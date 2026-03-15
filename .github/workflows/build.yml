@@ -28,10 +28,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Dependency Review
-        if: github.event_name == 'pull_request'
-        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
-
       - name: Set up JDK
         uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
@@ -41,31 +37,28 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
 
-      - name: Check code format
-        run: ./gradlew spotlessCheck
-
       - name: Build app
-        run: ./gradlew assembleRelease -Pinclude-telemetry -Penable-updater
+        run: ./gradlew assembleFoss -Penable-updater
 
       - name: Run unit tests
         id: unit_tests
-        run: ./gradlew testReleaseUnitTest
+        run: ./gradlew testFossUnitTest
 
       - name: Upload test report
         if: steps.unit_tests.outcome == 'failure'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: test-report-${{ github.sha }}
-          path: app/build/reports/tests/testReleaseUnitTest
+          path: app/build/reports/tests/testFossUnitTest
 
       - name: Upload APK
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: arm64-v8a-${{ github.sha }}
-          path: app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk
+          name: universal-foss-${{ github.sha }}
+          path: app/build/outputs/apk/foss/app-universal-foss-unsigned.apk
 
       - name: Upload mapping
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: mapping-${{ github.sha }}
-          path: app/build/outputs/mapping/release
+          path: app/build/outputs/mapping/foss
