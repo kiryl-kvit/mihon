@@ -4,6 +4,7 @@
 - Removed third-party integrations (TODO)
 - Added startup screen configuration (TODO)
 - Removed telemetry
+- Library -> Group -> Source
 
 ### Disclaimer
 
