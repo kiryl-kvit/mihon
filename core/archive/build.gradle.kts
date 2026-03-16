@@ -1,10 +1,12 @@
+import com.android.build.api.dsl.LibraryExtension
+import org.gradle.kotlin.dsl.configure
+
 plugins {
     id("mihon.library")
-    kotlin("android")
     kotlin("plugin.serialization")
 }
 
-android {
+extensions.configure<LibraryExtension> {
     namespace = "mihon.core.archive"
 }
 

@@ -1,10 +1,12 @@
+import com.android.build.api.dsl.LibraryExtension
+import org.gradle.kotlin.dsl.configure
+
 plugins {
     id("mihon.library")
     id("mihon.library.compose")
-    kotlin("android")
 }
 
-android {
+extensions.configure<LibraryExtension> {
     namespace = "tachiyomi.presentation.core"
 
     defaultConfig {

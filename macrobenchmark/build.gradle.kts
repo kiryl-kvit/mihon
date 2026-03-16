@@ -1,9 +1,11 @@
+import com.android.build.api.dsl.TestExtension
+import org.gradle.kotlin.dsl.configure
+
 plugins {
     id("mihon.benchmark")
-    kotlin("android")
 }
 
-android {
+extensions.configure<TestExtension> {
     namespace = "tachiyomi.macrobenchmark"
 
     defaultConfig {

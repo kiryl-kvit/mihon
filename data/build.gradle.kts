@@ -1,11 +1,13 @@
+import com.android.build.api.dsl.LibraryExtension
+import org.gradle.kotlin.dsl.configure
+
 plugins {
     id("mihon.library")
-    kotlin("android")
     kotlin("plugin.serialization")
     alias(libs.plugins.sqldelight)
 }
 
-android {
+extensions.configure<LibraryExtension> {
     namespace = "tachiyomi.data"
 
     defaultConfig {
