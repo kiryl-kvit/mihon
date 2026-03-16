@@ -9,6 +9,7 @@
 - Removed telemetry
 - Library -> Group -> Source (TODO)
 - Upgraded AGP to AGP 9
+- Removed localizations except EN
 
 ### Disclaimer
 
