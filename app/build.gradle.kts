@@ -20,8 +20,8 @@ extensions.configure<ApplicationExtension> {
     defaultConfig {
         applicationId = "app.mihon"
 
-        versionCode = 20
-        versionName = "1.0.1"
+        versionCode = 21
+        versionName = "1.1.0"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
         buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
