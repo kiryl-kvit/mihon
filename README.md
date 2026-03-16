@@ -7,8 +7,10 @@
 - Removed third-party integrations (TODO)
 - Added startup screen configuration (TODO)
 - Removed telemetry
-- Library -> Group -> Source (TODO)
+- Library → Group → Source (TODO)
 - Upgraded AGP to AGP 9
+- Removed localizations except EN
+- Removed tracking
 
 ### Disclaimer
 
