@@ -4,13 +4,12 @@
 ### 0.19.4
 
 ## Changes from the original
-- Removed third-party integrations (TODO)
-- Added startup screen configuration (TODO)
+- Removed third-party integrations
+- Added startup screen configuration
 - Removed telemetry
-- Library → Group → Source (TODO)
 - Upgraded AGP to AGP 9
 - Removed localizations except EN
-- Removed tracking
+- Library → Group → Source (TODO)
 
 ### Disclaimer
 
