@@ -17,6 +17,34 @@ class ExtensionUpdateNotifier(
     private val context: Context,
     private val securityPreferences: SecurityPreferences = Injekt.get(),
 ) {
+    fun autoUpdated(names: List<String>) {
+        if (names.isEmpty()) {
+            context.cancelNotification(Notifications.ID_EXTENSIONS_AUTO_UPDATED)
+            return
+        }
+
+        context.notify(
+            Notifications.ID_EXTENSIONS_AUTO_UPDATED,
+            Notifications.CHANNEL_EXTENSIONS_UPDATE,
+        ) {
+            setContentTitle(
+                context.pluralStringResource(
+                    MR.plurals.extension_auto_update_notification_updated,
+                    names.size,
+                    names.size,
+                ),
+            )
+            if (!securityPreferences.hideNotificationContent().get()) {
+                val extNames = names.joinToString(", ")
+                setContentText(extNames)
+                setStyle(NotificationCompat.BigTextStyle().bigText(extNames))
+            }
+            setSmallIcon(R.drawable.ic_extension_24dp)
+            setContentIntent(NotificationReceiver.openExtensionsPendingActivity(context))
+            setAutoCancel(true)
+        }
+    }
+
     fun promptUpdates(names: List<String>) {
         context.notify(
             Notifications.ID_UPDATES_TO_EXTS,
@@ -42,5 +70,6 @@ class ExtensionUpdateNotifier(
 
     fun dismiss() {
         context.cancelNotification(Notifications.ID_UPDATES_TO_EXTS)
+        context.cancelNotification(Notifications.ID_EXTENSIONS_AUTO_UPDATED)
     }
 }

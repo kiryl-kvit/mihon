@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.extension.api
 import android.content.Context
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension
+import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.extension.model.LoadResult
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.network.GET
@@ -11,9 +12,11 @@ import eu.kanade.tachiyomi.network.awaitSuccess
 import eu.kanade.tachiyomi.network.parseAs
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
+import mihon.core.common.CustomPreferences
 import mihon.domain.extensionrepo.interactor.GetExtensionRepo
 import mihon.domain.extensionrepo.interactor.UpdateExtensionRepo
 import mihon.domain.extensionrepo.model.ExtensionRepo
@@ -32,11 +35,17 @@ internal class ExtensionApi {
     private val getExtensionRepo: GetExtensionRepo by injectLazy()
     private val updateExtensionRepo: UpdateExtensionRepo by injectLazy()
     private val extensionManager: ExtensionManager by injectLazy()
+    private val customPreferences: CustomPreferences by injectLazy()
     private val json: Json by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {
         preferenceStore.getLong(Preference.appStateKey("last_ext_check"), 0)
     }
+
+    private data class UpdateCandidate(
+        val installed: Extension.Installed,
+        val available: Extension.Available,
+    )
 
     suspend fun findExtensions(): List<Extension.Available> {
         return withIOContext {
@@ -85,27 +94,76 @@ internal class ExtensionApi {
             findExtensions().also { lastExtCheck.set(Instant.now().toEpochMilli()) }
         }
 
+        extensionManager.isInitialized.first { it }
+
+        val extensionsByPkg = extensions.associateBy(Extension.Available::pkgName)
+
         val installedExtensions = ExtensionLoader.loadExtensions(context)
             .filterIsInstance<LoadResult.Success>()
             .map { it.extension }
 
-        val extensionsWithUpdate = mutableListOf<Extension.Installed>()
-        for (installedExt in installedExtensions) {
-            val pkgName = installedExt.pkgName
-            val availableExt = extensions.find { it.pkgName == pkgName } ?: continue
-            val hasUpdatedVer = availableExt.versionCode > installedExt.versionCode
-            val hasUpdatedLib = availableExt.libVersion > installedExt.libVersion
-            val hasUpdate = hasUpdatedVer || hasUpdatedLib
-            if (hasUpdate) {
-                extensionsWithUpdate.add(installedExt)
+        val updateCandidates = buildList {
+            installedExtensions.forEach { installedExt ->
+                val availableExt = extensionsByPkg[installedExt.pkgName] ?: return@forEach
+                val hasUpdatedVer = availableExt.versionCode > installedExt.versionCode
+                val hasUpdatedLib = availableExt.libVersion > installedExt.libVersion
+                val hasUpdate = hasUpdatedVer || hasUpdatedLib
+                if (hasUpdate) {
+                    add(UpdateCandidate(installedExt, availableExt))
+                }
             }
         }
 
-        if (extensionsWithUpdate.isNotEmpty()) {
-            ExtensionUpdateNotifier(context).promptUpdates(extensionsWithUpdate.map { it.name })
+        if (updateCandidates.isEmpty()) {
+            extensionManager.setAvailableExtensions(extensions)
+            return emptyList()
         }
 
-        return extensionsWithUpdate
+        extensionManager.setAvailableExtensions(extensions)
+
+        if (fromAvailableExtensionList || !customPreferences.extensionsAutoUpdates().get()) {
+            ExtensionUpdateNotifier(context).promptUpdates(updateCandidates.map { it.installed.name })
+            return updateCandidates.map { it.installed }
+        }
+
+        return autoUpdateExtensions(context, extensions, updateCandidates)
+    }
+
+    private suspend fun autoUpdateExtensions(
+        context: Context,
+        extensions: List<Extension.Available>,
+        updateCandidates: List<UpdateCandidate>,
+    ): List<Extension.Installed> {
+        val updatedNames = mutableListOf<String>()
+        val leftoverNames = mutableListOf<String>()
+
+        extensionManager.runAutoUpdateSession {
+            updateCandidates.forEach { candidate ->
+                val finalStep = runCatching {
+                    extensionManager.installExtensionForAutoUpdate(candidate.available)
+                        .first { it.isCompleted() }
+                }.getOrElse { InstallStep.Error }
+
+                when (finalStep) {
+                    InstallStep.Installed -> updatedNames += candidate.installed.name
+                    InstallStep.RequiresUserAction,
+                    InstallStep.Idle,
+                    InstallStep.Error,
+                    -> leftoverNames += candidate.installed.name
+                    else -> Unit
+                }
+            }
+        }
+
+        val notifier = ExtensionUpdateNotifier(context)
+        if (updatedNames.isNotEmpty()) {
+            notifier.autoUpdated(updatedNames)
+        }
+        if (leftoverNames.isNotEmpty()) {
+            notifier.promptUpdates(leftoverNames)
+        }
+
+        return updateCandidates.map { it.installed }
     }
 
     private fun List<ExtensionJsonObject>.toExtensions(repoUrl: String): List<Extension.Available> {

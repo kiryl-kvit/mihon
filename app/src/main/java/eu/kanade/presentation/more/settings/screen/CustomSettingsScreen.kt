@@ -21,10 +21,10 @@ object CustomSettingsScreen : SearchableSettings {
 
     @Composable
     override fun getPreferences(): List<Preference> {
-        val basePreferences = remember { Injekt.get<CustomPreferences>() }
+        val customPreferences = remember { Injekt.get<CustomPreferences>() }
         return listOf(
             Preference.PreferenceItem.ListPreference(
-                preference = basePreferences.homeScreenStartupTab(),
+                preference = customPreferences.homeScreenStartupTab(),
                 entries = persistentMapOf(
                     HomeScreenTabs.Library to stringResource(MR.strings.label_library),
                     HomeScreenTabs.Updates to stringResource(MR.strings.label_recent_updates),
@@ -33,6 +33,10 @@ object CustomSettingsScreen : SearchableSettings {
                 ),
                 title = stringResource(MR.strings.pref_startup_screen),
             ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = customPreferences.extensionsAutoUpdates(),
+                title = stringResource(MR.strings.pref_extensions_auto_update)
+            )
         )
     }
 }

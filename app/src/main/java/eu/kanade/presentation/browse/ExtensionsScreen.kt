@@ -402,6 +402,11 @@ private fun ExtensionItemContent(
                             else -> error("Must not show non-install process text")
                         },
                     )
+                } else if (installStep == InstallStep.RequiresUserAction) {
+                    DotSeparatorNoSpaceText()
+                    Text(
+                        text = stringResource(MR.strings.ext_requires_user_action),
+                    )
                 }
             }
         }
@@ -437,6 +442,14 @@ private fun ExtensionItemActions(
                     Icon(
                         imageVector = Icons.Outlined.Refresh,
                         contentDescription = stringResource(MR.strings.action_retry),
+                    )
+                }
+            }
+            installStep == InstallStep.RequiresUserAction -> {
+                IconButton(onClick = { onClickItemAction(extension) }) {
+                    Icon(
+                        imageVector = Icons.Outlined.GetApp,
+                        contentDescription = stringResource(MR.strings.ext_update),
                     )
                 }
             }

@@ -331,6 +331,7 @@
     <string name="ext_pending">Pending</string>
     <string name="ext_downloading">Downloading</string>
     <string name="ext_installing">Installing</string>
+    <string name="ext_requires_user_action">Needs user action</string>
     <string name="ext_installed">Installed</string>
     <string name="ext_trust">Trust</string>
     <string name="ext_untrusted">Untrusted</string>
@@ -630,6 +631,7 @@
     <string name="pref_category_custom">Custom settings</string>
     <string name="pref_custom_summary">Fork's custom settings</string>
     <string name="pref_startup_screen">Application startup screen</string>
+    <string name="pref_extensions_auto_update">Enable extensions auto-update</string>
 
       <!-- About section -->
     <string name="website">Website</string>

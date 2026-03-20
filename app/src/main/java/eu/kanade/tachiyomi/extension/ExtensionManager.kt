@@ -11,14 +11,15 @@ import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.extension.model.LoadResult
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
 import eu.kanade.tachiyomi.extension.util.ExtensionInstaller
+import eu.kanade.tachiyomi.extension.util.ExtensionInstaller.UserActionBehavior
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted.Companion.WhileSubscribed
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
@@ -32,6 +33,7 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The manager of extensions installed as another apk which extend the available sources. It handles
@@ -71,6 +73,10 @@ class ExtensionManager(
 
     private val untrustedExtensionMapFlow = MutableStateFlow(emptyMap<String, Extension.Untrusted>())
     val untrustedExtensionsFlow = untrustedExtensionMapFlow.mapExtensions(scope)
+
+    private val _isAutoUpdateInProgress = MutableStateFlow(false)
+    val isAutoUpdateInProgress: StateFlow<Boolean> = _isAutoUpdateInProgress.asStateFlow()
+    private val updateCheckInProgress = AtomicBoolean(false)
 
     init {
         initExtensions()
@@ -146,11 +152,40 @@ class ExtensionManager(
             return
         }
 
-        enableAdditionalSubLanguages(extensions)
+        setAvailableExtensions(extensions)
+    }
 
+    fun setAvailableExtensions(extensions: List<Extension.Available>) {
+        enableAdditionalSubLanguages(extensions)
         availableExtensionMapFlow.value = extensions.associateBy { it.pkgName }
         updatedInstalledExtensionsStatuses(extensions)
         setupAvailableExtensionsSourcesDataMap(extensions)
+    }
+
+    suspend fun checkForUpdates(
+        context: Context,
+        fromAvailableExtensionList: Boolean = false,
+    ): List<Extension.Installed>? {
+        if (!updateCheckInProgress.compareAndSet(false, true)) return null
+
+        return try {
+            api.checkForUpdates(context, fromAvailableExtensionList)
+        } finally {
+            updateCheckInProgress.set(false)
+        }
+    }
+
+    suspend fun runAutoUpdateSession(block: suspend () -> Unit) {
+        _isAutoUpdateInProgress.value = true
+        try {
+            block()
+        } finally {
+            try {
+                refreshInstalledExtensionsUpdateStatus()
+            } finally {
+                _isAutoUpdateInProgress.value = false
+            }
+        }
     }
 
     /**
@@ -194,30 +229,11 @@ class ExtensionManager(
             return
         }
 
-        val installedExtensionsMap = installedExtensionMapFlow.value.toMutableMap()
-        var changed = false
-        for ((pkgName, extension) in installedExtensionsMap) {
-            val availableExt = availableExtensions.find { it.pkgName == pkgName }
-
-            if (availableExt == null && !extension.isObsolete) {
-                installedExtensionsMap[pkgName] = extension.copy(isObsolete = true)
-                changed = true
-            } else if (availableExt != null) {
-                val hasUpdate = extension.updateExists(availableExt)
-                if (extension.hasUpdate != hasUpdate) {
-                    installedExtensionsMap[pkgName] = extension.copy(
-                        hasUpdate = hasUpdate,
-                        repoUrl = availableExt.repoUrl,
-                    )
-                } else {
-                    installedExtensionsMap[pkgName] = extension.copy(
-                        repoUrl = availableExt.repoUrl,
-                    )
-                }
-                changed = true
-            }
-        }
-        if (changed) {
+        val installedExtensionsMap = reconcileInstalledExtensions(
+            installedExtensionsMap = installedExtensionMapFlow.value,
+            availableExtensions = availableExtensions,
+        )
+        if (installedExtensionsMap != installedExtensionMapFlow.value) {
             installedExtensionMapFlow.value = installedExtensionsMap
         }
         updatePendingUpdatesCount()
@@ -231,7 +247,19 @@ class ExtensionManager(
      * @param extension The extension to be installed.
      */
     fun installExtension(extension: Extension.Available): Flow<InstallStep> {
-        return installer.downloadAndInstall(api.getApkUrl(extension), extension)
+        return installer.downloadAndInstall(
+            api.getApkUrl(extension),
+            extension,
+            UserActionBehavior.LaunchPrompt,
+        )
+    }
+
+    internal fun installExtensionForAutoUpdate(extension: Extension.Available): Flow<InstallStep> {
+        return installer.downloadAndInstall(
+            api.getApkUrl(extension),
+            extension,
+            UserActionBehavior.MarkAsRequiresUserAction,
+        )
     }
 
     /**
@@ -247,6 +275,7 @@ class ExtensionManager(
     }
 
     fun cancelInstallUpdateExtension(extension: Extension) {
+        installer.clearInstallStep(extension.pkgName)
         installer.cancelInstall(extension.pkgName)
     }
 
@@ -263,12 +292,15 @@ class ExtensionManager(
         installer.updateInstallStep(downloadId, step)
     }
 
+    fun installSteps() = installer.installSteps
+
     /**
      * Uninstalls the extension that matches the given package name.
      *
      * @param extension The extension to uninstall.
      */
     fun uninstallExtension(extension: Extension) {
+        installer.clearInstallStep(extension.pkgName)
         installer.uninstallApk(extension.pkgName)
     }
 
@@ -296,7 +328,7 @@ class ExtensionManager(
      * @param extension The extension to be registered.
      */
     private fun registerNewExtension(extension: Extension.Installed) {
-        installedExtensionMapFlow.value += extension
+        installedExtensionMapFlow.value += extension.copy(isObsolete = false)
     }
 
     /**
@@ -306,7 +338,7 @@ class ExtensionManager(
      * @param extension The extension to be registered.
      */
     private fun registerUpdatedExtension(extension: Extension.Installed) {
-        installedExtensionMapFlow.value += extension
+        installedExtensionMapFlow.value += extension.copy(isObsolete = false)
     }
 
     /**
@@ -316,6 +348,7 @@ class ExtensionManager(
      * @param pkgName The package name of the uninstalled application.
      */
     private fun unregisterExtension(pkgName: String) {
+        installer.clearInstallStep(pkgName)
         installedExtensionMapFlow.value -= pkgName
         untrustedExtensionMapFlow.value -= pkgName
     }
@@ -375,9 +408,59 @@ class ExtensionManager(
         }
     }
 
+    private suspend fun refreshInstalledExtensionsUpdateStatus() {
+        val currentInstalledExtensions = installedExtensionMapFlow.value
+        val reloadedInstalledExtensions = ExtensionLoader.loadExtensions(context)
+            .filterIsInstance<LoadResult.Success>()
+            .map { result ->
+                val current = currentInstalledExtensions[result.extension.pkgName]
+                result.extension.copy(
+                    hasUpdate = current?.hasUpdate ?: false,
+                    isObsolete = current?.isObsolete ?: false,
+                    repoUrl = current?.repoUrl,
+                )
+            }
+            .associateBy { it.pkgName }
+
+        val availableExtensions = availableExtensionMapFlow.value.values.toList()
+        installedExtensionMapFlow.value = if (availableExtensions.isEmpty()) {
+            reloadedInstalledExtensions
+        } else {
+            reconcileInstalledExtensions(
+                installedExtensionsMap = reloadedInstalledExtensions,
+                availableExtensions = availableExtensions,
+            )
+        }
+        updatePendingUpdatesCount()
+    }
+
+    private fun reconcileInstalledExtensions(
+        installedExtensionsMap: Map<String, Extension.Installed>,
+        availableExtensions: List<Extension.Available>,
+    ): Map<String, Extension.Installed> {
+        val availableExtensionsMap = availableExtensions.associateBy(Extension.Available::pkgName)
+
+        return installedExtensionsMap.mapValues { (pkgName, extension) ->
+            val availableExtension = availableExtensionsMap[pkgName]
+
+            if (availableExtension == null) {
+                extension.copy(
+                    hasUpdate = false,
+                    isObsolete = true,
+                )
+            } else {
+                extension.copy(
+                    hasUpdate = extension.updateExists(availableExtension),
+                    isObsolete = false,
+                    repoUrl = availableExtension.repoUrl,
+                )
+            }
+        }
+    }
+
     private operator fun <T : Extension> Map<String, T>.plus(extension: T) = plus(extension.pkgName to extension)
 
     private fun <T : Extension> StateFlow<Map<String, T>>.mapExtensions(scope: CoroutineScope): StateFlow<List<T>> {
-        return map { it.values.toList() }.stateIn(scope, SharingStarted.Lazily, value.values.toList())
+        return map { it.values.toList() }.stateIn(scope, WhileSubscribed(5_000), value.values.toList())
     }
 }

@@ -16,15 +16,13 @@ import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -41,8 +39,6 @@ class ExtensionsScreenModel(
     private val getExtensions: GetExtensionsByType = Injekt.get(),
 ) : StateScreenModel<ExtensionsScreenModel.State>(State()) {
 
-    private val currentDownloads = MutableStateFlow<Map<String, InstallStep>>(hashMapOf())
-
     init {
         val context = Injekt.get<Application>()
         val extensionMapper: (Map<String, InstallStep>) -> ((Extension) -> ExtensionUiModel.Item) = { map ->
@@ -57,7 +53,7 @@ class ExtensionsScreenModel(
                     .distinctUntilChanged()
                     .debounce(SEARCH_DEBOUNCE_MILLIS)
                     .map { searchQueryPredicate(it ?: "") },
-                currentDownloads,
+                extensionManager.installSteps(),
                 getExtensions.subscribe(),
             ) { predicate, downloads, (_updates, _installed, _available, _untrusted) ->
                 buildMap {
@@ -97,7 +93,12 @@ class ExtensionsScreenModel(
 
         screenModelScope.launchIO { findAvailableExtensions() }
 
-        preferences.extensionUpdatesCount().changes()
+        combine(
+            preferences.extensionUpdatesCount().changes(),
+            extensionManager.isAutoUpdateInProgress,
+        ) { updates, inProgress ->
+            if (inProgress) 0 else updates
+        }
             .onEach { mutableState.update { state -> state.copy(updates = it) } }
             .launchIn(screenModelScope)
 
@@ -166,22 +167,11 @@ class ExtensionsScreenModel(
 
     fun cancelInstallUpdateExtension(extension: Extension) {
         extensionManager.cancelInstallUpdateExtension(extension)
-        removeDownloadState(extension)
-    }
-
-    private fun addDownloadState(extension: Extension, installStep: InstallStep) {
-        currentDownloads.update { it + Pair(extension.pkgName, installStep) }
-    }
-
-    private fun removeDownloadState(extension: Extension) {
-        currentDownloads.update { it - extension.pkgName }
     }
 
     private suspend fun Flow<InstallStep>.collectToInstallUpdate(extension: Extension) =
         this
-            .onEach { installStep -> addDownloadState(extension, installStep) }
-            .onCompletion { removeDownloadState(extension) }
-            .collect()
+            .firstOrNull { it.isCompleted() }
 
     fun uninstallExtension(extension: Extension) {
         extensionManager.uninstallExtension(extension)

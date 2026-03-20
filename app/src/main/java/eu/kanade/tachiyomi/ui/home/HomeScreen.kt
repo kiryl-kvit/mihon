@@ -37,6 +37,7 @@ import cafe.adriel.voyager.navigator.tab.TabNavigator
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
+import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
 import eu.kanade.tachiyomi.ui.history.HistoryTab
@@ -275,7 +276,14 @@ object HomeScreen : Screen() {
                     }
                     BrowseTab::class.isInstance(tab) -> {
                         val count by produceState(initialValue = 0) {
-                            Injekt.get<SourcePreferences>().extensionUpdatesCount().changes()
+                            val preferences = Injekt.get<SourcePreferences>()
+                            val extensionManager = Injekt.get<ExtensionManager>()
+                            combine(
+                                preferences.extensionUpdatesCount().changes(),
+                                extensionManager.isAutoUpdateInProgress,
+                            ) { pendingCount, inProgress ->
+                                if (inProgress) 0 else pendingCount
+                            }
                                 .collectLatest { value = it }
                         }
                         if (count > 0) {
