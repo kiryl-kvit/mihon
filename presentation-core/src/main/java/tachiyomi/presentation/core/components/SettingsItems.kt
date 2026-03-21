@@ -135,6 +135,25 @@ fun BaseSortItem(label: String, icon: ImageVector?, onClick: () -> Unit) {
 }
 
 @Composable
+fun GroupItem(label: String, icon: ImageVector?, onClick: () -> Unit) {
+    BaseSettingsItem(
+        label = label,
+        widget = {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            } else {
+                Spacer(modifier = Modifier.size(24.dp))
+            }
+        },
+        onClick = onClick,
+    )
+}
+
+@Composable
 fun CheckboxItem(label: String, pref: Preference<Boolean>) {
     val checked by pref.collectAsState()
     CheckboxItem(

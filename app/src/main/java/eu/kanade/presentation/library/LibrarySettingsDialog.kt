@@ -2,11 +2,11 @@ package eu.kanade.presentation.library
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -24,12 +24,14 @@ import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BaseSortItem
 import tachiyomi.presentation.core.components.CheckboxItem
+import tachiyomi.presentation.core.components.GroupItem
 import tachiyomi.presentation.core.components.HeadingItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
@@ -78,7 +80,7 @@ fun LibrarySettingsDialog(
 }
 
 @Composable
-private fun ColumnScope.FilterPage(
+private fun FilterPage(
     screenModel: LibrarySettingsScreenModel,
 ) {
     val filterDownloaded by screenModel.libraryPreferences.filterDownloaded.collectAsState()
@@ -131,7 +133,7 @@ private fun ColumnScope.FilterPage(
 }
 
 @Composable
-private fun ColumnScope.SortPage(
+private fun SortPage(
     category: Category?,
     screenModel: LibrarySettingsScreenModel,
 ) {
@@ -152,7 +154,7 @@ private fun ColumnScope.SortPage(
         )
     }
 
-    options.map { (titleRes, mode) ->
+    options.forEach { (titleRes, mode) ->
         if (mode == LibrarySort.Type.Random) {
             BaseSortItem(
                 label = stringResource(titleRes),
@@ -162,7 +164,7 @@ private fun ColumnScope.SortPage(
                     screenModel.setSort(category, mode, LibrarySort.Direction.Ascending)
                 },
             )
-            return@map
+            return@forEach
         }
         SortItem(
             label = stringResource(titleRes),
@@ -195,12 +197,12 @@ private val displayModes = listOf(
 )
 
 @Composable
-private fun ColumnScope.DisplayPage(
+private fun DisplayPage(
     screenModel: LibrarySettingsScreenModel,
 ) {
     val displayMode by screenModel.libraryPreferences.displayMode.collectAsState()
     SettingsChipRow(MR.strings.action_display_mode) {
-        displayModes.map { (titleRes, mode) ->
+        displayModes.forEach { (titleRes, mode) ->
             FilterChip(
                 selected = displayMode == mode,
                 onClick = { screenModel.setDisplayMode(mode) },
@@ -268,8 +270,26 @@ private fun ColumnScope.DisplayPage(
 }
 
 @Composable
-private fun ColumnScope.GroupPage(
+private fun GroupPage(
     screenModel: LibrarySettingsScreenModel,
 ) {
+    val groupState by screenModel.libraryPreferences.groupType.collectAsState()
 
+    val options = remember {
+        listOfNotNull(
+            MR.strings.action_group_unset to LibraryGroupType.Unset,
+            MR.strings.action_group_extension_category to LibraryGroupType.ExtensionCategory,
+            MR.strings.action_group_category_extension to LibraryGroupType.CategoryExtension,
+        )
+    }
+
+    options.forEach { (titleRes, mode) ->
+        GroupItem(
+            label = stringResource(titleRes),
+            icon = Icons.Default.KeyboardDoubleArrowRight.takeIf { mode == groupState },
+            onClick = {
+                screenModel.setGroup(mode)
+            }
+        )
+    }
 }

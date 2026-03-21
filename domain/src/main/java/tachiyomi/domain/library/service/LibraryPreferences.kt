@@ -5,6 +5,7 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.manga.model.Manga
 
@@ -93,6 +94,15 @@ class LibraryPreferences(
     val filterIntervalCustom: Preference<TriState> = preferenceStore.getEnum(
         "pref_filter_library_interval_custom",
         TriState.DISABLED,
+    )
+
+    // endregion
+
+    // region Group
+
+    val groupType: Preference<LibraryGroupType> = preferenceStore.getEnum(
+        "pref_group_library_type",
+        LibraryGroupType.Unset,
     )
 
     // endregion

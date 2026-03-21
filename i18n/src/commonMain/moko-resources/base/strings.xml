@@ -320,6 +320,9 @@
     <string name="pref_disallow_non_ascii_filenames">Disallow non-ASCII filenames</string>
     <string name="pref_disallow_non_ascii_filenames_details">Ensures compatibility with certain storage media that don't support Unicode. When this is enabled, you'll need to manually rename source and manga folders by replacing non-ASCII characters with their lowercase UTF-8 hexadecimal representations. Chapter files don't need to be renamed.</string>
     <string name="action_group">Group</string>
+    <string name="action_group_extension_category">Extension -> Category</string>
+    <string name="action_group_category_extension">Category -> Extension</string>
+    <string name="action_group_unset">None</string>
 
       <!-- Extension section -->
     <string name="multi_lang">Multi</string>

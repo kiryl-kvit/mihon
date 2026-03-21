@@ -11,6 +11,7 @@ import tachiyomi.domain.category.interactor.SetDisplayMode
 import tachiyomi.domain.category.interactor.SetSortModeForCategory
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
 import uy.kohesive.injekt.Injekt
@@ -36,6 +37,12 @@ class LibrarySettingsScreenModel(
     fun setSort(category: Category?, mode: LibrarySort.Type, direction: LibrarySort.Direction) {
         screenModelScope.launchIO {
             setSortModeForCategory.await(category, mode, direction)
+        }
+    }
+
+    fun setGroup(type: LibraryGroupType){
+        screenModelScope.launchIO {
+            libraryPreferences.groupType.set(type)
         }
     }
 }
