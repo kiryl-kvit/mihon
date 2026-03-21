@@ -276,7 +276,8 @@ private fun GroupPage(
 
     val options = remember {
         listOfNotNull(
-            MR.strings.action_group_unset to LibraryGroupType.Unset,
+            MR.strings.action_group_category to LibraryGroupType.Category,
+            MR.strings.action_group_extension to LibraryGroupType.Extension,
             MR.strings.action_group_extension_category to LibraryGroupType.ExtensionCategory,
             MR.strings.action_group_category_extension to LibraryGroupType.CategoryExtension,
         )

@@ -322,7 +322,8 @@
     <string name="action_group">Group</string>
     <string name="action_group_extension_category">Extension -> Category</string>
     <string name="action_group_category_extension">Category -> Extension</string>
-    <string name="action_group_unset">None</string>
+    <string name="action_group_category">Category</string>
+    <string name="action_group_extension">Extension</string>
 
       <!-- Extension section -->
     <string name="multi_lang">Multi</string>

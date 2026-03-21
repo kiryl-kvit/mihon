@@ -102,7 +102,7 @@ class LibraryPreferences(
 
     val groupType: Preference<LibraryGroupType> = preferenceStore.getEnum(
         "pref_group_library_type",
-        LibraryGroupType.Unset,
+        LibraryGroupType.Category,
     )
 
     // endregion
