@@ -50,6 +50,7 @@ fun LibrarySettingsDialog(
             stringResource(MR.strings.action_filter),
             stringResource(MR.strings.action_sort),
             stringResource(MR.strings.action_display),
+            stringResource(MR.strings.action_group),
         ),
     ) { page ->
         Column(
@@ -66,6 +67,9 @@ fun LibrarySettingsDialog(
                     screenModel = screenModel,
                 )
                 2 -> DisplayPage(
+                    screenModel = screenModel,
+                )
+                3 -> GroupPage(
                     screenModel = screenModel,
                 )
             }
@@ -261,4 +265,11 @@ private fun ColumnScope.DisplayPage(
         label = stringResource(MR.strings.action_display_show_number_of_items),
         pref = screenModel.libraryPreferences.categoryNumberOfItems(),
     )
+}
+
+@Composable
+private fun ColumnScope.GroupPage(
+    screenModel: LibrarySettingsScreenModel,
+) {
+
 }
