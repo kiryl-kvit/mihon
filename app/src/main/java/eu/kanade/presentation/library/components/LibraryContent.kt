@@ -17,9 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.tachiyomi.ui.library.LibraryItem
+import eu.kanade.tachiyomi.ui.library.LibraryPage
+import eu.kanade.tachiyomi.ui.library.LibraryPageTab
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -27,7 +28,7 @@ import kotlin.time.Duration.Companion.seconds
 
 @Composable
 fun LibraryContent(
-    categories: List<Category>,
+    pages: List<LibraryPage>,
     searchQuery: String?,
     selection: Set<Long>,
     contentPadding: PaddingValues,
@@ -37,14 +38,15 @@ fun LibraryContent(
     onChangeCurrentPage: (Int) -> Unit,
     onClickManga: (Long) -> Unit,
     onContinueReadingClicked: ((LibraryManga) -> Unit)?,
-    onToggleSelection: (Category, LibraryManga) -> Unit,
-    onToggleRangeSelection: (Category, LibraryManga) -> Unit,
+    onToggleSelection: (LibraryPage, LibraryManga) -> Unit,
+    onToggleRangeSelection: (LibraryPage, LibraryManga) -> Unit,
     onRefresh: () -> Boolean,
     onGlobalSearchClicked: () -> Unit,
-    getItemCountForCategory: (Category) -> Int?,
+    getItemCountForPage: (LibraryPage) -> Int?,
+    getItemCountForPrimaryTab: (LibraryPageTab) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
-    getItemsForCategory: (Category) -> List<LibraryItem>,
+    getItemsForPage: (LibraryPage) -> List<LibraryItem>,
 ) {
     Column(
         modifier = Modifier.padding(
@@ -53,27 +55,67 @@ fun LibraryContent(
             end = contentPadding.calculateEndPadding(LocalLayoutDirection.current),
         ),
     ) {
-        val pagerState = rememberPagerState(currentPage) { categories.size }
+        val pagerState = rememberPagerState(currentPage) { pages.size }
 
         val scope = rememberCoroutineScope()
         var isRefreshing by remember(pagerState.currentPage) { mutableStateOf(false) }
 
-        if (showPageTabs && categories.isNotEmpty() && (categories.size > 1 || !categories.first().isSystemCategory)) {
-            LaunchedEffect(categories) {
-                if (categories.size <= pagerState.currentPage) {
-                    pagerState.scrollToPage(categories.size - 1)
+        val primaryTabs = remember(pages) {
+            pages.map(LibraryPage::primaryTab).distinctBy(LibraryPageTab::id)
+        }
+        val activePage = pages.getOrNull(pagerState.currentPage)
+        val secondaryTabs = remember(pages, activePage?.primaryTab?.id) {
+            activePage?.primaryTab?.id
+                ?.let { primaryTabId ->
+                    pages.filter { it.primaryTab.id == primaryTabId }
+                        .mapNotNull(LibraryPage::secondaryTab)
+                        .distinctBy(LibraryPageTab::id)
+                }
+                .orEmpty()
+        }
+
+        if (showPageTabs && pages.isNotEmpty()) {
+            LaunchedEffect(pages) {
+                if (pages.size <= pagerState.currentPage) {
+                    pagerState.scrollToPage(pages.size - 1)
                 }
             }
-            LibraryTabs(
-                categories = categories,
-                pagerState = pagerState,
-                getItemCountForCategory = getItemCountForCategory,
-                onTabItemClick = {
-                    scope.launch {
-                        pagerState.animateScrollToPage(it)
-                    }
-                },
-            )
+
+            if (primaryTabs.size > 1 || secondaryTabs.isNotEmpty()) {
+                LibraryTabs(
+                    tabs = primaryTabs,
+                    selectedTabId = activePage?.primaryTab?.id,
+                    getItemCountForTab = getItemCountForPrimaryTab,
+                    onTabItemClick = { selectedTab ->
+                        val targetPageIndex = pages.indexOfFirst { it.primaryTab.id == selectedTab.id }
+                        if (targetPageIndex < 0) return@LibraryTabs
+                        scope.launch {
+                            pagerState.animateScrollToPage(targetPageIndex)
+                        }
+                    },
+                )
+            }
+
+            if (secondaryTabs.isNotEmpty()) {
+                LibraryTabs(
+                    tabs = secondaryTabs,
+                    selectedTabId = activePage?.secondaryTab?.id,
+                    getItemCountForTab = { tab ->
+                        pages.firstOrNull {
+                            it.primaryTab.id == activePage?.primaryTab?.id && it.secondaryTab?.id == tab.id
+                        }?.let(getItemCountForPage)
+                    },
+                    onTabItemClick = { selectedTab ->
+                        val targetPageIndex = pages.indexOfFirst {
+                            it.primaryTab.id == activePage?.primaryTab?.id && it.secondaryTab?.id == selectedTab.id
+                        }
+                        if (targetPageIndex < 0) return@LibraryTabs
+                        scope.launch {
+                            pagerState.animateScrollToPage(targetPageIndex)
+                        }
+                    },
+                )
+            }
         }
 
         PullRefresh(
@@ -97,13 +139,13 @@ fun LibraryContent(
                 selection = selection,
                 searchQuery = searchQuery,
                 onGlobalSearchClicked = onGlobalSearchClicked,
-                getCategoryForPage = { page -> categories[page] },
+                getPageForIndex = { page -> pages[page] },
                 getDisplayMode = getDisplayMode,
                 getColumnsForOrientation = getColumnsForOrientation,
-                getItemsForCategory = getItemsForCategory,
-                onClickManga = { category, manga ->
+                getItemsForPage = getItemsForPage,
+                onClickManga = { page, manga ->
                     if (selection.isNotEmpty()) {
-                        onToggleSelection(category, manga)
+                        onToggleSelection(page, manga)
                     } else {
                         onClickManga(manga.manga.id)
                     }

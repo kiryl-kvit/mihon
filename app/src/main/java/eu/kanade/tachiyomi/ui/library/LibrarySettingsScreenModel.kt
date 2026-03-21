@@ -36,11 +36,12 @@ class LibrarySettingsScreenModel(
 
     fun setSort(category: Category?, mode: LibrarySort.Type, direction: LibrarySort.Direction) {
         screenModelScope.launchIO {
-            setSortModeForCategory.await(category, mode, direction)
+            val targetCategory = category.takeIf { libraryPreferences.groupType.get() == LibraryGroupType.Category }
+            setSortModeForCategory.await(targetCategory, mode, direction)
         }
     }
 
-    fun setGroup(type: LibraryGroupType){
+    fun setGroup(type: LibraryGroupType) {
         screenModelScope.launchIO {
             libraryPreferences.groupType.set(type)
         }

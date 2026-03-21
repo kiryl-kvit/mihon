@@ -116,7 +116,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         libraryPreferences.lastUpdatedTimestamp.set(Instant.now().toEpochMilli())
 
         val categoryId = inputData.getLong(KEY_CATEGORY, -1L)
-        addMangaToQueue(categoryId)
+        val sourceId = inputData.getLong(KEY_SOURCE, -1L)
+        addMangaToQueue(categoryId, sourceId)
 
         return withIOContext {
             try {
@@ -153,12 +154,17 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
      * Adds list of manga to be updated.
      *
      * @param categoryId the ID of the category to update, or -1 if no category specified.
+     * @param sourceId the ID of the source to update, or -1 if no source specified.
      */
-    private suspend fun addMangaToQueue(categoryId: Long) {
+    private suspend fun addMangaToQueue(categoryId: Long, sourceId: Long) {
         val libraryManga = getLibraryManga.await()
 
-        val listToUpdate = if (categoryId != -1L) {
-            libraryManga.filter { categoryId in it.categories }
+        val listToUpdate = if (categoryId != -1L || sourceId != -1L) {
+            libraryManga.filter {
+                val matchesCategory = categoryId == -1L || categoryId in it.categories
+                val matchesSource = sourceId == -1L || it.manga.source == sourceId
+                matchesCategory && matchesSource
+            }
         } else {
             val includedCategories = libraryPreferences.updateCategories.get().map { it.toLong() }
             val excludedCategories = libraryPreferences.updateCategoriesExclude.get().map { it.toLong() }
@@ -418,6 +424,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
          */
         private const val KEY_CATEGORY = "category"
 
+        /**
+         * Key for source to update.
+         */
+        private const val KEY_SOURCE = "source"
+
         fun setupTask(
             context: Context,
             prefInterval: Int? = null,
@@ -473,6 +484,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         fun startNow(
             context: Context,
             category: Category? = null,
+            sourceId: Long? = null,
         ): Boolean {
             val wm = context.workManager
             if (wm.isRunning(TAG)) {
@@ -482,6 +494,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
             val inputData = workDataOf(
                 KEY_CATEGORY to category?.id,
+                KEY_SOURCE to sourceId,
             )
             val request = OneTimeWorkRequestBuilder<LibraryUpdateJob>()
                 .addTag(TAG)

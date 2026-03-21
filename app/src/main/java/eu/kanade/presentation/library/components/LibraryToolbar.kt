@@ -20,6 +20,7 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.SearchToolbar
 import kotlinx.collections.immutable.persistentListOf
+import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.i18n.stringResource
@@ -30,6 +31,7 @@ fun LibraryToolbar(
     hasActiveFilters: Boolean,
     selectedCount: Int,
     title: LibraryToolbarTitle,
+    currentGroupType: LibraryGroupType,
     onClickUnselectAll: () -> Unit,
     onClickSelectAll: () -> Unit,
     onClickInvertSelection: () -> Unit,
@@ -50,6 +52,7 @@ fun LibraryToolbar(
     else -> LibraryRegularToolbar(
         title = title,
         hasFilters = hasActiveFilters,
+        currentGroupType = currentGroupType,
         searchQuery = searchQuery,
         onSearchQueryChange = onSearchQueryChange,
         onClickFilter = onClickFilter,
@@ -64,6 +67,7 @@ fun LibraryToolbar(
 private fun LibraryRegularToolbar(
     title: LibraryToolbarTitle,
     hasFilters: Boolean,
+    currentGroupType: LibraryGroupType,
     searchQuery: String?,
     onSearchQueryChange: (String?) -> Unit,
     onClickFilter: () -> Unit,
@@ -73,6 +77,13 @@ private fun LibraryRegularToolbar(
     scrollBehavior: TopAppBarScrollBehavior?,
 ) {
     val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
+    val updateCurrentGroupTitle = when (currentGroupType) {
+        LibraryGroupType.Category -> stringResource(MR.strings.action_update_category)
+        LibraryGroupType.Extension -> stringResource(MR.strings.action_update_extension)
+        LibraryGroupType.ExtensionCategory,
+        LibraryGroupType.CategoryExtension,
+        -> stringResource(MR.strings.action_update_group)
+    }
     SearchToolbar(
         titleContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -108,7 +119,7 @@ private fun LibraryRegularToolbar(
                         onClick = onClickGlobalUpdate,
                     ),
                     AppBar.OverflowAction(
-                        title = stringResource(MR.strings.action_update_category),
+                        title = updateCurrentGroupTitle,
                         onClick = onClickRefresh,
                     ),
                     AppBar.OverflowAction(

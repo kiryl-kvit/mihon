@@ -17,6 +17,7 @@ import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
+import eu.kanade.tachiyomi.source.getNameForMangaInfo
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
@@ -48,6 +49,7 @@ import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.history.interactor.GetNextChapters
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.sort
@@ -81,7 +83,7 @@ class LibraryScreenModel(
 
     init {
         mutableState.update { state ->
-            state.copy(activeCategoryIndex = libraryPreferences.lastUsedCategory.get())
+            state.copy(activePageIndex = libraryPreferences.lastUsedCategory.get())
         }
         screenModelScope.launchIO {
             combine(
@@ -100,31 +102,38 @@ class LibraryScreenModel(
                     showSystemCategory = showSystemCategory,
                     categories = categories,
                     favorites = filteredFavorites,
+                    hasActiveFilters = itemPreferences.hasActiveFilters,
                 )
             }
                 .distinctUntilChanged()
                 .collectLatest { libraryData ->
                     mutableState.update { state ->
-                        state.copy(libraryData = libraryData)
+                        state.copy(
+                            libraryData = libraryData,
+                            hasActiveFilters = libraryData.hasActiveFilters,
+                        )
                     }
                 }
         }
 
         screenModelScope.launchIO {
-            state
-                .dropWhile { !it.libraryData.isInitialized }
-                .map { it.libraryData }
-                .distinctUntilChanged()
-                .map { data ->
-                    data.favorites
-                        .applyGrouping(data.categories, data.showSystemCategory)
-                        .applySort(data.favoritesById)
-                }
-                .collectLatest {
+            combine(
+                state
+                    .dropWhile { !it.libraryData.isInitialized }
+                    .map { it.libraryData }
+                    .distinctUntilChanged(),
+                libraryPreferences.groupType.changes(),
+            ) { data, groupType ->
+                groupType to data.favorites
+                    .applyGrouping(data.categories, data.showSystemCategory, groupType)
+                    .applySort(data.favoritesById, groupType)
+            }
+                .collectLatest { (groupType, groupedFavorites) ->
                     mutableState.update { state ->
                         state.copy(
                             isLoading = false,
-                            groupedFavorites = it,
+                            groupedFavorites = groupedFavorites,
+                            groupType = groupType,
                         )
                     }
                 }
@@ -204,20 +213,123 @@ class LibraryScreenModel(
     private fun List<LibraryItem>.applyGrouping(
         categories: List<Category>,
         showSystemCategory: Boolean,
-    ): Map<Category, List</* LibraryItem */ Long>> {
-        val groupCache = mutableMapOf</* Category */ Long, MutableList</* LibraryItem */ Long>>()
-        forEach { item ->
-            item.libraryManga.categories.forEach { categoryId ->
-                groupCache.getOrPut(categoryId) { mutableListOf() }.add(item.id)
+        groupType: LibraryGroupType,
+    ): List<LibraryPage> {
+        val visibleCategories = categories.filter { showSystemCategory || !it.isSystemCategory }
+        val categoryTabs = visibleCategories.associate { category ->
+            category.id to LibraryPageTab(
+                id = "category:${category.id}",
+                title = category.name,
+                category = category,
+            )
+        }
+        val sourceNames = map { it.libraryManga.manga.source }
+            .distinct()
+            .associateWith { sourceId -> sourceManager.getOrStub(sourceId).getNameForMangaInfo() }
+        val sourceIds = sourceNames.keys.sortedWith { sourceId1, sourceId2 ->
+            sourceNames.getValue(sourceId1)
+                .compareToWithCollator(sourceNames.getValue(sourceId2))
+                .takeIf { it != 0 }
+                ?: sourceId1.compareTo(sourceId2)
+        }
+        val sourceTabs = sourceIds.associateWith { sourceId ->
+            LibraryPageTab(
+                id = "source:$sourceId",
+                title = sourceNames.getValue(sourceId),
+            )
+        }
+
+        return when (groupType) {
+            LibraryGroupType.Category -> {
+                visibleCategories.map { category ->
+                    LibraryPage(
+                        id = "category:${category.id}",
+                        primaryTab = categoryTabs.getValue(category.id),
+                        category = category,
+                        itemIds = fastFilter { category.id in it.libraryManga.categories }
+                            .fastMap(LibraryItem::id),
+                    )
+                }
+            }
+            LibraryGroupType.Extension -> {
+                sourceIds.map { sourceId ->
+                    LibraryPage(
+                        id = "source:$sourceId",
+                        primaryTab = sourceTabs.getValue(sourceId),
+                        sourceId = sourceId,
+                        itemIds = fastFilter { it.libraryManga.manga.source == sourceId }
+                            .fastMap(LibraryItem::id),
+                    )
+                }
+            }
+            LibraryGroupType.ExtensionCategory -> {
+                buildList {
+                    sourceIds.forEach { sourceId ->
+                        val sourceItems = this@applyGrouping.fastFilter { it.libraryManga.manga.source == sourceId }
+                        visibleCategories.forEach { category ->
+                            val itemIds = sourceItems.fastFilter { category.id in it.libraryManga.categories }
+                                .fastMap(LibraryItem::id)
+                            if (itemIds.isNotEmpty()) {
+                                add(
+                                    LibraryPage(
+                                        id = "source:$sourceId:category:${category.id}",
+                                        primaryTab = sourceTabs.getValue(sourceId),
+                                        secondaryTab = categoryTabs.getValue(category.id),
+                                        category = category,
+                                        sourceId = sourceId,
+                                        itemIds = itemIds,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            LibraryGroupType.CategoryExtension -> {
+                buildList {
+                    visibleCategories.forEach { category ->
+                        val categoryItems = this@applyGrouping.fastFilter { category.id in it.libraryManga.categories }
+                        if (categoryItems.isEmpty()) {
+                            add(
+                                LibraryPage(
+                                    id = "category:${category.id}",
+                                    primaryTab = categoryTabs.getValue(category.id),
+                                    category = category,
+                                ),
+                            )
+                        } else {
+                            val categorySourceIds = categoryItems.map { it.libraryManga.manga.source }
+                                .distinct()
+                                .sortedWith { sourceId1, sourceId2 ->
+                                    sourceNames.getValue(sourceId1)
+                                        .compareToWithCollator(sourceNames.getValue(sourceId2))
+                                        .takeIf { it != 0 }
+                                        ?: sourceId1.compareTo(sourceId2)
+                                }
+                            categorySourceIds.forEach { sourceId ->
+                                add(
+                                    LibraryPage(
+                                        id = "category:${category.id}:source:$sourceId",
+                                        primaryTab = categoryTabs.getValue(category.id),
+                                        secondaryTab = sourceTabs.getValue(sourceId),
+                                        category = category,
+                                        sourceId = sourceId,
+                                        itemIds = categoryItems.fastFilter { it.libraryManga.manga.source == sourceId }
+                                            .fastMap(LibraryItem::id),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
-        return categories.filter { showSystemCategory || !it.isSystemCategory }
-            .associateWith { groupCache[it.id]?.toList().orEmpty() }
     }
 
-    private fun Map<Category, List</* LibraryItem */ Long>>.applySort(
+    private fun List<LibraryPage>.applySort(
         favoritesById: Map<Long, LibraryItem>,
-    ): Map<Category, List</* LibraryItem */ Long>> {
+        groupType: LibraryGroupType,
+    ): List<LibraryPage> {
         val sortAlphabetically: (LibraryItem, LibraryItem) -> Int = { manga1, manga2 ->
             val title1 = manga1.libraryManga.manga.title.lowercase()
             val title2 = manga2.libraryManga.manga.title.lowercase()
@@ -260,18 +372,25 @@ class LibraryScreenModel(
             }
         }
 
-        return mapValues { (key, value) ->
-            if (key.sort.type == LibrarySort.Type.Random) {
-                return@mapValues value.shuffled(Random(libraryPreferences.randomSortSeed.get()))
+        return map { page ->
+            val sort = if (groupType == LibraryGroupType.Category) {
+                page.category?.sort ?: libraryPreferences.sortingMode.get()
+            } else {
+                libraryPreferences.sortingMode.get()
+            }
+            if (sort.type == LibrarySort.Type.Random) {
+                return@map page.copy(
+                    itemIds = page.itemIds.shuffled(Random(libraryPreferences.randomSortSeed.get())),
+                )
             }
 
-            val manga = value.mapNotNull { favoritesById[it] }
+            val manga = page.itemIds.mapNotNull { favoritesById[it] }
 
-            val comparator = key.sort.comparator()
-                .let { if (key.sort.isAscending) it else it.reversed() }
+            val comparator = sort.comparator()
+                .let { if (sort.isAscending) it else it.reversed() }
                 .thenComparator(sortAlphabetically)
 
-            manga.sortedWith(comparator).map { it.id }
+            page.copy(itemIds = manga.sortedWith(comparator).map { it.id })
         }
     }
 
@@ -504,46 +623,46 @@ class LibraryScreenModel(
             .asState(screenModelScope)
     }
 
-    fun getRandomLibraryItemForCurrentCategory(): LibraryItem? {
+    fun getRandomLibraryItemForCurrentPage(): LibraryItem? {
         val state = state.value
-        return state.getItemsForCategoryId(state.activeCategory?.id).randomOrNull()
+        return state.getItemsForPageId(state.activePage?.id).randomOrNull()
     }
 
     fun showSettingsDialog() {
         mutableState.update { it.copy(dialog = Dialog.SettingsSheet) }
     }
 
-    private var lastSelectionCategory: Long? = null
+    private var lastSelectionPageId: String? = null
 
     fun clearSelection() {
-        lastSelectionCategory = null
+        lastSelectionPageId = null
         mutableState.update { it.copy(selection = setOf()) }
     }
 
-    fun toggleSelection(category: Category, manga: LibraryManga) {
+    fun toggleSelection(page: LibraryPage, manga: LibraryManga) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { set ->
                 if (!set.remove(manga.id)) set.add(manga.id)
             }
-            lastSelectionCategory = category.id.takeIf { newSelection.isNotEmpty() }
+            lastSelectionPageId = page.id.takeIf { newSelection.isNotEmpty() }
             state.copy(selection = newSelection)
         }
     }
 
     /**
      * Selects all mangas between and including the given manga and the last pressed manga from the
-     * same category as the given manga
+     * same group as the given manga
      */
-    fun toggleRangeSelection(category: Category, manga: LibraryManga) {
+    fun toggleRangeSelection(page: LibraryPage, manga: LibraryManga) {
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
                 val lastSelected = list.lastOrNull()
-                if (lastSelectionCategory != category.id) {
+                if (lastSelectionPageId != page.id) {
                     list.add(manga.id)
                     return@mutate
                 }
 
-                val items = state.getItemsForCategoryId(category.id).fastMap { it.id }
+                val items = state.getItemsForPageId(page.id).fastMap { it.id }
                 val lastMangaIndex = items.indexOf(lastSelected)
                 val curMangaIndex = items.indexOf(manga.id)
 
@@ -555,26 +674,26 @@ class LibraryScreenModel(
                 }
                 selectionRange.mapNotNull { items[it] }.let(list::addAll)
             }
-            lastSelectionCategory = category.id
+            lastSelectionPageId = page.id
             state.copy(selection = newSelection)
         }
     }
 
     fun selectAll() {
-        lastSelectionCategory = null
+        lastSelectionPageId = null
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
-                state.getItemsForCategoryId(state.activeCategory?.id).map { it.id }.let(list::addAll)
+                state.getItemsForPageId(state.activePage?.id).map { it.id }.let(list::addAll)
             }
             state.copy(selection = newSelection)
         }
     }
 
     fun invertSelection() {
-        lastSelectionCategory = null
+        lastSelectionPageId = null
         mutableState.update { state ->
             val newSelection = state.selection.mutate { list ->
-                val itemIds = state.getItemsForCategoryId(state.activeCategory?.id).fastMap { it.id }
+                val itemIds = state.getItemsForPageId(state.activePage?.id).fastMap { it.id }
                 val (toRemove, toAdd) = itemIds.partition { it in list }
                 list.removeAll(toRemove)
                 list.addAll(toAdd)
@@ -587,11 +706,11 @@ class LibraryScreenModel(
         mutableState.update { it.copy(searchQuery = query) }
     }
 
-    fun updateActiveCategoryIndex(index: Int) {
+    fun updateActivePageIndex(index: Int) {
         val newIndex = mutableState.updateAndGet { state ->
-            state.copy(activeCategoryIndex = index)
+            state.copy(activePageIndex = index)
         }
-            .coercedActiveCategoryIndex
+            .coercedActivePageIndex
 
         libraryPreferences.lastUsedCategory.set(newIndex)
     }
@@ -602,7 +721,7 @@ class LibraryScreenModel(
             val mangaList = state.value.selectedManga
 
             // Hide the default category because it has a different behavior than the ones from db.
-            val categories = state.value.displayedCategories.filter { it.id != 0L }
+            val categories = state.value.libraryData.categories.filter { it.id != 0L }
 
             // Get indexes of the common categories to preselect.
             val common = getCommonCategories(mangaList)
@@ -653,7 +772,16 @@ class LibraryScreenModel(
         val filterBookmarked: TriState,
         val filterCompleted: TriState,
         val filterIntervalCustom: TriState,
-    )
+    ) {
+        val hasActiveFilters: Boolean =
+            globalFilterDownloaded ||
+                filterDownloaded != TriState.DISABLED ||
+                filterUnread != TriState.DISABLED ||
+                filterStarted != TriState.DISABLED ||
+                filterBookmarked != TriState.DISABLED ||
+                filterCompleted != TriState.DISABLED ||
+                filterIntervalCustom != TriState.DISABLED
+    }
 
     @Immutable
     data class LibraryData(
@@ -661,13 +789,13 @@ class LibraryScreenModel(
         val showSystemCategory: Boolean = false,
         val categories: List<Category> = emptyList(),
         val favorites: List<LibraryItem> = emptyList(),
+        val hasActiveFilters: Boolean = false,
     ) {
         val favoritesById by lazy { favorites.associateBy { it.id } }
     }
 
     @Immutable
     data class State(
-        val isInitialized: Boolean = false,
         val isLoading: Boolean = true,
         val searchQuery: String? = null,
         val selection: Set</* Manga */ Long> = setOf(),
@@ -677,17 +805,21 @@ class LibraryScreenModel(
         val showMangaContinueButton: Boolean = false,
         val dialog: Dialog? = null,
         val libraryData: LibraryData = LibraryData(),
-        private val activeCategoryIndex: Int = 0,
-        private val groupedFavorites: Map<Category, List</* LibraryItem */ Long>> = emptyMap(),
+        val groupType: LibraryGroupType = LibraryGroupType.Category,
+        private val activePageIndex: Int = 0,
+        private val groupedFavorites: List<LibraryPage> = emptyList(),
     ) {
-        val displayedCategories: List<Category> = groupedFavorites.keys.toList()
+        val displayedPages: List<LibraryPage> = groupedFavorites
 
-        val coercedActiveCategoryIndex = activeCategoryIndex.coerceIn(
+        val coercedActivePageIndex = activePageIndex.coerceIn(
             minimumValue = 0,
-            maximumValue = displayedCategories.lastIndex.coerceAtLeast(0),
+            maximumValue = displayedPages.lastIndex.coerceAtLeast(0),
         )
 
-        val activeCategory: Category? = displayedCategories.getOrNull(coercedActiveCategoryIndex)
+        val activePage: LibraryPage? = displayedPages.getOrNull(coercedActivePageIndex)
+
+        val activeSortCategory: Category? = activePage?.category
+            ?.takeIf { groupType == LibraryGroupType.Category }
 
         val isLibraryEmpty = libraryData.favorites.isEmpty()
 
@@ -695,18 +827,27 @@ class LibraryScreenModel(
 
         val selectedManga by lazy { selection.mapNotNull { libraryData.favoritesById[it]?.libraryManga?.manga } }
 
-        fun getItemsForCategoryId(categoryId: Long?): List<LibraryItem> {
-            if (categoryId == null) return emptyList()
-            val category = displayedCategories.find { it.id == categoryId } ?: return emptyList()
-            return getItemsForCategory(category)
+        fun getItemsForPageId(pageId: String?): List<LibraryItem> {
+            if (pageId == null) return emptyList()
+            val page = displayedPages.find { it.id == pageId } ?: return emptyList()
+            return getItemsForPage(page)
         }
 
-        fun getItemsForCategory(category: Category): List<LibraryItem> {
-            return groupedFavorites[category].orEmpty().mapNotNull { libraryData.favoritesById[it] }
+        fun getItemsForPage(page: LibraryPage): List<LibraryItem> {
+            return page.itemIds.mapNotNull { libraryData.favoritesById[it] }
         }
 
-        fun getItemCountForCategory(category: Category): Int? {
-            return if (showMangaCount || !searchQuery.isNullOrEmpty()) groupedFavorites[category]?.size else null
+        fun getItemCountForPage(page: LibraryPage): Int? {
+            return if (showMangaCount || !searchQuery.isNullOrEmpty()) page.itemIds.size else null
+        }
+
+        fun getItemCountForPrimaryTab(tab: LibraryPageTab): Int? {
+            if (!showMangaCount && searchQuery.isNullOrEmpty()) return null
+            return displayedPages
+                .filter { it.primaryTab.id == tab.id }
+                .flatMap(LibraryPage::itemIds)
+                .distinct()
+                .size
         }
 
         fun getToolbarTitle(
@@ -714,14 +855,11 @@ class LibraryScreenModel(
             defaultCategoryTitle: String,
             page: Int,
         ): LibraryToolbarTitle {
-            val category = displayedCategories.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
-            val categoryName = category.let {
-                if (it.isSystemCategory) defaultCategoryTitle else it.name
-            }
-            val title = if (showCategoryTabs) defaultTitle else categoryName
+            val currentPage = displayedPages.getOrNull(page) ?: return LibraryToolbarTitle(defaultTitle)
+            val title = if (showCategoryTabs) defaultTitle else currentPage.displayTitle(defaultCategoryTitle)
             val count = when {
                 !showMangaCount -> null
-                !showCategoryTabs -> getItemCountForCategory(category)
+                !showCategoryTabs -> getItemCountForPage(currentPage)
                 // Whole library count
                 else -> libraryData.favorites.size
             }

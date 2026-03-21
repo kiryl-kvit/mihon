@@ -136,8 +136,10 @@ private fun SortPage(
     category: Category?,
     screenModel: LibrarySettingsScreenModel,
 ) {
-    val sortingMode = category.sort.type
-    val sortDescending = !category.sort.isAscending
+    val globalSort by screenModel.libraryPreferences.sortingMode.collectAsState()
+    val currentSort = category?.sort ?: globalSort
+    val sortingMode = currentSort.type
+    val sortDescending = !currentSort.isAscending
 
     val options = remember {
         listOfNotNull(
@@ -258,8 +260,17 @@ private fun DisplayPage(
     )
 
     HeadingItem(MR.strings.tabs_header)
+    val groupType by screenModel.libraryPreferences.groupType.collectAsState()
     CheckboxItem(
-        label = stringResource(MR.strings.action_display_show_tabs),
+        label = stringResource(
+            when (groupType) {
+                LibraryGroupType.Category -> MR.strings.action_display_show_tabs
+                LibraryGroupType.Extension -> MR.strings.action_display_show_extension_tabs
+                LibraryGroupType.ExtensionCategory,
+                LibraryGroupType.CategoryExtension,
+                -> MR.strings.action_display_show_group_tabs
+            },
+        ),
         pref = screenModel.libraryPreferences.categoryTabs,
     )
     CheckboxItem(
