@@ -1,36 +1,29 @@
-import mihon.buildlogic.AndroidConfig
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
-    id("mihon.library.kmp")
+    alias(mihonx.plugins.kotlin.multiplatform)
+    alias(mihonx.plugins.spotless)
 }
 
 kotlin {
     android {
         namespace = "tachiyomi.source.local"
-        compileSdk = AndroidConfig.COMPILE_SDK
-        minSdk = AndroidConfig.MIN_SDK
 
-        withHostTest {}
+        // TODO(antsy): Remove when https://youtrack.jetbrains.com/issue/KT-83319 is resolved
+        withHostTest { }
+    }
 
-        optimization {
-            consumerKeepRules.apply {
-                publish = true
-                file("consumer-rules.pro")
-            }
-        }
+    @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    @Suppress("UnstableApiUsage")
+    dependencies {
+        implementation(projects.sourceApi)
+        api(projects.i18n)
+
+        implementation(libs.unifile)
     }
 
     sourceSets {
-        val commonMain by getting {
-            dependencies {
-                implementation(projects.sourceApi)
-                api(projects.i18n)
-
-                implementation(libs.unifile)
-            }
-        }
-        val androidMain by getting {
+        androidMain {
             dependencies {
                 implementation(projects.core.archive)
                 implementation(projects.core.common)

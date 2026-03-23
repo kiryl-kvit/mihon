@@ -1,46 +1,41 @@
-import mihon.buildlogic.AndroidConfig
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
-    id("mihon.library.kmp")
-    kotlin("plugin.serialization")
+    alias(mihonx.plugins.kotlin.multiplatform)
+    alias(mihonx.plugins.spotless)
+
+    alias(libs.plugins.kotlin.serialization)
 }
 
 kotlin {
+    @Suppress("UnstableApiUsage")
     android {
         namespace = "eu.kanade.tachiyomi.source"
-        compileSdk = AndroidConfig.COMPILE_SDK
-        minSdk = AndroidConfig.MIN_SDK
-
-        withHostTest {}
-
         optimization {
-            consumerKeepRules.apply {
-                publish = true
-                file("consumer-proguard.pro")
-            }
+            consumerKeepRules.file("consumer-proguard.pro")
         }
+
+        // TODO(antsy): Remove when https://youtrack.jetbrains.com/issue/KT-83319 is resolved
+        withHostTest { }
+    }
+
+    @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    @Suppress("UnstableApiUsage")
+    dependencies {
+        api(libs.kotlinx.serialization.json)
+        api(libs.injekt)
+        api(libs.rxJava)
+        api(libs.jsoup)
+
+        implementation(platform(libs.androidx.compose.bom))
+        implementation(libs.androidx.compose.runtime)
     }
 
     sourceSets {
-        val commonMain by getting {
-            dependencies {
-                api(libs.kotlinx.serialization.json)
-                api(libs.injekt)
-                api(libs.rxJava)
-                api(libs.jsoup)
-
-                implementation(project.dependencies.platform(libs.androidx.compose.bom))
-                implementation(libs.androidx.compose.runtime)
-            }
-        }
-        val androidMain by getting {
+        androidMain {
             dependencies {
                 implementation(projects.core.common)
                 api(libs.androidx.preference)
-
-                // Workaround for https://youtrack.jetbrains.com/issue/KT-57605
-                implementation(libs.kotlinx.coroutines.android)
             }
         }
     }

@@ -1,7 +1,7 @@
 ## Fork that adds some features and changes that I miss in the official version and are convenient for me personally
 
 ## Original app version base
-### 0.19.5
+### 0.19.7
 
 ## Changes from the original
 - Removed third-party integrations
