@@ -1,18 +1,12 @@
-import com.android.build.api.dsl.LibraryExtension
-import org.gradle.kotlin.dsl.configure
-
 plugins {
-    id("mihon.library")
-    id("mihon.library.compose")
+    alias(mihonx.plugins.android.library)
+    alias(mihonx.plugins.compose)
+
+    alias(mihonx.plugins.spotless)
 }
 
-extensions.configure<LibraryExtension> {
+android {
     namespace = "tachiyomi.presentation.core"
-
-    defaultConfig {
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
-    }
 }
 
 kotlin {

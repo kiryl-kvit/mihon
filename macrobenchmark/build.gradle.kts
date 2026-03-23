@@ -2,7 +2,7 @@ import com.android.build.api.dsl.TestExtension
 import org.gradle.kotlin.dsl.configure
 
 plugins {
-    id("mihon.benchmark")
+    alias(mihonx.plugins.android.test)
 }
 
 extensions.configure<TestExtension> {

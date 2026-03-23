@@ -1,41 +1,40 @@
-import mihon.buildlogic.AndroidConfig
+import mihon.gradle.tasks.GenerateLocalesConfigTask
 import org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi
 
 plugins {
-    id("mihon.library.kmp")
+    alias(mihonx.plugins.kotlin.multiplatform)
+    alias(mihonx.plugins.spotless)
+
     alias(libs.plugins.moko.resources)
 }
 
 kotlin {
     android {
         namespace = "tachiyomi.i18n"
-        compileSdk = AndroidConfig.COMPILE_SDK
-        minSdk = AndroidConfig.MIN_SDK
 
-        withHostTest {}
-
-        androidResources {
-            enable = true
-        }
-
-        lint {
-            disable.addAll(listOf("MissingTranslation", "ExtraTranslation"))
-        }
+        // TODO(antsy): Remove when https://youtrack.jetbrains.com/issue/KT-83319 is resolved
+        withHostTest { }
     }
 
-    applyDefaultHierarchyTemplate()
-
-    sourceSets {
-        commonMain {
-            dependencies {
-                api(libs.moko.resources)
-            }
-        }
+    @OptIn(ExperimentalKotlinGradlePluginApi::class)
+    @Suppress("UnstableApiUsage")
+    dependencies {
+        api(libs.moko.resources)
     }
 
     @OptIn(ExperimentalKotlinGradlePluginApi::class)
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val resSource = variant.sources.res ?: return@onVariants
+
+        val variantName = variant.name.replaceFirstChar { it.uppercase() }
+        val task = tasks.register<GenerateLocalesConfigTask>("generate${variantName}LocalesConfig")
+        resSource.addGeneratedSourceDirectory(task) { it.outputDir }
     }
 }
 

@@ -1,20 +1,19 @@
-import com.android.build.api.dsl.ApplicationExtension
-import mihon.buildlogic.tasks.PrepareAboutLibrariesResourceTask
-import mihon.buildlogic.tasks.GenerateShortcutsXmlTask
-import mihon.buildlogic.Config
-import mihon.buildlogic.getBuildTime
-import mihon.buildlogic.getCommitCount
-import mihon.buildlogic.getGitSha
-import org.gradle.kotlin.dsl.configure
+import mihon.gradle.Config
+import mihon.gradle.getBuildTime
+import mihon.gradle.getLatestCommitCount
+import mihon.gradle.getLatestCommitSha
+import mihon.gradle.tasks.ReplaceShortcutsPlaceholderTask
 
 plugins {
-    id("mihon.android.application")
-    id("mihon.android.application.compose")
-    id("mihon.aboutlibraries")
-    kotlin("plugin.serialization")
+    alias(mihonx.plugins.android.application)
+    alias(mihonx.plugins.compose)
+    alias(mihonx.plugins.spotless)
+
+    alias(libs.plugins.aboutLibraries)
+    alias(libs.plugins.kotlin.serialization)
 }
 
-extensions.configure<ApplicationExtension> {
+android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
@@ -23,9 +22,9 @@ extensions.configure<ApplicationExtension> {
         versionCode = 22
         versionName = "1.2.0"
 
-        buildConfigField("String", "COMMIT_COUNT", "\"${getCommitCount()}\"")
-        buildConfigField("String", "COMMIT_SHA", "\"${getGitSha()}\"")
-        buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = false)}\"")
+        buildConfigField("String", "COMMIT_COUNT", "\"${getLatestCommitCount()}\"")
+        buildConfigField("String", "COMMIT_SHA", "\"${getLatestCommitSha()}\"")
+        buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLatestCommitTime = false)}\"")
         buildConfigField("boolean", "UPDATER_ENABLED", "${Config.enableUpdater}")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -36,7 +35,7 @@ extensions.configure<ApplicationExtension> {
     buildTypes {
         val debug by getting {
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-${getCommitCount()}"
+            versionNameSuffix = "-${getLatestCommitCount()}"
             isPseudoLocalesEnabled = true
         }
         val release by getting {
@@ -45,7 +44,7 @@ extensions.configure<ApplicationExtension> {
 
             proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
 
-            buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = true)}\"")
+            buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLatestCommitTime = true)}\"")
         }
 
         val commonMatchingFallbacks = listOf(release.name)
@@ -67,7 +66,7 @@ extensions.configure<ApplicationExtension> {
 
             matchingFallbacks.addAll(commonMatchingFallbacks)
 
-            buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLastCommitTime = false)}\"")
+            buildConfigField("String", "BUILD_TIME", "\"${getBuildTime(useLatestCommitTime = false)}\"")
         }
         create("benchmark") {
             initWith(release)
@@ -134,9 +133,6 @@ extensions.configure<ApplicationExtension> {
         viewBinding = true
         buildConfig = true
         aidl = true
-
-        // Disable some unused things
-        shaders = false
     }
 
     lint {
@@ -176,7 +172,6 @@ dependencies {
     implementation(projects.domain)
     implementation(projects.presentationCore)
     implementation(projects.presentationWidget)
-
     // Compose
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.foundation)
@@ -286,28 +281,17 @@ dependencies {
 }
 
 androidComponents {
-    val prepareAboutLibrariesResource = tasks.register<PrepareAboutLibrariesResourceTask>("prepareAboutLibrariesResource") {
-        dependsOn(tasks.named("exportLibraryDefinitions"))
-        sourceFile.set(layout.buildDirectory.file("generated/aboutLibraries/aboutlibraries.json"))
-    }
+    onVariants { variant ->
+        val resSource = variant.sources.res ?: return@onVariants
 
-    onVariants(selector().all()) { variant ->
-        val generateShortcutsTask = tasks.register<GenerateShortcutsXmlTask>(
-            "generate${variant.name.replaceFirstChar(Char::titlecase)}ShortcutsXml",
+        val variantName = variant.name.replaceFirstChar { it.uppercase() }
+        val replaceShortcutsPlaceholderTask = tasks.register<ReplaceShortcutsPlaceholderTask>(
+            "replace${variantName}ShortcutPlaceholder",
         ) {
-            sourceFile.set(layout.projectDirectory.file("shortcuts.xml"))
             applicationId.set(variant.applicationId)
+            shortcutsFile.set(projectDir.resolve("src/main/shortcuts.xml"))
         }
-
-        variant.sources.res?.addGeneratedSourceDirectory(
-            prepareAboutLibrariesResource,
-            PrepareAboutLibrariesResourceTask::outputDirectory,
-        )
-
-        variant.sources.res?.addGeneratedSourceDirectory(
-            generateShortcutsTask,
-            GenerateShortcutsXmlTask::outputDirectory,
-        )
+        resSource.addGeneratedSourceDirectory(replaceShortcutsPlaceholderTask) { it.outputDir }
     }
 
     onVariants(selector().withFlavor("default" to "standard")) {
