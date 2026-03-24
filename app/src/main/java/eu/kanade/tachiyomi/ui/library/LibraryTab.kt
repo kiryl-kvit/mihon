@@ -49,9 +49,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import mihon.feature.migration.config.MigrationConfigScreen
+import dev.icerock.moko.resources.StringResource
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
@@ -93,16 +93,36 @@ data object LibraryTab : Tab {
 
         val snackbarHostState = remember { SnackbarHostState() }
 
-        val onClickRefresh: (Category?) -> Boolean = { category ->
-            val started = LibraryUpdateJob.startNow(context, category)
+        fun showRefreshMessage(started: Boolean, messageRes: StringResource) {
             scope.launch {
                 val msgRes = when {
                     !started -> MR.strings.update_already_running
-                    category != null -> MR.strings.updating_category
-                    else -> MR.strings.updating_library
+                    else -> messageRes
                 }
                 snackbarHostState.showSnackbar(context.stringResource(msgRes))
             }
+        }
+
+        val onClickRefresh: (LibraryScreenModel.State) -> Boolean = { state ->
+            val activePage = state.activePage
+            val started = LibraryUpdateJob.startNow(
+                context = context,
+                category = activePage?.category,
+                sourceId = activePage?.sourceId,
+            )
+            val messageRes = when {
+                activePage?.sourceId != null && activePage.category != null -> MR.strings.updating_group
+                activePage?.sourceId != null -> MR.strings.updating_extension
+                activePage?.category != null -> MR.strings.updating_category
+                else -> MR.strings.updating_library
+            }
+            showRefreshMessage(started, messageRes)
+            started
+        }
+
+        val onClickGlobalUpdate: () -> Boolean = {
+            val started = LibraryUpdateJob.startNow(context)
+            showRefreshMessage(started, MR.strings.updating_library)
             started
         }
 
@@ -111,21 +131,22 @@ data object LibraryTab : Tab {
                 val title = state.getToolbarTitle(
                     defaultTitle = stringResource(MR.strings.label_library),
                     defaultCategoryTitle = stringResource(MR.strings.label_default),
-                    page = state.coercedActiveCategoryIndex,
+                    page = state.coercedActivePageIndex,
                 )
                 LibraryToolbar(
                     hasActiveFilters = state.hasActiveFilters,
                     selectedCount = state.selection.size,
                     title = title,
+                    currentGroupType = state.groupType,
                     onClickUnselectAll = screenModel::clearSelection,
                     onClickSelectAll = screenModel::selectAll,
                     onClickInvertSelection = screenModel::invertSelection,
                     onClickFilter = screenModel::showSettingsDialog,
-                    onClickRefresh = { onClickRefresh(state.activeCategory) },
-                    onClickGlobalUpdate = { onClickRefresh(null) },
+                    onClickRefresh = { onClickRefresh(state) },
+                    onClickGlobalUpdate = { onClickGlobalUpdate() },
                     onClickOpenRandomManga = {
                         scope.launch {
-                            val randomItem = screenModel.getRandomLibraryItemForCurrentCategory()
+                            val randomItem = screenModel.getRandomLibraryItemForCurrentPage()
                             if (randomItem != null) {
                                 navigator.push(MangaScreen(randomItem.libraryManga.manga.id))
                             } else {
@@ -179,14 +200,14 @@ data object LibraryTab : Tab {
                 }
                 else -> {
                     LibraryContent(
-                        categories = state.displayedCategories,
+                        pages = state.displayedPages,
                         searchQuery = state.searchQuery,
                         selection = state.selection,
                         contentPadding = contentPadding,
-                        currentPage = state.coercedActiveCategoryIndex,
+                        currentPage = state.coercedActivePageIndex,
                         hasActiveFilters = state.hasActiveFilters,
                         showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
-                        onChangeCurrentPage = screenModel::updateActiveCategoryIndex,
+                        onChangeCurrentPage = screenModel::updateActivePageIndex,
                         onClickManga = { navigator.push(MangaScreen(it)) },
                         onContinueReadingClicked = { it: LibraryManga ->
                             scope.launchIO {
@@ -206,14 +227,15 @@ data object LibraryTab : Tab {
                             screenModel.toggleRangeSelection(category, manga)
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
-                        onRefresh = { onClickRefresh(state.activeCategory) },
+                        onRefresh = { onClickRefresh(state) },
                         onGlobalSearchClicked = {
                             navigator.push(GlobalSearchScreen(screenModel.state.value.searchQuery ?: ""))
                         },
-                        getItemCountForCategory = { state.getItemCountForCategory(it) },
+                        getItemCountForPage = { state.getItemCountForPage(it) },
+                        getItemCountForPrimaryTab = { state.getItemCountForPrimaryTab(it) },
                         getDisplayMode = { screenModel.getDisplayMode() },
                         getColumnsForOrientation = { screenModel.getColumnsForOrientation(it) },
-                        getItemsForCategory = { state.getItemsForCategory(it) },
+                        getItemsForPage = { state.getItemsForPage(it) },
                     )
                 }
             }
@@ -225,7 +247,7 @@ data object LibraryTab : Tab {
                 LibrarySettingsDialog(
                     onDismissRequest = onDismissRequest,
                     screenModel = settingsScreenModel,
-                    category = state.activeCategory,
+                    category = state.activeSortCategory,
                 )
             }
             is LibraryScreenModel.Dialog.ChangeCategory -> {

@@ -69,7 +69,7 @@ import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.data.updater.RELEASE_URL
-import eu.kanade.tachiyomi.extension.api.ExtensionApi
+import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
@@ -111,6 +111,7 @@ class MainActivity : BaseActivity() {
 
     private val downloadCache: DownloadCache by injectLazy()
     private val chapterCache: ChapterCache by injectLazy()
+    private val extensionManager: ExtensionManager by injectLazy()
 
     private val getIncognitoState: GetIncognitoState by injectLazy()
 
@@ -273,6 +274,16 @@ class MainActivity : BaseActivity() {
                 chapterCache.clear()
             }
         }
+
+        if (isLaunch) {
+            extensionManager.scope.launchIO {
+                try {
+                    extensionManager.checkForUpdates(applicationContext)
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                }
+            }
+        }
     }
 
     override fun onProvideAssistContent(outContent: AssistContent) {
@@ -322,14 +333,6 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        // Extensions updates
-        LaunchedEffect(Unit) {
-            try {
-                ExtensionApi().checkForUpdates(context)
-            } catch (e: Exception) {
-                logcat(LogPriority.ERROR, e)
-            }
-        }
     }
 
     @Composable

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.LocalContentColor
@@ -225,6 +226,12 @@ object SettingsMainScreen : Screen() {
             subtitleRes = MR.strings.pref_advanced_summary,
             icon = Icons.Outlined.Code,
             screen = SettingsAdvancedScreen,
+        ),
+        Item(
+            titleRes = MR.strings.pref_category_custom,
+            subtitleRes = MR.strings.pref_custom_summary,
+            icon = Icons.Outlined.Settings,
+            screen = CustomSettingsScreen,
         ),
         Item(
             titleRes = MR.strings.pref_category_about,

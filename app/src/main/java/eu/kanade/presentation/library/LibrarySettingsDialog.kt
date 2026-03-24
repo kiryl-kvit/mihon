@@ -2,7 +2,6 @@ package eu.kanade.presentation.library
 
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,6 +24,7 @@ import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.sort
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -32,6 +32,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BaseSortItem
 import tachiyomi.presentation.core.components.CheckboxItem
 import tachiyomi.presentation.core.components.HeadingItem
+import tachiyomi.presentation.core.components.RadioItem
 import tachiyomi.presentation.core.components.SettingsChipRow
 import tachiyomi.presentation.core.components.SliderItem
 import tachiyomi.presentation.core.components.SortItem
@@ -51,6 +52,7 @@ fun LibrarySettingsDialog(
             stringResource(MR.strings.action_filter),
             stringResource(MR.strings.action_sort),
             stringResource(MR.strings.action_display),
+            stringResource(MR.strings.action_group),
         ),
     ) { page ->
         Column(
@@ -69,13 +71,16 @@ fun LibrarySettingsDialog(
                 2 -> DisplayPage(
                     screenModel = screenModel,
                 )
+                3 -> GroupPage(
+                    screenModel = screenModel,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ColumnScope.FilterPage(
+private fun FilterPage(
     screenModel: LibrarySettingsScreenModel,
 ) {
     val filterDownloaded by screenModel.libraryPreferences.filterDownloaded.collectAsState()
@@ -155,13 +160,15 @@ private fun ColumnScope.FilterPage(
 }
 
 @Composable
-private fun ColumnScope.SortPage(
+private fun SortPage(
     category: Category?,
     screenModel: LibrarySettingsScreenModel,
 ) {
     val trackers by screenModel.trackersFlow.collectAsState()
-    val sortingMode = category.sort.type
-    val sortDescending = !category.sort.isAscending
+    val globalSort by screenModel.libraryPreferences.sortingMode.collectAsState()
+    val currentSort = category?.sort ?: globalSort
+    val sortingMode = currentSort.type
+    val sortDescending = !currentSort.isAscending
 
     val options = remember(trackers.isEmpty()) {
         val trackerMeanPair = if (trackers.isNotEmpty()) {
@@ -183,7 +190,7 @@ private fun ColumnScope.SortPage(
         )
     }
 
-    options.map { (titleRes, mode) ->
+    options.forEach { (titleRes, mode) ->
         if (mode == LibrarySort.Type.Random) {
             BaseSortItem(
                 label = stringResource(titleRes),
@@ -193,7 +200,7 @@ private fun ColumnScope.SortPage(
                     screenModel.setSort(category, mode, LibrarySort.Direction.Ascending)
                 },
             )
-            return@map
+            return@forEach
         }
         SortItem(
             label = stringResource(titleRes),
@@ -226,12 +233,12 @@ private val displayModes = listOf(
 )
 
 @Composable
-private fun ColumnScope.DisplayPage(
+private fun DisplayPage(
     screenModel: LibrarySettingsScreenModel,
 ) {
     val displayMode by screenModel.libraryPreferences.displayMode.collectAsState()
     SettingsChipRow(MR.strings.action_display_mode) {
-        displayModes.map { (titleRes, mode) ->
+        displayModes.forEach { (titleRes, mode) ->
             FilterChip(
                 selected = displayMode == mode,
                 onClick = { screenModel.setDisplayMode(mode) },
@@ -288,12 +295,47 @@ private fun ColumnScope.DisplayPage(
     )
 
     HeadingItem(MR.strings.tabs_header)
+    val groupType by screenModel.libraryPreferences.groupType.collectAsState()
     CheckboxItem(
-        label = stringResource(MR.strings.action_display_show_tabs),
+        label = stringResource(
+            when (groupType) {
+                LibraryGroupType.Category -> MR.strings.action_display_show_tabs
+                LibraryGroupType.Extension -> MR.strings.action_display_show_extension_tabs
+                LibraryGroupType.ExtensionCategory,
+                LibraryGroupType.CategoryExtension,
+                -> MR.strings.action_display_show_group_tabs
+            },
+        ),
         pref = screenModel.libraryPreferences.categoryTabs,
     )
     CheckboxItem(
         label = stringResource(MR.strings.action_display_show_number_of_items),
         pref = screenModel.libraryPreferences.categoryNumberOfItems,
     )
+}
+
+@Composable
+private fun GroupPage(
+    screenModel: LibrarySettingsScreenModel,
+) {
+    val groupState by screenModel.libraryPreferences.groupType.collectAsState()
+
+    val options = remember {
+        listOfNotNull(
+            MR.strings.action_group_category to LibraryGroupType.Category,
+            MR.strings.action_group_extension to LibraryGroupType.Extension,
+            MR.strings.action_group_extension_category to LibraryGroupType.ExtensionCategory,
+            MR.strings.action_group_category_extension to LibraryGroupType.CategoryExtension,
+        )
+    }
+
+    options.forEach { (titleRes, mode) ->
+        RadioItem(
+            label = stringResource(titleRes),
+            selected = mode == groupState,
+            onClick = {
+                screenModel.setGroup(mode)
+            }
+        )
+    }
 }

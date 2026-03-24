@@ -91,6 +91,11 @@
         <item quantity="other">%d extension updates available</item>
     </plurals>
 
+    <plurals name="extension_auto_update_notification_updated">
+        <item quantity="one">1 extension updated automatically</item>
+        <item quantity="other">%d extensions updated automatically</item>
+    </plurals>
+
     <plurals name="num_repos">
         <item quantity="one">%d repo</item>
         <item quantity="other">%d repos</item>
