@@ -15,6 +15,7 @@ import mihon.feature.profiles.core.ProfileAwareStore
 import mihon.feature.profiles.core.ProfileStore
 import mihon.feature.profiles.core.ProfileStoreImpl
 import mihon.feature.profiles.core.ProfilesPreferences
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.storage.AndroidStorageFolderProvider
@@ -38,6 +39,7 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory { ProfileStoreImpl(app, get()) }
         addSingletonFactory<ProfileStore> { get<ProfileStoreImpl>() }
         addSingletonFactory<ProfileAwareStore> { get<ProfileStoreImpl>() }
+        addSingletonFactory<ActiveProfileProvider> { get<ProfileStoreImpl>() }
         addSingletonFactory {
             NetworkPreferences(
                 preferenceStore = get<ProfileStore>().basePreferenceStore(),
