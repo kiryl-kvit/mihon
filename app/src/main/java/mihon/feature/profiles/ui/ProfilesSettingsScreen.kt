@@ -308,7 +308,7 @@ private fun ProfileCard(
                 TextButton(onClick = onRename) {
                     Text(stringResource(MR.strings.action_edit))
                 }
-                if (!profile.isArchived && profile.id != ProfileConstants.defaultProfileId) {
+                if (!profile.isArchived && !isActive && profile.id != ProfileConstants.defaultProfileId) {
                     TextButton(onClick = onArchive) {
                         Text(stringResource(MR.strings.action_archive))
                     }

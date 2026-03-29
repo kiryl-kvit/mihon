@@ -210,7 +210,10 @@ class MainActivity : BaseActivity() {
                 val initialProfile = profileManager.loadInitialProfile()
                 setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
 
-                val shouldShowPicker = profilesPreferences.pickerEnabled.get() && profileManager.shouldShowPicker.first()
+                val shouldShowPicker =
+                    profilesPreferences.pickerEnabled.get() &&
+                        profileManager.shouldShowPicker.first() &&
+                        initialProfile == null
                 if (shouldShowPicker) {
                     startupGateState = ProfileStartupGateState.Picker
                     pendingAuthProfile = null
@@ -358,6 +361,7 @@ class MainActivity : BaseActivity() {
                                 return@launch
                             }
                             profileManager.setActiveProfile(profile.id)
+                            profilesPreferences.pickerEnabled.set(false)
                             setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
                             startupGateState = ProfileStartupGateState.Ready
                             activity.intent = Intent(activity.intent).apply {

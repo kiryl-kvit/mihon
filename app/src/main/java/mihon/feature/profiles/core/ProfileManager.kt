@@ -108,12 +108,8 @@ class ProfileManager(
 
     suspend fun setProfileArchived(profileId: Long, archived: Boolean) {
         if (profileId == ProfileConstants.defaultProfileId && archived) return
+        if (archived && activeProfileId == profileId) return
         profileDatabase.updateProfile(id = profileId, isArchived = archived)
-        if (archived && activeProfileId == profileId) {
-            val fallback = visibleProfiles.value.firstOrNull { it.id != profileId }
-                ?: profileDatabase.getProfileById(ProfileConstants.defaultProfileId)
-            if (fallback != null) setActiveProfile(fallback.id)
-        }
     }
 
     suspend fun setProfileRequiresAuth(profileId: Long, enabled: Boolean) {
