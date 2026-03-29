@@ -68,8 +68,14 @@ class HistoryRepositoryImpl(
 
     override suspend fun upsertHistory(historyUpdate: HistoryUpdate) {
         try {
-            handler.await {
-                historyQueries.upsert(
+            handler.await(inTransaction = true) {
+                historyQueries.upsertUpdate(
+                    historyUpdate.readAt,
+                    historyUpdate.sessionReadDuration,
+                    profileProvider.activeProfileId,
+                    historyUpdate.chapterId,
+                )
+                historyQueries.upsertInsert(
                     profileProvider.activeProfileId,
                     historyUpdate.chapterId,
                     historyUpdate.readAt,

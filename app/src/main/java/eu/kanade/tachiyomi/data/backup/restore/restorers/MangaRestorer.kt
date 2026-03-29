@@ -358,7 +358,13 @@ class MangaRestorer(
         if (toUpdate.isNotEmpty()) {
             handler.await(true) {
                 toUpdate.forEach {
-                    historyQueries.upsert(
+                    historyQueries.upsertUpdate(
+                        it.readAt,
+                        it.readDuration,
+                        profileProvider.activeProfileId,
+                        it.chapterId,
+                    )
+                    historyQueries.upsertInsert(
                         profileProvider.activeProfileId,
                         it.chapterId,
                         it.readAt,

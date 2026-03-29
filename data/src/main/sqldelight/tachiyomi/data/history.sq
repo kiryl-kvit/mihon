@@ -76,16 +76,17 @@ DELETE FROM history
 WHERE profile_id = :profileId
 AND last_read = 0;
 
-upsert:
-INSERT INTO history(profile_id, chapter_id, last_read, time_read)
-VALUES (:profileId, :chapterId, :readAt, :time_read)
-ON CONFLICT(profile_id, chapter_id)
-DO UPDATE
+upsertUpdate:
+UPDATE history
 SET
     last_read = :readAt,
     time_read = time_read + :time_read
 WHERE profile_id = :profileId
 AND chapter_id = :chapterId;
+
+upsertInsert:
+INSERT OR IGNORE INTO history(profile_id, chapter_id, last_read, time_read)
+VALUES (:profileId, :chapterId, :readAt, :time_read);
 
 getReadDuration:
 SELECT coalesce(sum(time_read), 0)
