@@ -7,7 +7,10 @@ import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.backupChapterMapper
 import eu.kanade.tachiyomi.data.backup.models.backupTrackMapper
 import eu.kanade.tachiyomi.ui.reader.setting.ReadingMode
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.history.model.History
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.history.interactor.GetHistory
 import tachiyomi.domain.manga.model.Manga
@@ -16,28 +19,42 @@ import uy.kohesive.injekt.api.get
 
 class MangaBackupCreator(
     private val handler: DatabaseHandler = Injekt.get(),
+    private val profileProvider: ActiveProfileProvider = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val getHistory: GetHistory = Injekt.get(),
 ) {
 
     suspend operator fun invoke(mangas: List<Manga>, options: BackupOptions): List<BackupManga> {
+        return invoke(profileProvider.activeProfileId, mangas, options)
+    }
+
+    suspend operator fun invoke(
+        profileId: Long,
+        mangas: List<Manga>,
+        options: BackupOptions,
+    ): List<BackupManga> {
         return mangas.map {
-            backupManga(it, options)
+            backupManga(profileId, it, options)
         }
     }
 
-    private suspend fun backupManga(manga: Manga, options: BackupOptions): BackupManga {
+    private suspend fun backupManga(
+        profileId: Long,
+        manga: Manga,
+        options: BackupOptions,
+    ): BackupManga {
         // Entry for this manga
         val mangaObject = manga.toBackupManga()
 
         mangaObject.excludedScanlators = handler.awaitList {
-            excluded_scanlatorsQueries.getExcludedScanlatorsByMangaId(manga.id)
+            excluded_scanlatorsQueries.getExcludedScanlatorsByMangaId(profileId, manga.id)
         }
 
         if (options.chapters) {
             // Backup all the chapters
             handler.awaitList {
                 chaptersQueries.getChaptersByMangaId(
+                    profileId = profileId,
                     mangaId = manga.id,
                     applyScanlatorFilter = 0, // false
                     mapper = backupChapterMapper,
@@ -49,24 +66,54 @@ class MangaBackupCreator(
 
         if (options.categories) {
             // Backup categories for this manga
-            val categoriesForManga = getCategories.await(manga.id)
+            val categoriesForManga = if (profileId == profileProvider.activeProfileId) {
+                getCategories.await(manga.id)
+            } else {
+                handler.awaitList {
+                    categoriesQueries.getCategoriesByMangaId(profileId, manga.id) { id, name, order, flags ->
+                        Category(
+                            id = id,
+                            name = name,
+                            order = order,
+                            flags = flags,
+                        )
+                    }
+                }
+            }
             if (categoriesForManga.isNotEmpty()) {
                 mangaObject.categories = categoriesForManga.map { it.order }
             }
         }
 
         if (options.tracking) {
-            val tracks = handler.awaitList { manga_syncQueries.getTracksByMangaId(manga.id, backupTrackMapper) }
+            val tracks = handler.awaitList {
+                manga_syncQueries.getTracksByMangaId(profileId, manga.id, backupTrackMapper)
+            }
             if (tracks.isNotEmpty()) {
                 mangaObject.tracking = tracks
             }
         }
 
         if (options.history) {
-            val historyByMangaId = getHistory.await(manga.id)
+            val historyByMangaId = if (profileId == profileProvider.activeProfileId) {
+                getHistory.await(manga.id)
+            } else {
+                handler.awaitList {
+                    historyQueries.getHistoryByMangaId(profileId, manga.id) { _, chapterId, lastRead, timeRead ->
+                        History(
+                            id = 0,
+                            chapterId = chapterId,
+                            readAt = lastRead,
+                            readDuration = timeRead,
+                        )
+                    }
+                }
+            }
             if (historyByMangaId.isNotEmpty()) {
                 val history = historyByMangaId.map { history ->
-                    val chapter = handler.awaitOne { chaptersQueries.getChapterById(history.chapterId) }
+                    val chapter = handler.awaitOne {
+                        chaptersQueries.getChapterById(history.chapterId, profileId)
+                    }
                     BackupHistory(chapter.url, history.readAt?.time ?: 0L, history.readDuration)
                 }
                 if (history.isNotEmpty()) {

@@ -11,6 +11,10 @@ typealias SourcePagingSource = PagingSource<Long, Manga>
 
 interface SourceRepository {
 
+    fun getConfigurableSourceIds(): List<Long>
+
+    fun getConfigurableSourceKeys(): List<String>
+
     fun getSources(): Flow<List<Source>>
 
     fun getOnlineSources(): Flow<List<Source>>

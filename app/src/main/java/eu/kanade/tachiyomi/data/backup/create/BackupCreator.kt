@@ -17,6 +17,9 @@ import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSource
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
+import mihon.feature.profiles.core.ProfileBackup
+import mihon.feature.profiles.core.ProfileManager
+import mihon.feature.profiles.core.ProfileScopedBackup
 import kotlinx.serialization.protobuf.ProtoBuf
 import logcat.LogPriority
 import okio.buffer
@@ -44,6 +47,7 @@ class BackupCreator(
     private val parser: ProtoBuf = Injekt.get(),
     private val getFavorites: GetFavorites = Injekt.get(),
     private val backupPreferences: BackupPreferences = Injekt.get(),
+    private val profileManager: ProfileManager = Injekt.get(),
     private val mangaRepository: MangaRepository = Injekt.get(),
 
     private val categoriesBackupCreator: CategoriesBackupCreator = CategoriesBackupCreator(),
@@ -78,15 +82,22 @@ class BackupCreator(
             }
 
             val nonFavoriteManga = if (options.readEntries) mangaRepository.getReadMangaNotInLibrary() else emptyList()
-            val backupManga = backupMangas(getFavorites.await() + nonFavoriteManga, options)
+            val activeProfile = profileManager.activeProfile.value
+            val backupManga = backupMangas(activeProfile?.id, getFavorites.await() + nonFavoriteManga, options)
+            val backupProfiles = backupProfiles(options)
+            val backupSources = backupSources(
+                mangas = backupManga + backupProfiles.flatMap(ProfileScopedBackup::manga),
+            )
 
             val backup = Backup(
                 backupManga = backupManga,
                 backupCategories = backupCategories(options),
-                backupSources = backupSources(backupManga),
+                backupSources = backupSources,
                 backupPreferences = backupAppPreferences(options),
                 backupExtensionRepo = backupExtensionRepos(options),
                 backupSourcePreferences = backupSourcePreferences(options),
+                backupProfiles = backupProfiles,
+                activeProfileUuid = activeProfile?.uuid,
             )
 
             val byteArray = parser.encodeToByteArray(Backup.serializer(), backup)
@@ -122,13 +133,26 @@ class BackupCreator(
     private suspend fun backupCategories(options: BackupOptions): List<BackupCategory> {
         if (!options.categories) return emptyList()
 
-        return categoriesBackupCreator()
+        val activeProfileId = profileManager.activeProfile.value?.id
+        return if (activeProfileId != null) {
+            categoriesBackupCreator(activeProfileId)
+        } else {
+            categoriesBackupCreator()
+        }
     }
 
-    private suspend fun backupMangas(mangas: List<Manga>, options: BackupOptions): List<BackupManga> {
+    private suspend fun backupMangas(
+        profileId: Long?,
+        mangas: List<Manga>,
+        options: BackupOptions,
+    ): List<BackupManga> {
         if (!options.libraryEntries) return emptyList()
 
-        return mangaBackupCreator(mangas, options)
+        return if (profileId != null) {
+            mangaBackupCreator(profileId, mangas, options)
+        } else {
+            mangaBackupCreator(mangas, options)
+        }
     }
 
     private fun backupSources(mangas: List<BackupManga>): List<BackupSource> {
@@ -151,6 +175,65 @@ class BackupCreator(
         if (!options.sourceSettings) return emptyList()
 
         return preferenceBackupCreator.createSource(includePrivatePreferences = options.privateSettings)
+    }
+
+    private suspend fun backupProfiles(options: BackupOptions): List<ProfileScopedBackup> {
+        val bundles = profileManager.getProfileBundles(includeArchived = true)
+        if (bundles.isEmpty()) return emptyList()
+
+        return bundles.map { bundle ->
+            val profileId = bundle.profile.id
+            val manga = if (options.libraryEntries) {
+                val favorites = mangaRepository.getFavoritesByProfile(profileId)
+                val nonLibrary = if (options.readEntries) {
+                    mangaRepository.getReadMangaNotInLibraryByProfile(profileId)
+                } else {
+                    emptyList()
+                }
+                backupMangas(profileId, favorites + nonLibrary, options)
+            } else {
+                emptyList()
+            }
+
+            val categories = if (options.categories) {
+                categoriesBackupCreator(profileId)
+            } else {
+                emptyList()
+            }
+
+            val appPreferences = if (options.appSettings) {
+                preferenceBackupCreator.createApp(
+                    profileId = profileId,
+                    includePrivatePreferences = options.privateSettings,
+                )
+            } else {
+                emptyList()
+            }
+
+            val sourcePreferences = if (options.sourceSettings) {
+                preferenceBackupCreator.createSource(
+                    profileId = profileId,
+                    includePrivatePreferences = options.privateSettings,
+                )
+            } else {
+                emptyList()
+            }
+
+            ProfileScopedBackup(
+                profile = ProfileBackup(
+                    uuid = bundle.profile.uuid,
+                    name = bundle.profile.name,
+                    colorSeed = bundle.profile.colorSeed,
+                    position = bundle.profile.position,
+                    requiresAuth = bundle.profile.requiresAuth,
+                    isArchived = bundle.profile.isArchived,
+                ),
+                categories = categories,
+                manga = manga,
+                preferences = appPreferences,
+                sourcePreferences = sourcePreferences,
+            )
+        }
     }
 
     companion object {

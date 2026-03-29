@@ -5,6 +5,8 @@ import tachiyomi.domain.track.model.Track
 object TrackMapper {
     fun mapTrack(
         id: Long,
+        @Suppress("UNUSED_PARAMETER")
+        profileId: Long,
         mangaId: Long,
         syncId: Long,
         remoteId: Long,

@@ -1,5 +1,6 @@
 CREATE VIEW updatesView AS
 SELECT
+    mangas.profile_id,
     mangas._id AS mangaId,
     mangas.title AS mangaTitle,
     chapters._id AS chapterId,
@@ -17,9 +18,11 @@ SELECT
     chapters.date_fetch AS datefetch,
     excluded_scanlators.scanlator AS excludedScanlator
 FROM mangas JOIN chapters
-ON mangas._id = chapters.manga_id
+ON mangas.profile_id = chapters.profile_id
+AND mangas._id = chapters.manga_id
 LEFT JOIN excluded_scanlators
-ON mangas._id = excluded_scanlators.manga_id
+ON mangas.profile_id = excluded_scanlators.profile_id
+AND mangas._id = excluded_scanlators.manga_id
 AND chapters.scanlator = excluded_scanlators.scanlator
 WHERE favorite = 1
 AND date_fetch > date_added
@@ -28,15 +31,16 @@ ORDER BY date_fetch DESC;
 getRecentUpdates:
 SELECT *
 FROM updatesView
-WHERE dateUpload > :after
+WHERE profile_id = :profileId
+AND dateUpload > :after
 LIMIT :limit;
 
 getRecentUpdatesWithFilters:
 SELECT *
 FROM updatesView
-WHERE dateUpload > :after
+WHERE profile_id = :profileId
+AND dateUpload > :after
 AND (:read IS NULL OR read = :read)
--- Started means some progress but not finished, Read means finished chapter, thus:
 AND (
     :started IS NULL
     OR (:started = 1 AND last_page_read > 0 AND read = 0)
@@ -51,6 +55,7 @@ LIMIT :limit;
 getUpdatesByReadStatus:
 SELECT *
 FROM updatesView
-WHERE read = :read
+WHERE profile_id = :profileId
+AND read = :read
 AND dateUpload > :after
 LIMIT :limit;

@@ -5,6 +5,7 @@ import kotlin.String;
 
 CREATE TABLE mangas(
     _id INTEGER NOT NULL PRIMARY KEY,
+    profile_id INTEGER NOT NULL DEFAULT 1,
     source INTEGER NOT NULL,
     url TEXT NOT NULL,
     artist TEXT,
@@ -28,12 +29,15 @@ CREATE TABLE mangas(
     favorite_modified_at INTEGER,
     version INTEGER NOT NULL DEFAULT 0,
     is_syncing INTEGER NOT NULL DEFAULT 0,
-    notes TEXT NOT NULL DEFAULT ""
+    notes TEXT NOT NULL DEFAULT "",
+    FOREIGN KEY(profile_id) REFERENCES profiles (_id)
+    ON DELETE CASCADE
 );
 
-CREATE INDEX library_favorite_index ON mangas(favorite) WHERE favorite = 1;
-CREATE INDEX mangas_url_index ON mangas(url);
-CREATE INDEX idx_mangas_source ON mangas(source);
+CREATE INDEX library_favorite_index ON mangas(profile_id, favorite) WHERE favorite = 1;
+CREATE INDEX mangas_url_index ON mangas(profile_id, url);
+CREATE INDEX idx_mangas_source ON mangas(profile_id, source);
+CREATE UNIQUE INDEX idx_mangas_profile_source_url ON mangas(profile_id, source, url);
 
 CREATE TRIGGER update_last_favorited_at_mangas
 AFTER UPDATE OF favorite ON mangas
@@ -65,55 +69,64 @@ END;
 getMangaById:
 SELECT *
 FROM mangas
-WHERE _id = :id;
+WHERE _id = :id
+AND profile_id = :profileId;
 
--- TODO: this should ideally never really have more than 1 result
 getMangaByUrlAndSource:
 SELECT *
 FROM mangas
-WHERE url = :url
+WHERE profile_id = :profileId
+AND url = :url
 AND source = :source
 LIMIT 1;
 
 getFavorites:
 SELECT *
 FROM mangas
-WHERE favorite = 1;
+WHERE profile_id = :profileId
+AND favorite = 1;
 
 getReadMangaNotInLibrary:
 SELECT *
 FROM mangas
-WHERE favorite = 0 AND _id IN (
+WHERE profile_id = :profileId
+AND favorite = 0 AND _id IN (
     SELECT DISTINCT chapters.manga_id
     FROM chapters
-    WHERE read = 1 OR last_page_read != 0
+    WHERE profile_id = :profileId
+    AND (read = 1 OR last_page_read != 0)
 );
 
 getAllManga:
 SELECT *
-FROM mangas;
+FROM mangas
+WHERE profile_id = :profileId;
 
 getAllMangaSourceAndUrl:
 SELECT source, url
-FROM mangas;
+FROM mangas
+WHERE profile_id = :profileId;
 
 getMangasWithFavoriteTimestamp:
 SELECT *
 FROM mangas
-WHERE favorite_modified_at IS NOT NULL;
+WHERE profile_id = :profileId
+AND favorite_modified_at IS NOT NULL;
 
 getSourceIdWithFavoriteCount:
 SELECT
 source,
 count(*)
 FROM mangas
-WHERE favorite = 1
+WHERE profile_id = :profileId
+AND favorite = 1
 GROUP BY source;
 
 getFavoriteBySourceId:
 SELECT *
 FROM mangas
-WHERE favorite = 1
+WHERE profile_id = :profileId
+AND favorite = 1
 AND source = :sourceId;
 
 getDuplicateLibraryManga:
@@ -125,14 +138,17 @@ track_dupes AS (
     ON S1.sync_id = S2.sync_id
     AND S1.remote_id = S2.remote_id
     AND S1.manga_id != S2.manga_id
-    WHERE S1.manga_id = :id
+    WHERE S1.profile_id = :profileId
+    AND S2.profile_id = :profileId
+    AND S1.manga_id = :id
 ),
 duplicates AS (
     SELECT M.*
     FROM mangas M
     LEFT JOIN track_dupes D
     ON D.manga_id = _id
-    WHERE favorite = 1
+    WHERE M.profile_id = :profileId
+    AND favorite = 1
     AND _id != :id
     AND (lower(title) LIKE '%' || lower(:title) || '%' OR D.manga_id IS NOT NULL)
 ),
@@ -145,8 +161,10 @@ chapter_counts AS (
     ON M._id = C.manga_id
     LEFT JOIN excluded_scanlators ES
     ON C.manga_id = ES.manga_id
+    AND C.profile_id = ES.profile_id
     AND C.scanlator = ES.scanlator
-    WHERE ES.scanlator IS NULL
+    WHERE C.profile_id = :profileId
+    AND ES.scanlator IS NULL
     GROUP BY M._id
 )
 SELECT
@@ -159,43 +177,54 @@ ON M._id = CC.manga_id;
 getUpcomingManga:
 SELECT *
 FROM mangas
-WHERE next_update >= :startOfDay
+WHERE profile_id = :profileId
+AND next_update >= :startOfDay
 AND favorite = 1
 AND status IN :statuses
 ORDER BY next_update ASC;
 
 resetViewerFlags:
 UPDATE mangas
-SET viewer = 0;
+SET viewer = 0
+WHERE profile_id = :profileId;
 
 resetIsSyncing:
 UPDATE mangas
 SET is_syncing = 0
-WHERE is_syncing = 1;
+WHERE profile_id = :profileId
+AND is_syncing = 1;
 
 getSourceIdsWithNonLibraryManga:
 SELECT source, COUNT(*) AS manga_count
 FROM mangas
-WHERE favorite = 0
+WHERE profile_id = :profileId
+AND favorite = 0
 GROUP BY source;
 
 deleteNonLibraryManga:
 DELETE FROM mangas
-WHERE favorite = 0
+WHERE profile_id = :profileId
+AND favorite = 0
 AND source IN :sourceIds
 AND (
     :keepReadManga = 0
     OR _id NOT IN (
         SELECT DISTINCT manga_id
         FROM chapters
-        WHERE read = 1
-        OR last_page_read != 0
+        WHERE profile_id = :profileId
+        AND (read = 1 OR last_page_read != 0)
     )
 );
 
+countProfileManga:
+SELECT count(*)
+FROM mangas
+WHERE profile_id = :profileId
+AND favorite = 1;
+
 insert:
-INSERT INTO mangas(source, url, artist, author, description, genre, title, status, thumbnail_url, favorite, last_update, next_update, initialized, viewer, chapter_flags, cover_last_modified, date_added, update_strategy, calculate_interval, last_modified_at, version, notes)
-VALUES (:source, :url, :artist, :author, :description, :genre, :title, :status, :thumbnailUrl, :favorite, :lastUpdate, :nextUpdate, :initialized, :viewerFlags, :chapterFlags, :coverLastModified, :dateAdded, :updateStrategy, :calculateInterval, 0, :version, :notes);
+INSERT INTO mangas(profile_id, source, url, artist, author, description, genre, title, status, thumbnail_url, favorite, last_update, next_update, initialized, viewer, chapter_flags, cover_last_modified, date_added, update_strategy, calculate_interval, last_modified_at, version, notes)
+VALUES (:profileId, :source, :url, :artist, :author, :description, :genre, :title, :status, :thumbnailUrl, :favorite, :lastUpdate, :nextUpdate, :initialized, :viewerFlags, :chapterFlags, :coverLastModified, :dateAdded, :updateStrategy, :calculateInterval, 0, :version, :notes);
 
 update:
 UPDATE mangas SET
@@ -221,25 +250,29 @@ UPDATE mangas SET
     version = coalesce(:version, version),
     is_syncing = coalesce(:isSyncing, is_syncing),
     notes = coalesce(:notes, notes)
-WHERE _id = :mangaId;
+WHERE _id = :mangaId
+AND profile_id = :profileId;
 
 selectLastInsertedRowId:
 SELECT last_insert_rowid();
 
 insertNetworkManga {
-    -- Insert the manga if it doesn't exist already
     INSERT INTO mangas(
-        source, url, artist, author, description, genre, title, status, thumbnail_url, favorite,
+        profile_id, source, url, artist, author, description, genre, title, status, thumbnail_url, favorite,
         last_update, next_update, initialized, viewer, chapter_flags, cover_last_modified, date_added,
         update_strategy, calculate_interval, last_modified_at, version
     )
     SELECT
-        :source, :url, :artist, :author, :description, :genre, :title, :status, :thumbnailUrl, :favorite,
+        :profileId, :source, :url, :artist, :author, :description, :genre, :title, :status, :thumbnailUrl, :favorite,
         :lastUpdate, :nextUpdate, :initialized, :viewerFlags, :chapterFlags, :coverLastModified, :dateAdded,
         :updateStrategy, :calculateInterval, 0, :version
-    WHERE NOT EXISTS(SELECT 0 FROM mangas WHERE source = :source AND url = :url);
+    WHERE NOT EXISTS(
+        SELECT 0 FROM mangas
+        WHERE profile_id = :profileId
+        AND source = :source
+        AND url = :url
+    );
 
-    -- Update the relevant details if applicable and not favorite
     UPDATE mangas
     SET
         title = CASE WHEN :updateTitle THEN :title ELSE title END,
@@ -251,14 +284,15 @@ insertNetworkManga {
         status = CASE WHEN :updateDetails THEN :status ELSE status END,
         update_strategy = CASE WHEN :updateDetails THEN :updateStrategy ELSE update_strategy END,
         initialized = :updateDetails
-    WHERE source = :source
+    WHERE profile_id = :profileId
+    AND source = :source
     AND url = :url
     AND favorite = 0;
 
-    -- Finally return the manga
     SELECT *
     FROM mangas
-    WHERE source = :source
+    WHERE profile_id = :profileId
+    AND source = :source
     AND url = :url
     LIMIT 1;
 }

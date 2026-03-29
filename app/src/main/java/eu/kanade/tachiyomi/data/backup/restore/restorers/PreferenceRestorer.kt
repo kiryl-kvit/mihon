@@ -14,6 +14,7 @@ import eu.kanade.tachiyomi.data.backup.models.StringPreferenceValue
 import eu.kanade.tachiyomi.data.backup.models.StringSetPreferenceValue
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.source.sourcePreferences
+import mihon.feature.profiles.core.ProfileStore
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.plusAssign
@@ -28,24 +29,63 @@ class PreferenceRestorer(
     private val context: Context,
     private val getCategories: GetCategories = Injekt.get(),
     private val preferenceStore: PreferenceStore = Injekt.get(),
+    private val profileStore: ProfileStore = Injekt.get(),
 ) {
     suspend fun restoreApp(
         preferences: List<BackupPreference>,
         backupCategories: List<BackupCategory>?,
+        scheduleJobs: Boolean = true,
+    ) {
+        restoreAppForProfile(
+            profileId = profileStore.currentProfileId,
+            preferences = preferences,
+            backupCategories = backupCategories,
+            includeGlobalRestore = true,
+            scheduleJobs = scheduleJobs,
+        )
+    }
+
+    suspend fun restoreAppForProfile(
+        profileId: Long,
+        preferences: List<BackupPreference>,
+        backupCategories: List<BackupCategory>?,
+        includeGlobalRestore: Boolean,
+        scheduleJobs: Boolean,
     ) {
         restorePreferences(
-            preferences,
-            preferenceStore,
-            backupCategories,
+            toRestore = preferences,
+            preferenceStore = profileStore.profileStore(profileId),
+            backupCategories = backupCategories,
         )
 
-        LibraryUpdateJob.setupTask(context)
-        BackupCreateJob.setupTask(context)
+        if (includeGlobalRestore) {
+            restorePreferences(
+                toRestore = preferences,
+                preferenceStore = preferenceStore,
+                backupCategories = null,
+            )
+        }
+
+        if (scheduleJobs) {
+            LibraryUpdateJob.setupTask(context)
+            BackupCreateJob.setupTask(context)
+        }
     }
 
     suspend fun restoreSource(preferences: List<BackupSourcePreferences>) {
         preferences.forEach {
-            val sourcePrefs = AndroidPreferenceStore(context, sourcePreferences(it.sourceKey))
+            val targetKey = it.sourceId?.let(profileStore::sourcePreferenceKey) ?: it.sourceKey
+            val sourcePrefs = AndroidPreferenceStore(context, sourcePreferences(targetKey))
+            restorePreferences(it.prefs, sourcePrefs)
+        }
+    }
+
+    suspend fun restoreSource(profileId: Long, preferences: List<BackupSourcePreferences>) {
+        preferences.forEach {
+            val targetKey = it.sourceId
+                ?.let { sourceId -> profileStore.sourcePreferenceKey(sourceId, profileId) }
+                ?: it.sourceKey
+            val sourcePrefs = AndroidPreferenceStore(context, sourcePreferences(targetKey))
             restorePreferences(it.prefs, sourcePrefs)
         }
     }

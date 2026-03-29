@@ -1,7 +1,9 @@
 package tachiyomi.data.updates
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import tachiyomi.core.common.util.lang.toLong
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.updates.model.UpdatesWithRelations
@@ -9,6 +11,7 @@ import tachiyomi.domain.updates.repository.UpdatesRepository
 
 class UpdatesRepositoryImpl(
     private val databaseHandler: DatabaseHandler,
+    private val profileProvider: ActiveProfileProvider,
 ) : UpdatesRepository {
 
     override suspend fun awaitWithRead(
@@ -18,6 +21,7 @@ class UpdatesRepositoryImpl(
     ): List<UpdatesWithRelations> {
         return databaseHandler.awaitList {
             updatesViewQueries.getUpdatesByReadStatus(
+                profileId = profileProvider.activeProfileId,
                 read = read,
                 after = after,
                 limit = limit,
@@ -34,17 +38,20 @@ class UpdatesRepositoryImpl(
         bookmarked: Boolean?,
         hideExcludedScanlators: Boolean,
     ): Flow<List<UpdatesWithRelations>> {
-        return databaseHandler.subscribeToList {
-            updatesViewQueries.getRecentUpdatesWithFilters(
-                after = after,
-                limit = limit,
-                // invert because unread in Kotlin -> read column in SQL
-                read = unread?.let { !it },
-                started = started?.toLong(),
-                bookmarked = bookmarked,
-                hideExcludedScanlators = hideExcludedScanlators.toLong(),
-                mapper = ::mapUpdatesWithRelations,
-            )
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            databaseHandler.subscribeToList {
+                updatesViewQueries.getRecentUpdatesWithFilters(
+                    profileId = profileId,
+                    after = after,
+                    limit = limit,
+                    // invert because unread in Kotlin -> read column in SQL
+                    read = unread?.let { !it },
+                    started = started?.toLong(),
+                    bookmarked = bookmarked,
+                    hideExcludedScanlators = hideExcludedScanlators.toLong(),
+                    mapper = ::mapUpdatesWithRelations,
+                )
+            }
         }
     }
 
@@ -53,17 +60,22 @@ class UpdatesRepositoryImpl(
         after: Long,
         limit: Long,
     ): Flow<List<UpdatesWithRelations>> {
-        return databaseHandler.subscribeToList {
-            updatesViewQueries.getUpdatesByReadStatus(
-                read = read,
-                after = after,
-                limit = limit,
-                mapper = ::mapUpdatesWithRelations,
-            )
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            databaseHandler.subscribeToList {
+                updatesViewQueries.getUpdatesByReadStatus(
+                    profileId = profileId,
+                    read = read,
+                    after = after,
+                    limit = limit,
+                    mapper = ::mapUpdatesWithRelations,
+                )
+            }
         }
     }
 
     private fun mapUpdatesWithRelations(
+        @Suppress("UNUSED_PARAMETER")
+        profileId: Long,
         mangaId: Long,
         mangaTitle: String,
         chapterId: Long,

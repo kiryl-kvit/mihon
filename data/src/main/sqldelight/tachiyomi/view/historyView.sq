@@ -1,5 +1,6 @@
 CREATE VIEW historyView AS
 SELECT
+    history.profile_id,
     history._id AS id,
     mangas._id AS mangaId,
     chapters._id AS chapterId,
@@ -15,16 +16,20 @@ SELECT
     max_last_read.chapter_id AS maxReadAtChapterId
 FROM mangas
 JOIN chapters
-ON mangas._id = chapters.manga_id
+ON mangas.profile_id = chapters.profile_id
+AND mangas._id = chapters.manga_id
 JOIN history
-ON chapters._id = history.chapter_id
+ON chapters.profile_id = history.profile_id
+AND chapters._id = history.chapter_id
 JOIN (
-    SELECT chapters.manga_id,chapters._id AS chapter_id, MAX(history.last_read) AS last_read
+    SELECT chapters.profile_id, chapters.manga_id, chapters._id AS chapter_id, MAX(history.last_read) AS last_read
     FROM chapters JOIN history
-    ON chapters._id = history.chapter_id
-    GROUP BY chapters.manga_id
+    ON chapters.profile_id = history.profile_id
+    AND chapters._id = history.chapter_id
+    GROUP BY chapters.profile_id, chapters.manga_id
 ) AS max_last_read
-ON chapters.manga_id = max_last_read.manga_id;
+ON chapters.profile_id = max_last_read.profile_id
+AND chapters.manga_id = max_last_read.manga_id;
 
 history:
 SELECT
@@ -40,7 +45,8 @@ chapterNumber,
 readAt,
 readDuration
 FROM historyView
-WHERE historyView.readAt > 0
+WHERE profile_id = :profileId
+AND historyView.readAt > 0
 AND maxReadAtChapterId = historyView.chapterId
 AND lower(historyView.title) LIKE ('%' || :query || '%')
 ORDER BY readAt DESC;
@@ -59,6 +65,7 @@ chapterNumber,
 readAt,
 readDuration
 FROM historyView
-WHERE historyView.readAt > 0
+WHERE profile_id = :profileId
+AND historyView.readAt > 0
 ORDER BY readAt DESC
 LIMIT 1;

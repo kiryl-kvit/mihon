@@ -11,6 +11,7 @@ SELECT
 FROM mangas M
 LEFT JOIN (
     SELECT
+        chapters.profile_id,
         chapters.manga_id,
         count(*) AS total,
         sum(read) AS readCount,
@@ -20,22 +21,27 @@ LEFT JOIN (
         sum(chapters.bookmark) AS bookmarkCount
     FROM chapters
     LEFT JOIN excluded_scanlators
-    ON chapters.manga_id = excluded_scanlators.manga_id
+    ON chapters.profile_id = excluded_scanlators.profile_id
+    AND chapters.manga_id = excluded_scanlators.manga_id
     AND chapters.scanlator = excluded_scanlators.scanlator
     LEFT JOIN history
-    ON chapters._id = history.chapter_id
+    ON chapters.profile_id = history.profile_id
+    AND chapters._id = history.chapter_id
     WHERE excluded_scanlators.scanlator IS NULL
-    GROUP BY chapters.manga_id
+    GROUP BY chapters.profile_id, chapters.manga_id
 ) AS C
-ON M._id = C.manga_id
+ON M.profile_id = C.profile_id
+AND M._id = C.manga_id
 LEFT JOIN (
-    SELECT manga_id, group_concat(category_id) AS categories
+    SELECT profile_id, manga_id, group_concat(category_id) AS categories
     FROM mangas_categories
-    GROUP BY manga_id
+    GROUP BY profile_id, manga_id
 ) AS MC
-ON MC.manga_id = M._id
+ON MC.profile_id = M.profile_id
+AND MC.manga_id = M._id
 WHERE M.favorite = 1;
 
 library:
 SELECT *
-FROM libraryView;
+FROM libraryView
+WHERE profile_id = :profileId;

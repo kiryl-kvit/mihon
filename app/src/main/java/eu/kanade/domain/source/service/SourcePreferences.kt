@@ -10,7 +10,8 @@ import tachiyomi.core.common.preference.getLongArray
 import tachiyomi.domain.library.model.LibraryDisplayMode
 
 class SourcePreferences(
-    preferenceStore: PreferenceStore,
+    private val preferenceStore: PreferenceStore,
+    private val globalPreferenceStore: PreferenceStore = preferenceStore,
 ) {
 
     val sourceDisplayMode: Preference<LibraryDisplayMode> = preferenceStore.getObjectFromString(
@@ -36,7 +37,7 @@ class SourcePreferences(
         -1,
     )
 
-    val showNsfwSource: Preference<Boolean> = preferenceStore.getBoolean("show_nsfw_source", true)
+    val showNsfwSource: Preference<Boolean> = globalPreferenceStore.getBoolean("show_nsfw_source", true)
 
     val migrationSortingMode: Preference<SetMigrateSorting.Mode> = preferenceStore.getEnum(
         "pref_migration_sorting",
@@ -50,11 +51,11 @@ class SourcePreferences(
 
     val hideInLibraryItems: Preference<Boolean> = preferenceStore.getBoolean("browse_hide_in_library_items", false)
 
-    val extensionRepos: Preference<Set<String>> = preferenceStore.getStringSet("extension_repos", emptySet())
+    val extensionRepos: Preference<Set<String>> = globalPreferenceStore.getStringSet("extension_repos", emptySet())
 
-    val extensionUpdatesCount: Preference<Int> = preferenceStore.getInt("ext_updates_count", 0)
+    val extensionUpdatesCount: Preference<Int> = globalPreferenceStore.getInt("ext_updates_count", 0)
 
-    val trustedExtensions: Preference<Set<String>> = preferenceStore.getStringSet(
+    val trustedExtensions: Preference<Set<String>> = globalPreferenceStore.getStringSet(
         Preference.appStateKey("trusted_extensions"),
         emptySet(),
     )

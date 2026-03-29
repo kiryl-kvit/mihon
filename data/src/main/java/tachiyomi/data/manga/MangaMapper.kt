@@ -8,6 +8,8 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 object MangaMapper {
     fun mapManga(
         id: Long,
+        @Suppress("UNUSED_PARAMETER")
+        profileId: Long,
         source: Long,
         url: String,
         artist: String?,
@@ -62,6 +64,8 @@ object MangaMapper {
 
     fun mapLibraryManga(
         id: Long,
+        @Suppress("UNUSED_PARAMETER")
+        profileId: Long,
         source: Long,
         url: String,
         artist: String?,
@@ -96,6 +100,7 @@ object MangaMapper {
     ): LibraryManga = LibraryManga(
         manga = mapManga(
             id,
+            profileId,
             source,
             url,
             artist,
@@ -132,6 +137,8 @@ object MangaMapper {
 
     fun mapMangaWithChapterCount(
         id: Long,
+        @Suppress("UNUSED_PARAMETER")
+        profileId: Long,
         source: Long,
         url: String,
         artist: String?,
@@ -160,6 +167,7 @@ object MangaMapper {
     ): MangaWithChapterCount = MangaWithChapterCount(
         manga = mapManga(
             id,
+            profileId,
             source,
             url,
             artist,

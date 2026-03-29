@@ -11,6 +11,10 @@ import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
 import mihon.core.common.CustomPreferences
+import mihon.feature.profiles.core.ProfileAwareStore
+import mihon.feature.profiles.core.ProfileStore
+import mihon.feature.profiles.core.ProfileStoreImpl
+import mihon.feature.profiles.core.ProfilesPreferences
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.storage.AndroidStorageFolderProvider
@@ -30,38 +34,45 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory<PreferenceStore> {
             AndroidPreferenceStore(app)
         }
+        addSingletonFactory { ProfilesPreferences(get()) }
+        addSingletonFactory { ProfileStoreImpl(app, get()) }
+        addSingletonFactory<ProfileStore> { get<ProfileStoreImpl>() }
+        addSingletonFactory<ProfileAwareStore> { get<ProfileStoreImpl>() }
         addSingletonFactory {
             NetworkPreferences(
-                preferenceStore = get(),
+                preferenceStore = get<ProfileStore>().basePreferenceStore(),
                 verboseLoggingDefault = isDebugBuildType,
             )
         }
         addSingletonFactory {
-            SourcePreferences(get())
+            SourcePreferences(
+                preferenceStore = get<ProfileStore>().profileStore(),
+                globalPreferenceStore = get<ProfileStore>().basePreferenceStore(),
+            )
         }
         addSingletonFactory {
-            SecurityPreferences(get())
+            SecurityPreferences(get<ProfileStore>().profileStore())
         }
         addSingletonFactory {
-            PrivacyPreferences(get())
+            PrivacyPreferences(get<ProfileStore>().basePreferenceStore())
         }
         addSingletonFactory {
-            LibraryPreferences(get())
+            LibraryPreferences(get<ProfileStore>().profileStore())
         }
         addSingletonFactory {
-            UpdatesPreferences(get())
+            UpdatesPreferences(get<ProfileStore>().profileStore())
         }
         addSingletonFactory {
-            ReaderPreferences(get())
+            ReaderPreferences(get<ProfileStore>().profileStore())
         }
         addSingletonFactory {
-            TrackPreferences(get())
+            TrackPreferences(get<ProfileStore>().privateStore())
         }
         addSingletonFactory {
-            DownloadPreferences(get())
+            DownloadPreferences(get<ProfileStore>().basePreferenceStore())
         }
         addSingletonFactory {
-            BackupPreferences(get())
+            BackupPreferences(get<ProfileStore>().basePreferenceStore())
         }
         addSingletonFactory {
             StoragePreferences(
@@ -70,13 +81,13 @@ class PreferenceModule(val app: Application) : InjektModule {
             )
         }
         addSingletonFactory {
-            UiPreferences(get())
+            UiPreferences(get<ProfileStore>().profileStore())
         }
         addSingletonFactory {
-            BasePreferences(app, get())
+            BasePreferences(app, get<ProfileStore>().basePreferenceStore())
         }
         addSingletonFactory {
-            CustomPreferences(get())
+            CustomPreferences(get<ProfileStore>().basePreferenceStore())
         }
     }
 }

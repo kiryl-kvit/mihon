@@ -12,20 +12,31 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,12 +46,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.core.animation.doOnEnd
 import androidx.core.net.toUri
 import androidx.core.splashscreen.SplashScreen
@@ -55,6 +70,9 @@ import cafe.adriel.voyager.navigator.NavigatorDisposeBehavior
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.source.interactor.GetIncognitoState
+import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
+import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.presentation.components.AppStateBanners
 import eu.kanade.presentation.components.DownloadedOnlyBannerBackgroundColor
 import eu.kanade.presentation.components.IncognitoModeBannerBackgroundColor
@@ -66,11 +84,13 @@ import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
 import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.cache.ChapterCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
+import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.updater.AppUpdateChecker
 import eu.kanade.tachiyomi.data.updater.RELEASE_URL
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
+import eu.kanade.tachiyomi.ui.base.delegate.SecureActivityDelegate
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.deeplink.DeepLinkScreen
@@ -78,6 +98,7 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.more.NewUpdateScreen
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
+import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.authenticate
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
 import eu.kanade.tachiyomi.util.system.openInBrowser
@@ -88,12 +109,17 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import logcat.LogPriority
 import mihon.core.migration.Migrator
+import mihon.feature.profiles.core.Profile
+import mihon.feature.profiles.core.ProfileManager
+import mihon.feature.profiles.core.ProfilesPreferences
 import tachiyomi.core.common.Constants
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -108,6 +134,10 @@ class MainActivity : BaseActivity() {
 
     private val libraryPreferences: LibraryPreferences by injectLazy()
     private val preferences: BasePreferences by injectLazy()
+    private val uiPreferences: UiPreferences by injectLazy()
+    private val securityPreferences: SecurityPreferences by injectLazy()
+    private val profileManager: ProfileManager by injectLazy()
+    private val profilesPreferences: ProfilesPreferences by injectLazy()
 
     private val downloadCache: DownloadCache by injectLazy()
     private val chapterCache: ChapterCache by injectLazy()
@@ -117,6 +147,7 @@ class MainActivity : BaseActivity() {
 
     // To be checked by splash screen. If true then splash screen will be removed.
     var ready = false
+    private var startupCompleted = false
 
     private var navigator: Navigator? = null
 
@@ -132,8 +163,6 @@ class MainActivity : BaseActivity() {
 
         super.onCreate(savedInstanceState)
 
-        val didMigration = Migrator.awaitAndRelease()
-
         // Do not let the launcher create a new activity http://stackoverflow.com/questions/16283079
         if (!isTaskRoot) {
             finish()
@@ -142,10 +171,25 @@ class MainActivity : BaseActivity() {
 
         setComposeContent {
             val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            val activity = context as MainActivity
+            var showChangelog by remember { mutableStateOf(false) }
 
             var incognito by remember { mutableStateOf(getIncognitoState.await(null)) }
             val downloadOnly by preferences.downloadedOnly.collectAsState()
             val indexing by downloadCache.isInitializing.collectAsState()
+            val visibleProfiles by profileManager.visibleProfiles.collectAsState()
+            val activeProfile by profileManager.activeProfile.collectAsState()
+            var startupGateState by remember(isLaunch) {
+                mutableStateOf<ProfileStartupGateState>(
+                    if (isLaunch) {
+                        ProfileStartupGateState.Loading
+                    } else {
+                        ProfileStartupGateState.Ready
+                    },
+                )
+            }
+            var pendingAuthProfile by remember(isLaunch) { mutableStateOf<Profile?>(null) }
 
             val isSystemInDarkTheme = isSystemInDarkTheme()
             val statusBarBackgroundColor = when {
@@ -164,86 +208,176 @@ class MainActivity : BaseActivity() {
                 )
             }
 
-            Navigator(
-                screen = HomeScreen,
-                disposeBehavior = NavigatorDisposeBehavior(disposeNestedNavigators = false, disposeSteps = true),
-            ) { navigator ->
-                LaunchedEffect(navigator) {
-                    this@MainActivity.navigator = navigator
-
-                    if (isLaunch) {
-                        // Set start screen
-                        handleIntentAction(intent, navigator)
-
-                        // Reset Incognito Mode on relaunch
-                        preferences.incognitoMode.set(false)
-                    }
-                }
-                LaunchedEffect(navigator.lastItem) {
-                    (navigator.lastItem as? BrowseSourceScreen)?.sourceId
-                        .let(getIncognitoState::subscribe)
-                        .collectLatest { incognito = it }
+            LaunchedEffect(isLaunch) {
+                if (!isLaunch) {
+                    startupGateState = ProfileStartupGateState.Ready
+                    return@LaunchedEffect
                 }
 
-                val scaffoldInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
-                Scaffold(
-                    topBar = {
-                        AppStateBanners(
-                            downloadedOnlyMode = downloadOnly,
-                            incognitoMode = incognito,
-                            indexing = indexing,
-                            modifier = Modifier.windowInsetsPadding(scaffoldInsets),
-                        )
-                    },
-                    contentWindowInsets = scaffoldInsets,
-                ) { contentPadding ->
-                    // Consume insets already used by app state banners
-                    Box {
-                        // Shows current screen
-                        DefaultNavigatorScreenTransition(
-                            navigator = navigator,
-                            modifier = Modifier
-                                .padding(contentPadding)
-                                .consumeWindowInsets(contentPadding),
-                        )
+                profileManager.storePendingIntent(intent)
+                val initialProfile = profileManager.loadInitialProfile()
+                setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
 
-                        // Draw navigation bar scrim when needed
-                        if (remember { isNavigationBarNeedsScrim() }) {
-                            Spacer(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                                    .alpha(0.8f)
-                                    .background(MaterialTheme.colorScheme.surfaceContainer),
-                            )
-                        }
-                    }
+                val shouldShowPicker = profilesPreferences.pickerEnabled.get() && profileManager.shouldShowPicker.first()
+                if (shouldShowPicker) {
+                    startupGateState = ProfileStartupGateState.Picker
+                    pendingAuthProfile = null
+                } else if (initialProfile?.requiresAuth == true && !shouldSkipStartupProfileAuth()) {
+                    pendingAuthProfile = initialProfile
+                    startupGateState = ProfileStartupGateState.Authenticating
+                } else {
+                    pendingAuthProfile = null
+                    startupGateState = ProfileStartupGateState.Ready
                 }
-
-                // Pop source-related screens when incognito mode is turned off
-                LaunchedEffect(Unit) {
-                    preferences.incognitoMode.changes()
-                        .drop(1)
-                        .filter { !it }
-                        .onEach {
-                            val currentScreen = navigator.lastItem
-                            if (currentScreen is BrowseSourceScreen ||
-                                (currentScreen is MangaScreen && currentScreen.fromSource)
-                            ) {
-                                navigator.popUntilRoot()
-                            }
-                        }
-                        .launchIn(this)
-                }
-
-                HandleOnNewIntent(context = context, navigator = navigator)
-
-                CheckForUpdates()
-                ShowOnboarding()
             }
 
-            var showChangelog by remember { mutableStateOf(didMigration && !BuildConfig.DEBUG) }
+            LaunchedEffect(startupGateState, visibleProfiles, activeProfile?.id) {
+                if (startupGateState == ProfileStartupGateState.Picker && visibleProfiles.size <= 1) {
+                    val profile = activeProfile ?: visibleProfiles.firstOrNull()
+                    if (profile?.requiresAuth == true && !shouldSkipStartupProfileAuth()) {
+                        pendingAuthProfile = profile
+                        startupGateState = ProfileStartupGateState.Authenticating
+                    } else {
+                        pendingAuthProfile = null
+                        setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
+                        startupGateState = ProfileStartupGateState.Ready
+                    }
+                }
+            }
+
+            LaunchedEffect(startupGateState, pendingAuthProfile?.id) {
+                if (startupGateState != ProfileStartupGateState.Authenticating) return@LaunchedEffect
+
+                val profile = pendingAuthProfile
+                if (profile == null) {
+                    startupGateState = ProfileStartupGateState.Ready
+                    return@LaunchedEffect
+                }
+
+                if (authenticateProfile(profile)) {
+                    startupGateState = ProfileStartupGateState.Ready
+                } else {
+                    finishAffinity()
+                }
+            }
+
+            LaunchedEffect(startupGateState) {
+                if (startupGateState != ProfileStartupGateState.Loading) {
+                    ready = true
+                }
+            }
+
+            LaunchedEffect(Unit) {
+                val didMigration = try {
+                    Migrator.await()
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                    false
+                } finally {
+                    Migrator.release()
+                }
+
+                if (didMigration && !BuildConfig.DEBUG) {
+                    showChangelog = true
+                }
+            }
+
+            if (startupGateState == ProfileStartupGateState.Ready) {
+                Navigator(
+                    screen = HomeScreen,
+                    disposeBehavior = NavigatorDisposeBehavior(disposeNestedNavigators = false, disposeSteps = true),
+                ) { navigator ->
+                    LaunchedEffect(navigator, startupGateState) {
+                        this@MainActivity.navigator = navigator
+                        completeStartup(isLaunch, navigator)
+                    }
+                    LaunchedEffect(navigator.lastItem) {
+                        (navigator.lastItem as? BrowseSourceScreen)?.sourceId
+                            .let(getIncognitoState::subscribe)
+                            .collectLatest { incognito = it }
+                    }
+
+                    val scaffoldInsets = WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)
+                    Scaffold(
+                        topBar = {
+                            AppStateBanners(
+                                downloadedOnlyMode = downloadOnly,
+                                incognitoMode = incognito,
+                                indexing = indexing,
+                                modifier = Modifier.windowInsetsPadding(scaffoldInsets),
+                            )
+                        },
+                        contentWindowInsets = scaffoldInsets,
+                    ) { contentPadding ->
+                        // Consume insets already used by app state banners
+                        Box {
+                            // Shows current screen
+                            DefaultNavigatorScreenTransition(
+                                navigator = navigator,
+                                modifier = Modifier
+                                    .padding(contentPadding)
+                                    .consumeWindowInsets(contentPadding),
+                            )
+
+                            // Draw navigation bar scrim when needed
+                            if (remember { isNavigationBarNeedsScrim() }) {
+                                Spacer(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                                        .alpha(0.8f)
+                                        .background(MaterialTheme.colorScheme.surfaceContainer),
+                                )
+                            }
+                        }
+                    }
+
+                    // Pop source-related screens when incognito mode is turned off
+                    LaunchedEffect(Unit) {
+                        preferences.incognitoMode.changes()
+                            .drop(1)
+                            .filter { !it }
+                            .onEach {
+                                val currentScreen = navigator.lastItem
+                                if (currentScreen is BrowseSourceScreen ||
+                                    (currentScreen is MangaScreen && currentScreen.fromSource)
+                                ) {
+                                    navigator.popUntilRoot()
+                                }
+                            }
+                            .launchIn(this)
+                    }
+
+                    HandleOnNewIntent(context = context, navigator = navigator)
+
+                    CheckForUpdates()
+                    ShowOnboarding()
+                }
+            } else {
+                ProfileGateContent(
+                    state = startupGateState,
+                    profiles = visibleProfiles,
+                    activeProfileId = activeProfile?.id,
+                    authProfileName = pendingAuthProfile?.name,
+                    onProfileSelected = { profile ->
+                        scope.launch {
+                            if (profile.requiresAuth && !authenticateProfile(profile)) {
+                                return@launch
+                            }
+                            profileManager.setActiveProfile(profile.id)
+                            setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
+                            startupGateState = ProfileStartupGateState.Ready
+                            activity.intent = Intent(activity.intent).apply {
+                                action = Intent.ACTION_MAIN
+                                data = null
+                                replaceExtras(Bundle())
+                            }
+                        }
+                    },
+                )
+            }
+
             if (showChangelog) {
                 AlertDialog(
                     onDismissRequest = { showChangelog = false },
@@ -269,21 +403,6 @@ class MainActivity : BaseActivity() {
         }
         setSplashScreenExitAnimation(splashScreen)
 
-        if (isLaunch && libraryPreferences.autoClearChapterCache.get()) {
-            lifecycleScope.launchIO {
-                chapterCache.clear()
-            }
-        }
-
-        if (isLaunch) {
-            extensionManager.scope.launchIO {
-                try {
-                    extensionManager.checkForUpdates(applicationContext)
-                } catch (e: Exception) {
-                    logcat(LogPriority.ERROR, e)
-                }
-            }
-        }
     }
 
     override fun onProvideAssistContent(outContent: AssistContent) {
@@ -292,6 +411,14 @@ class MainActivity : BaseActivity() {
             is AssistContentScreen -> {
                 screen.onProvideAssistUrl()?.let { outContent.webUri = it.toUri() }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (!startupCompleted) {
+            profileManager.storePendingIntent(intent)
         }
     }
 
@@ -304,7 +431,14 @@ class MainActivity : BaseActivity() {
                 componentActivity.addOnNewIntentListener(consumer)
                 awaitClose { componentActivity.removeOnNewIntentListener(consumer) }
             }
-                .collectLatest { handleIntentAction(it, navigator) }
+                .collectLatest {
+                    if (!startupCompleted) {
+                        profileManager.storePendingIntent(it)
+                    }
+                    if (startupCompleted) {
+                        handleIntentAction(it, navigator)
+                    }
+                }
         }
     }
 
@@ -458,14 +592,197 @@ class MainActivity : BaseActivity() {
             lifecycleScope.launch { HomeScreen.openTab(tabToOpen) }
         }
 
-        ready = true
         return true
+    }
+
+    private fun completeStartup(isLaunch: Boolean, navigator: Navigator) {
+        if (startupCompleted) {
+            ready = true
+            return
+        }
+
+        startupCompleted = true
+
+        if (isLaunch) {
+            val launchIntent = profileManager.consumePendingIntent() ?: intent
+            handleIntentAction(launchIntent, navigator)
+
+            // Reset Incognito Mode on relaunch
+            preferences.incognitoMode.set(false)
+
+            if (libraryPreferences.autoClearChapterCache.get()) {
+                lifecycleScope.launchIO {
+                    chapterCache.clear()
+                }
+            }
+
+            extensionManager.scope.launchIO {
+                try {
+                    extensionManager.checkForUpdates(applicationContext)
+                } catch (e: Exception) {
+                    logcat(LogPriority.ERROR, e)
+                }
+            }
+
+            LibraryUpdateJob.setupTask(
+                context = this,
+                prefInterval = libraryPreferences.autoUpdateInterval.get(),
+            )
+        }
+
+        ready = true
+    }
+
+    private suspend fun authenticateProfile(profile: Profile): Boolean {
+        return authenticate(
+            title = this.stringResource(MR.strings.unlock_app_title, profile.name),
+            subtitle = null,
+        )
+    }
+
+    private fun shouldSkipStartupProfileAuth(): Boolean {
+        return securityPreferences.useAuthenticator.get() && SecureActivityDelegate.requireUnlock
     }
 
     companion object {
         const val INTENT_SEARCH = "eu.kanade.tachiyomi.SEARCH"
         const val INTENT_SEARCH_QUERY = "query"
         const val INTENT_SEARCH_FILTER = "filter"
+    }
+}
+
+private enum class ProfileStartupGateState {
+    Loading,
+    Picker,
+    Authenticating,
+    Ready,
+}
+
+@Composable
+private fun ProfileGateContent(
+    state: ProfileStartupGateState,
+    profiles: List<Profile>,
+    activeProfileId: Long?,
+    authProfileName: String?,
+    onProfileSelected: (Profile) -> Unit,
+) {
+    when {
+        state == ProfileStartupGateState.Loading -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        state == ProfileStartupGateState.Authenticating -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator()
+                    authProfileName?.let {
+                        Text(
+                            text = stringResource(MR.strings.unlock_app_title, it),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                    }
+                }
+            }
+        }
+        state == ProfileStartupGateState.Picker -> {
+            if (profiles.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp, vertical = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        text = stringResource(MR.strings.profiles_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = stringResource(MR.strings.profiles_summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 144.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(profiles, key = Profile::id) { profile ->
+                            ProfilePickerCard(
+                                profile = profile,
+                                isActive = profile.id == activeProfileId,
+                                onClick = { onProfileSelected(profile) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        else -> Unit
+    }
+}
+
+@Composable
+private fun ProfilePickerCard(
+    profile: Profile,
+    isActive: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = if (isActive) {
+        CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+    } else {
+        CardDefaults.elevatedCardColors()
+    }
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = colors,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val initials = profile.name.trim().take(2).uppercase().ifBlank { "?" }
+            Text(
+                text = initials,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = profile.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+            )
+            Text(
+                text = if (isActive) stringResource(MR.strings.profiles_active) else stringResource(MR.strings.action_switch),
+                style = MaterialTheme.typography.labelLarge,
+                textAlign = TextAlign.Start,
+            )
+        }
     }
 }
 

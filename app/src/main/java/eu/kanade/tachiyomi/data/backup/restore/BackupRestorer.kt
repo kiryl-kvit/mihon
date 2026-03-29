@@ -4,11 +4,13 @@ import android.content.Context
 import android.net.Uri
 import eu.kanade.tachiyomi.data.backup.BackupDecoder
 import eu.kanade.tachiyomi.data.backup.BackupNotifier
+import eu.kanade.tachiyomi.data.backup.create.BackupCreateJob
 import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupExtensionRepos
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
+import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
@@ -18,8 +20,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import mihon.feature.profiles.core.ProfileDatabase
+import mihon.feature.profiles.core.ProfileConstants
+import mihon.feature.profiles.core.ProfileManager
+import mihon.feature.profiles.core.ProfileScopedBackup
+import mihon.feature.profiles.core.ProfileStore
+import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -34,6 +45,10 @@ class BackupRestorer(
     private val preferenceRestorer: PreferenceRestorer = PreferenceRestorer(context),
     private val extensionRepoRestorer: ExtensionRepoRestorer = ExtensionRepoRestorer(),
     private val mangaRestorer: MangaRestorer = MangaRestorer(),
+    private val profileDatabase: ProfileDatabase = Injekt.get(),
+    private val profileManager: ProfileManager = Injekt.get(),
+    private val profileStore: ProfileStore = Injekt.get(),
+    private val libraryPreferences: LibraryPreferences = Injekt.get(),
 ) {
 
     private var restoreAmount = 0
@@ -70,6 +85,11 @@ class BackupRestorer(
         val backupMaps = backup.backupSources
         sourceMapping = backupMaps.associate { it.sourceId to it.name }
 
+        if (backup.backupProfiles.isNotEmpty()) {
+            restoreFromProfilesBackup(backup.backupProfiles, backup.activeProfileUuid, backup.backupExtensionRepo, options)
+            return
+        }
+
         if (options.libraryEntries) {
             restoreAmount += backup.backupManga.size
         }
@@ -105,6 +125,156 @@ class BackupRestorer(
 
             // TODO: optionally trigger online library + tracker update
         }
+    }
+
+    private suspend fun restoreFromProfilesBackup(
+        backupProfiles: List<ProfileScopedBackup>,
+        activeProfileUuid: String?,
+        backupExtensionRepo: List<BackupExtensionRepos>,
+        options: RestoreOptions,
+    ) {
+        val previousProfileId = profileManager.activeProfileId
+
+        if (options.libraryEntries) {
+            restoreAmount += backupProfiles.sumOf { it.manga.size }
+        }
+        if (options.categories) {
+            restoreAmount += backupProfiles.size
+        }
+        if (options.appSettings) {
+            restoreAmount += backupProfiles.size
+        }
+        if (options.sourceSettings) {
+            restoreAmount += backupProfiles.size
+        }
+        if (options.extensionRepoSettings) {
+            restoreAmount += backupExtensionRepo.size
+        }
+
+        for (profileBackup in backupProfiles) {
+            val profile = upsertProfile(profileBackup)
+            profileManager.setActiveProfile(profile.id, rescheduleJobs = false)
+
+            if (options.categories) {
+                categoriesRestorer(profileBackup.categories)
+                restoreProgress += 1
+                notifier.showRestoreProgress(
+                    "${profile.name}: ${context.stringResource(MR.strings.categories)}",
+                    restoreProgress,
+                    restoreAmount,
+                    isSync,
+                )
+            }
+
+            if (options.appSettings) {
+                preferenceRestorer.restoreAppForProfile(
+                    profileId = profile.id,
+                    preferences = profileBackup.preferences,
+                    backupCategories = profileBackup.categories.takeIf { options.categories },
+                    includeGlobalRestore = profile.id == ProfileConstants.defaultProfileId,
+                    scheduleJobs = false,
+                )
+                restoreProgress += 1
+                notifier.showRestoreProgress(
+                    "${profile.name}: ${context.stringResource(MR.strings.app_settings)}",
+                    restoreProgress,
+                    restoreAmount,
+                    isSync,
+                )
+            }
+
+            if (options.sourceSettings) {
+                preferenceRestorer.restoreSource(profile.id, profileBackup.sourcePreferences)
+                restoreProgress += 1
+                notifier.showRestoreProgress(
+                    "${profile.name}: ${context.stringResource(MR.strings.source_settings)}",
+                    restoreProgress,
+                    restoreAmount,
+                    isSync,
+                )
+            }
+
+            if (options.libraryEntries) {
+                mangaRestorer.sortByNew(profileBackup.manga)
+                    .forEach {
+                        try {
+                            mangaRestorer.restore(
+                                it,
+                                if (options.categories) profileBackup.categories else emptyList(),
+                            )
+                        } catch (e: Exception) {
+                            val sourceName = sourceMapping[it.source] ?: it.source.toString()
+                            errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")
+                        }
+
+                        restoreProgress += 1
+                        notifier.showRestoreProgress(
+                            "${profile.name}: ${it.title}",
+                            restoreProgress,
+                            restoreAmount,
+                            isSync,
+                        )
+                    }
+            }
+        }
+
+        if (options.extensionRepoSettings) {
+            backupExtensionRepo.forEach {
+                try {
+                    extensionRepoRestorer(it)
+                } catch (e: Exception) {
+                    errors.add(Date() to "Error Adding Repo: ${it.name} : ${e.message}")
+                }
+
+                restoreProgress += 1
+                notifier.showRestoreProgress(
+                    context.stringResource(MR.strings.extensionRepo_settings),
+                    restoreProgress,
+                    restoreAmount,
+                    isSync,
+                )
+            }
+        }
+
+        val targetProfile = activeProfileUuid
+            ?.let { profileDatabase.getProfileByUuid(it) }
+            ?: profileDatabase.getProfileById(previousProfileId)
+        if (targetProfile != null) {
+            profileManager.setActiveProfile(targetProfile.id, rescheduleJobs = false)
+        }
+
+        if (options.appSettings) {
+            LibraryUpdateJob.setupTask(
+                context = context,
+                prefInterval = libraryPreferences.autoUpdateInterval.get(),
+            )
+            BackupCreateJob.setupTask(context)
+        }
+    }
+
+    private suspend fun upsertProfile(bundle: ProfileScopedBackup): mihon.feature.profiles.core.Profile {
+        val existing = profileDatabase.getProfileByUuid(bundle.profile.uuid)
+        if (existing != null) {
+            profileDatabase.updateProfile(
+                id = existing.id,
+                name = bundle.profile.name,
+                colorSeed = bundle.profile.colorSeed,
+                position = bundle.profile.position,
+                requiresAuth = bundle.profile.requiresAuth,
+                isArchived = bundle.profile.isArchived,
+            )
+            return profileDatabase.getProfileById(existing.id) ?: existing
+        }
+
+        val id = profileDatabase.insertProfile(
+            uuid = bundle.profile.uuid,
+            name = bundle.profile.name,
+            colorSeed = bundle.profile.colorSeed,
+            position = bundle.profile.position,
+            requiresAuth = bundle.profile.requiresAuth,
+            isArchived = bundle.profile.isArchived,
+        )
+        return requireNotNull(profileDatabase.getProfileById(id))
     }
 
     private fun CoroutineScope.restoreCategories(backupCategories: List<BackupCategory>) = launch {

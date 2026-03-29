@@ -22,6 +22,9 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.AndroidSourceManager
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
+import mihon.feature.profiles.core.ProfileSourcePreferenceProvider
+import mihon.feature.profiles.core.ProfileDatabase
+import mihon.feature.profiles.core.ProfileManager
 import nl.adaptivity.xmlutil.XmlDeclMode
 import nl.adaptivity.xmlutil.core.XmlVersion
 import nl.adaptivity.xmlutil.serialization.XML
@@ -36,6 +39,7 @@ import tachiyomi.data.StringListColumnAdapter
 import tachiyomi.data.UpdateStrategyColumnAdapter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.storage.service.StorageManager
+import eu.kanade.tachiyomi.source.SourcePreferenceProvider
 import tachiyomi.source.local.image.LocalCoverManager
 import tachiyomi.source.local.io.LocalSourceFileSystem
 import uy.kohesive.injekt.api.InjektModule
@@ -72,6 +76,9 @@ class AppModule(val app: Application) : InjektModule {
             )
         }
         addSingletonFactory<DatabaseHandler> { AndroidDatabaseHandler(get(), get()) }
+        addSingletonFactory { ProfileDatabase(get()) }
+        addSingletonFactory { ProfileManager(app, get(), get(), get()) }
+        addSingletonFactory<SourcePreferenceProvider> { ProfileSourcePreferenceProvider(app, get()) }
 
         addSingletonFactory {
             Json {

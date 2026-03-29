@@ -1,9 +1,11 @@
 package tachiyomi.data.chapter
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.toLong
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
@@ -11,6 +13,7 @@ import tachiyomi.domain.chapter.repository.ChapterRepository
 
 class ChapterRepositoryImpl(
     private val handler: DatabaseHandler,
+    private val profileProvider: ActiveProfileProvider,
 ) : ChapterRepository {
 
     override suspend fun addAll(chapters: List<Chapter>): List<Chapter> {
@@ -18,18 +21,19 @@ class ChapterRepositoryImpl(
             handler.await(inTransaction = true) {
                 chapters.map { chapter ->
                     chaptersQueries.insert(
-                        chapter.mangaId,
-                        chapter.url,
-                        chapter.name,
-                        chapter.scanlator,
-                        chapter.read,
-                        chapter.bookmark,
-                        chapter.lastPageRead,
-                        chapter.chapterNumber,
-                        chapter.sourceOrder,
-                        chapter.dateFetch,
-                        chapter.dateUpload,
-                        chapter.version,
+                        profileId = profileProvider.activeProfileId,
+                        mangaId = chapter.mangaId,
+                        url = chapter.url,
+                        name = chapter.name,
+                        scanlator = chapter.scanlator,
+                        read = chapter.read,
+                        bookmark = chapter.bookmark,
+                        lastPageRead = chapter.lastPageRead,
+                        chapterNumber = chapter.chapterNumber,
+                        sourceOrder = chapter.sourceOrder,
+                        dateFetch = chapter.dateFetch,
+                        dateUpload = chapter.dateUpload,
+                        version = chapter.version,
                     )
                     val lastInsertId = chaptersQueries.selectLastInsertedRowId().executeAsOne()
                     chapter.copy(id = lastInsertId)
@@ -67,6 +71,7 @@ class ChapterRepositoryImpl(
                     chapterId = chapterUpdate.id,
                     version = chapterUpdate.version,
                     isSyncing = 0,
+                    profileId = profileProvider.activeProfileId,
                 )
             }
         }
@@ -74,7 +79,7 @@ class ChapterRepositoryImpl(
 
     override suspend fun removeChaptersWithIds(chapterIds: List<Long>) {
         try {
-            handler.await { chaptersQueries.removeChaptersWithIds(chapterIds) }
+            handler.await { chaptersQueries.removeChaptersWithIds(profileProvider.activeProfileId, chapterIds) }
         } catch (e: Exception) {
             logcat(LogPriority.ERROR, e)
         }
@@ -82,25 +87,33 @@ class ChapterRepositoryImpl(
 
     override suspend fun getChapterByMangaId(mangaId: Long, applyScanlatorFilter: Boolean): List<Chapter> {
         return handler.awaitList {
-            chaptersQueries.getChaptersByMangaId(mangaId, applyScanlatorFilter.toLong(), ::mapChapter)
+            chaptersQueries.getChaptersByMangaId(
+                profileProvider.activeProfileId,
+                mangaId,
+                applyScanlatorFilter.toLong(),
+                ::mapChapter,
+            )
         }
     }
 
     override suspend fun getScanlatorsByMangaId(mangaId: Long): List<String> {
         return handler.awaitList {
-            chaptersQueries.getScanlatorsByMangaId(mangaId) { it.orEmpty() }
+            chaptersQueries.getScanlatorsByMangaId(profileProvider.activeProfileId, mangaId) { it.orEmpty() }
         }
     }
 
     override fun getScanlatorsByMangaIdAsFlow(mangaId: Long): Flow<List<String>> {
-        return handler.subscribeToList {
-            chaptersQueries.getScanlatorsByMangaId(mangaId) { it.orEmpty() }
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            handler.subscribeToList {
+                chaptersQueries.getScanlatorsByMangaId(profileId, mangaId) { it.orEmpty() }
+            }
         }
     }
 
     override suspend fun getBookmarkedChaptersByMangaId(mangaId: Long): List<Chapter> {
         return handler.awaitList {
             chaptersQueries.getBookmarkedChaptersByMangaId(
+                profileProvider.activeProfileId,
                 mangaId,
                 ::mapChapter,
             )
@@ -108,18 +121,28 @@ class ChapterRepositoryImpl(
     }
 
     override suspend fun getChapterById(id: Long): Chapter? {
-        return handler.awaitOneOrNull { chaptersQueries.getChapterById(id, ::mapChapter) }
+        return handler.awaitOneOrNull {
+            chaptersQueries.getChapterById(id, profileProvider.activeProfileId, ::mapChapter)
+        }
     }
 
     override suspend fun getChapterByMangaIdAsFlow(mangaId: Long, applyScanlatorFilter: Boolean): Flow<List<Chapter>> {
-        return handler.subscribeToList {
-            chaptersQueries.getChaptersByMangaId(mangaId, applyScanlatorFilter.toLong(), ::mapChapter)
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            handler.subscribeToList {
+                chaptersQueries.getChaptersByMangaId(
+                    profileId,
+                    mangaId,
+                    applyScanlatorFilter.toLong(),
+                    ::mapChapter,
+                )
+            }
         }
     }
 
     override suspend fun getChapterByUrlAndMangaId(url: String, mangaId: Long): Chapter? {
         return handler.awaitOneOrNull {
             chaptersQueries.getChapterByUrlAndMangaId(
+                profileProvider.activeProfileId,
                 url,
                 mangaId,
                 ::mapChapter,
@@ -129,6 +152,8 @@ class ChapterRepositoryImpl(
 
     private fun mapChapter(
         id: Long,
+        @Suppress("UNUSED_PARAMETER")
+        profileId: Long,
         mangaId: Long,
         url: String,
         name: String,

@@ -90,6 +90,7 @@
     <string name="action_disable_all">Disable all</string>
     <string name="action_edit">Edit</string>
     <string name="action_add">Add</string>
+    <string name="action_archive">Archive</string>
     <string name="action_update_category">Update category</string>
     <string name="action_update_extension">Update extension</string>
     <string name="action_update_group">Update group</string>
@@ -139,6 +140,7 @@
     <string name="action_apply">Apply</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_ok">OK</string>
+    <string name="action_switch">Switch</string>
     <string name="action_cancel_all">Cancel all</string>
     <string name="cancel_all_for_series">Cancel all for this series</string>
     <string name="action_sort">Sort</string>
@@ -653,6 +655,19 @@
     <!-- Custom settings section -->
     <string name="pref_category_custom">Custom settings</string>
     <string name="pref_custom_summary">Fork's custom settings</string>
+    <string name="profiles_title">Profiles</string>
+    <string name="profiles_summary">Manage and switch profiles</string>
+    <string name="profiles_add_profile">Add profile</string>
+    <string name="profiles_rename_profile">Rename profile</string>
+    <string name="profiles_archive_profile">Archive profile</string>
+    <string name="profiles_delete_profile">Delete profile</string>
+    <string name="profiles_visible">Profiles</string>
+    <string name="profiles_archived">Archived</string>
+    <string name="profiles_active">Active</string>
+    <string name="profiles_default">Default</string>
+    <string name="profiles_name_exists">A profile with this name already exists</string>
+    <string name="profiles_archive_profile_confirmation">Archive %1$s?</string>
+    <string name="profiles_delete_profile_confirmation">Delete %1$s permanently?</string>
     <string name="pref_startup_screen">Application startup screen</string>
     <string name="pref_extensions_auto_update">Enable extensions auto-update</string>
 

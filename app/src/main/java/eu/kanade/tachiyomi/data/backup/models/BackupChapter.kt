@@ -44,6 +44,7 @@ data class BackupChapter(
 val backupChapterMapper = {
         _: Long,
         _: Long,
+        _: Long,
         url: String,
         name: String,
         scanlator: String?,

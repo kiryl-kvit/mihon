@@ -1,15 +1,18 @@
 CREATE TABLE mangas_categories(
     _id INTEGER NOT NULL PRIMARY KEY,
+    profile_id INTEGER NOT NULL DEFAULT 1,
     manga_id INTEGER NOT NULL,
     category_id INTEGER NOT NULL,
     FOREIGN KEY(category_id) REFERENCES categories (_id)
     ON DELETE CASCADE,
     FOREIGN KEY(manga_id) REFERENCES mangas (_id)
+    ON DELETE CASCADE,
+    FOREIGN KEY(profile_id) REFERENCES profiles (_id)
     ON DELETE CASCADE
 );
 
-CREATE INDEX idx_mangas_categories_manga_id ON mangas_categories(manga_id);
-CREATE INDEX idx_mangas_categories_category_id ON mangas_categories(category_id);
+CREATE INDEX idx_mangas_categories_manga_id ON mangas_categories(profile_id, manga_id);
+CREATE INDEX idx_mangas_categories_category_id ON mangas_categories(profile_id, category_id);
 
 CREATE TRIGGER insert_manga_category_update_version AFTER INSERT ON mangas_categories
 BEGIN
@@ -19,9 +22,10 @@ BEGIN
 END;
 
 insert:
-INSERT INTO mangas_categories(manga_id, category_id)
-VALUES (:mangaId, :categoryId);
+INSERT INTO mangas_categories(profile_id, manga_id, category_id)
+VALUES (:profileId, :mangaId, :categoryId);
 
 deleteMangaCategoryByMangaId:
 DELETE FROM mangas_categories
-WHERE manga_id = :mangaId;
+WHERE profile_id = :profileId
+AND manga_id = :mangaId;

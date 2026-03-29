@@ -57,6 +57,7 @@ data class BackupTracking(
 val backupTrackMapper = {
         _: Long,
         _: Long,
+        _: Long,
         syncId: Long,
         mediaId: Long,
         libraryId: Long?,

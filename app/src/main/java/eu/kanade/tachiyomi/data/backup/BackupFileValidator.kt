@@ -40,8 +40,10 @@ class BackupFileValidator(
             .distinct()
             .sorted()
 
-        val trackers = backup.backupManga
-            .flatMap { it.tracking }
+        val trackers = buildList {
+            addAll(backup.backupManga.flatMap { it.tracking })
+            addAll(backup.backupProfiles.flatMap { profile -> profile.manga.flatMap { it.tracking } })
+        }
             .map { it.syncId }
             .distinct()
         val missingTrackers = trackers

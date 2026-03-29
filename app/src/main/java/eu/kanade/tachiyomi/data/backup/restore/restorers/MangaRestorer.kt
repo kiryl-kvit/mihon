@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupChapter
 import eu.kanade.tachiyomi.data.backup.models.BackupHistory
 import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupTracking
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.data.UpdateStrategyColumnAdapter
 import tachiyomi.domain.category.interactor.GetCategories
@@ -25,6 +26,7 @@ import kotlin.math.max
 
 class MangaRestorer(
     private val handler: DatabaseHandler = Injekt.get(),
+    private val profileProvider: ActiveProfileProvider = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val getMangaByUrlAndSourceId: GetMangaByUrlAndSourceId = Injekt.get(),
     private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
@@ -43,7 +45,7 @@ class MangaRestorer(
     }
 
     suspend fun sortByNew(backupMangas: List<BackupManga>): List<BackupManga> {
-        val urlsBySource = handler.awaitList { mangasQueries.getAllMangaSourceAndUrl() }
+        val urlsBySource = handler.awaitList { mangasQueries.getAllMangaSourceAndUrl(profileProvider.activeProfileId) }
             .groupBy({ it.source }, { it.url })
 
         return backupMangas
@@ -130,6 +132,7 @@ class MangaRestorer(
                 version = manga.version,
                 isSyncing = 1,
                 notes = manga.notes,
+                profileId = profileProvider.activeProfileId,
             )
         }
         return manga
@@ -190,23 +193,24 @@ class MangaRestorer(
 
     private suspend fun insertNewChapters(chapters: List<Chapter>) {
         handler.await(true) {
-            chapters.forEach { chapter ->
-                chaptersQueries.insert(
-                    chapter.mangaId,
-                    chapter.url,
-                    chapter.name,
-                    chapter.scanlator,
-                    chapter.read,
-                    chapter.bookmark,
-                    chapter.lastPageRead,
-                    chapter.chapterNumber,
-                    chapter.sourceOrder,
-                    chapter.dateFetch,
-                    chapter.dateUpload,
-                    chapter.version,
-                )
+                chapters.forEach { chapter ->
+                    chaptersQueries.insert(
+                        profileProvider.activeProfileId,
+                        chapter.mangaId,
+                        chapter.url,
+                        chapter.name,
+                        chapter.scanlator,
+                        chapter.read,
+                        chapter.bookmark,
+                        chapter.lastPageRead,
+                        chapter.chapterNumber,
+                        chapter.sourceOrder,
+                        chapter.dateFetch,
+                        chapter.dateUpload,
+                        chapter.version,
+                    )
+                }
             }
-        }
     }
 
     private suspend fun updateExistingChapters(chapters: List<Chapter>) {
@@ -227,6 +231,7 @@ class MangaRestorer(
                     chapterId = chapter.id,
                     version = chapter.version,
                     isSyncing = 0,
+                    profileId = profileProvider.activeProfileId,
                 )
             }
         }
@@ -240,6 +245,7 @@ class MangaRestorer(
     private suspend fun insertManga(manga: Manga): Long {
         return handler.awaitOneExecutable(true) {
             mangasQueries.insert(
+                profileId = profileProvider.activeProfileId,
                 source = manga.source,
                 url = manga.url,
                 artist = manga.artist,
@@ -310,9 +316,9 @@ class MangaRestorer(
 
         if (mangaCategoriesToUpdate.isNotEmpty()) {
             handler.await(true) {
-                mangas_categoriesQueries.deleteMangaCategoryByMangaId(manga.id)
+                mangas_categoriesQueries.deleteMangaCategoryByMangaId(profileProvider.activeProfileId, manga.id)
                 mangaCategoriesToUpdate.forEach { (mangaId, categoryId) ->
-                    mangas_categoriesQueries.insert(mangaId, categoryId)
+                    mangas_categoriesQueries.insert(profileProvider.activeProfileId, mangaId, categoryId)
                 }
             }
         }
@@ -320,11 +326,15 @@ class MangaRestorer(
 
     private suspend fun restoreHistory(backupHistory: List<BackupHistory>) {
         val toUpdate = backupHistory.mapNotNull { history ->
-            val dbHistory = handler.awaitOneOrNull { historyQueries.getHistoryByChapterUrl(history.url) }
+            val dbHistory = handler.awaitOneOrNull {
+                historyQueries.getHistoryByChapterUrl(profileProvider.activeProfileId, history.url)
+            }
             val item = history.getHistoryImpl()
 
             if (dbHistory == null) {
-                val chapter = handler.awaitOneOrNull { chaptersQueries.getChapterByUrl(history.url) }
+                val chapter = handler.awaitOneOrNull {
+                    chaptersQueries.getChapterByUrl(profileProvider.activeProfileId, history.url)
+                }
                 return@mapNotNull if (chapter == null) {
                     // Chapter doesn't exist; skip
                     null
@@ -349,6 +359,7 @@ class MangaRestorer(
             handler.await(true) {
                 toUpdate.forEach {
                     historyQueries.upsert(
+                        profileProvider.activeProfileId,
                         it.chapterId,
                         it.readAt,
                         it.readDuration,
@@ -406,6 +417,7 @@ class MangaRestorer(
                         track.finishDate,
                         track.private,
                         track.id,
+                        profileProvider.activeProfileId,
                     )
                 }
             }
@@ -423,13 +435,13 @@ class MangaRestorer(
     private suspend fun restoreExcludedScanlators(manga: Manga, excludedScanlators: List<String>) {
         if (excludedScanlators.isEmpty()) return
         val existingExcludedScanlators = handler.awaitList {
-            excluded_scanlatorsQueries.getExcludedScanlatorsByMangaId(manga.id)
+            excluded_scanlatorsQueries.getExcludedScanlatorsByMangaId(profileProvider.activeProfileId, manga.id)
         }
         val toInsert = excludedScanlators.filter { it !in existingExcludedScanlators }
         if (toInsert.isNotEmpty()) {
             handler.await {
                 toInsert.forEach {
-                    excluded_scanlatorsQueries.insert(manga.id, it)
+                    excluded_scanlatorsQueries.insert(profileProvider.activeProfileId, manga.id, it)
                 }
             }
         }

@@ -3,10 +3,13 @@ package eu.kanade.presentation.more.settings.screen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
 import kotlinx.collections.immutable.persistentMapOf
 import mihon.core.common.CustomPreferences
 import mihon.core.common.HomeScreenTabs
+import mihon.feature.profiles.ui.ProfilesSettingsScreen
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
@@ -22,7 +25,15 @@ object CustomSettingsScreen : SearchableSettings {
     @Composable
     override fun getPreferences(): List<Preference> {
         val customPreferences = remember { Injekt.get<CustomPreferences>() }
+        val navigator = LocalNavigator.currentOrThrow
         return listOf(
+            Preference.PreferenceItem.TextPreference(
+                title = stringResource(MR.strings.profiles_title),
+                subtitle = stringResource(MR.strings.profiles_summary),
+                onClick = {
+                    navigator.push(ProfilesSettingsScreen())
+                },
+            ),
             Preference.PreferenceItem.ListPreference(
                 preference = customPreferences.homeScreenStartupTab,
                 entries = persistentMapOf(
