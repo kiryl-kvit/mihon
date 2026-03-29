@@ -16,9 +16,10 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
 
 class ProfileStoreImpl(
-    application: Application,
+    private val application: Application,
     private val profilesPreferences: ProfilesPreferences = Injekt.get(),
 ) : ProfileAwareStore {
 
@@ -125,5 +126,20 @@ class ProfileStoreImpl(
         baseStore.sharedPreferences.edit(commit = true) {
             keys.forEach(::remove)
         }
+    }
+
+    fun deleteProfileState(profileId: Long) {
+        deleteKeys(profileKeys(profileId))
+        deleteSourcePreferences(profileId)
+    }
+
+    private fun deleteSourcePreferences(profileId: Long) {
+        val prefix = "source_${profileId}_"
+        val sharedPrefsDir = File(application.applicationInfo.dataDir, "shared_prefs")
+        sharedPrefsDir.listFiles()
+            ?.asSequence()
+            ?.map { it.name.removeSuffix(".xml") }
+            ?.filter { it.startsWith(prefix) }
+            ?.forEach { prefName -> application.deleteSharedPreferences(prefName) }
     }
 }

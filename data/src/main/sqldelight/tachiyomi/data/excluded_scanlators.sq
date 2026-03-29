@@ -21,6 +21,10 @@ WHERE profile_id = :profileId
 AND manga_id = :mangaId
 AND scanlator IN :scanlators;
 
+deleteByProfile:
+DELETE FROM excluded_scanlators
+WHERE profile_id = :profileId;
+
 getExcludedScanlatorsByMangaId:
 SELECT scanlator
 FROM excluded_scanlators

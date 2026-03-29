@@ -29,3 +29,7 @@ deleteMangaCategoryByMangaId:
 DELETE FROM mangas_categories
 WHERE profile_id = :profileId
 AND manga_id = :mangaId;
+
+deleteByProfile:
+DELETE FROM mangas_categories
+WHERE profile_id = :profileId;

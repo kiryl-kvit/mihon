@@ -78,6 +78,18 @@ class ProfileDatabase(
         }
     }
 
+    suspend fun clearProfileData(profileId: Long) {
+        handler.await(inTransaction = true) {
+            historyQueries.removeAllHistory(profileId)
+            excluded_scanlatorsQueries.deleteByProfile(profileId)
+            manga_syncQueries.deleteByProfile(profileId)
+            mangas_categoriesQueries.deleteByProfile(profileId)
+            chaptersQueries.deleteByProfile(profileId)
+            categoriesQueries.deleteByProfile(profileId)
+            mangasQueries.deleteByProfile(profileId)
+        }
+    }
+
     suspend fun getVisibleProfileCount(): Long {
         return handler.awaitOne {
             profilesQueries.getVisibleProfileCount()

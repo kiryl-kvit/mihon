@@ -103,6 +103,10 @@ DELETE FROM chapters
 WHERE profile_id = :profileId
 AND _id IN :chapterIds;
 
+deleteByProfile:
+DELETE FROM chapters
+WHERE profile_id = :profileId;
+
 resetIsSyncing:
 UPDATE chapters
 SET is_syncing = 0

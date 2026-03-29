@@ -101,18 +101,16 @@ class ProfileManager(
             requiresAuth = false,
             isArchived = false,
         )
+        clearProfileState(id)
+        val hiddenSourceIds = extensionManager.installedExtensionsFlow.value
+            .flatMap { extension -> extension.sources.map { source -> source.id.toString() } }
+            .toSet()
         profileStore.profileStore(id)
             .getStringSet(
                 "hidden_catalogues",
-                extensionManager.installedExtensionsFlow.value
-                    .flatMap { extension -> extension.sources.map { source -> source.id.toString() } }
-                    .toSet(),
+                hiddenSourceIds,
             )
-            .set(
-                extensionManager.installedExtensionsFlow.value
-                    .flatMap { extension -> extension.sources.map { source -> source.id.toString() } }
-                    .toSet(),
-            )
+            .set(hiddenSourceIds)
         return requireNotNull(profileDatabase.getProfileById(id))
     }
 
@@ -139,8 +137,13 @@ class ProfileManager(
         if (activeProfileId == profileId && fallback != null) {
             setActiveProfile(fallback.id)
         }
-        profileStore.deleteKeys(profileStore.profileKeys(profileId))
+        clearProfileState(profileId)
         profileDatabase.deleteProfile(profileId)
+    }
+
+    private suspend fun clearProfileState(profileId: Long) {
+        profileDatabase.clearProfileData(profileId)
+        profileStore.deleteProfileState(profileId)
     }
 
     suspend fun getProfileBundles(includeArchived: Boolean = true): List<ProfileBundle> {

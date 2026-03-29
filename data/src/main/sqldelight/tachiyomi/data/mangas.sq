@@ -216,6 +216,10 @@ AND (
     )
 );
 
+deleteByProfile:
+DELETE FROM mangas
+WHERE profile_id = :profileId;
+
 countProfileManga:
 SELECT count(*)
 FROM mangas

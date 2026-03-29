@@ -31,6 +31,10 @@ WHERE profile_id = :profileId
 AND manga_id = :mangaId
 AND sync_id = :syncId;
 
+deleteByProfile:
+DELETE FROM manga_sync
+WHERE profile_id = :profileId;
+
 getTracks:
 SELECT *
 FROM manga_sync

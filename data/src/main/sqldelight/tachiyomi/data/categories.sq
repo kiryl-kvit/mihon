@@ -60,6 +60,10 @@ DELETE FROM categories
 WHERE profile_id = :profileId
 AND _id = :categoryId;
 
+deleteByProfile:
+DELETE FROM categories
+WHERE profile_id = :profileId;
+
 update:
 UPDATE categories
 SET name = coalesce(:name, name),
