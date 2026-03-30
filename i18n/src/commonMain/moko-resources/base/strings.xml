@@ -186,6 +186,7 @@
 
     <string name="merge_members_count">%d members</string>
     <string name="merge_existing_target_locked">Existing merged entry will stay as the root</string>
+    <string name="remove_merged_manga_warning">Merged entries are removed from the library as whole groups.</string>
 
     <!-- Operations -->
     <string name="loading">Loading…</string>

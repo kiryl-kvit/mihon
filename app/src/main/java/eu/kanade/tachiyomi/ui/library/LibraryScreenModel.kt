@@ -871,7 +871,16 @@ class LibraryScreenModel(
         screenModelScope.launchIO {
             val mangaList = getSelectedActionManga()
             val containsLocalManga = mangaList.any(Manga::isLocal)
-            mutableState.update { it.copy(dialog = Dialog.DeleteManga(mangaList, containsLocalManga)) }
+            val containsMergedManga = state.value.selectedLibraryManga.any(LibraryManga::isMerged)
+            mutableState.update {
+                it.copy(
+                    dialog = Dialog.DeleteManga(
+                        manga = mangaList,
+                        containsLocalManga = containsLocalManga,
+                        containsMergedManga = containsMergedManga,
+                    ),
+                )
+            }
         }
     }
 
@@ -977,6 +986,7 @@ class LibraryScreenModel(
         data class DeleteManga(
             val manga: List<Manga>,
             val containsLocalManga: Boolean,
+            val containsMergedManga: Boolean,
         ) : Dialog
     }
 

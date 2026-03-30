@@ -1,7 +1,9 @@
 package eu.kanade.presentation.library
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -14,10 +16,12 @@ import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LabeledCheckbox
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.components.material.padding
 
 @Composable
 fun DeleteLibraryMangaDialog(
     containsLocalManga: Boolean,
+    containsMergedManga: Boolean = false,
     onDismissRequest: () -> Unit,
     onConfirm: (Boolean, Boolean) -> Unit,
 ) {
@@ -56,7 +60,12 @@ fun DeleteLibraryMangaDialog(
             Text(text = stringResource(MR.strings.action_remove))
         },
         text = {
-            Column {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            ) {
+                if (containsMergedManga) {
+                    Text(text = stringResource(MR.strings.remove_merged_manga_warning))
+                }
                 list.forEach { state ->
                     LabeledCheckbox(
                         label = stringResource(state.value),

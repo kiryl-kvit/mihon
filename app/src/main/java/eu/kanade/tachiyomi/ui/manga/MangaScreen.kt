@@ -246,6 +246,7 @@ class MangaScreen(
             is MangaScreenModel.Dialog.RemoveMergedManga -> {
                 DeleteLibraryMangaDialog(
                     containsLocalManga = dialog.containsLocalManga,
+                    containsMergedManga = true,
                     onDismissRequest = onDismissRequest,
                     onConfirm = { deleteManga, deleteChapter ->
                         screenModel.removeMergedManga(dialog.members, deleteManga, deleteChapter)
