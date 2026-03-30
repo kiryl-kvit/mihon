@@ -2,9 +2,12 @@ package mihon.feature.profiles.core
 
 import android.app.Application
 import android.content.Intent
+import android.content.Context
+import androidx.core.content.edit
 import androidx.preference.PreferenceManager
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
+import tachiyomi.core.common.preference.Preference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
+import java.io.File
 import kotlin.random.Random
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -140,18 +144,148 @@ class ProfileManager(
     }
 
     private fun migrateLegacyPreferencesIfNeeded() {
-        if (profilesPreferences.legacyPreferenceMigrationCompleted.get()) return
+        val currentVersion = profilesPreferences.legacyPreferenceMigrationVersion.get()
+        if (currentVersion >= LEGACY_PROFILE_MIGRATION_VERSION) return
+
+        correctProfileOwnershipMismatches(currentVersion)
+        val ownership = ProfilePreferenceOwnership.derive()
 
         val migration = ProfilePreferenceMigration(
             PreferenceManager.getDefaultSharedPreferences(application),
         )
         migration.migrateLegacyPreferenceKeys(
             profileId = ProfileConstants.defaultProfileId,
-            profileKeys = ProfileScopedPreferenceSets.profile,
-            appStateKeys = ProfileScopedPreferenceSets.appState,
-            privateKeys = ProfileScopedPreferenceSets.private,
+            profileKeys = ownership.profile,
+            appStateKeys = ownership.appState,
+            privateKeys = ownership.private,
         )
-        profilesPreferences.legacyPreferenceMigrationCompleted.set(true)
+        migrateLegacySourcePreferences()
+        migration.cleanupLegacyPreferenceKeys(
+            profileId = ProfileConstants.defaultProfileId,
+            profileKeys = ownership.profile,
+            appStateKeys = ownership.appState,
+            privateKeys = ownership.private,
+        )
+        profilesPreferences.legacyPreferenceMigrationVersion.set(LEGACY_PROFILE_MIGRATION_VERSION)
+    }
+
+    private fun correctProfileOwnershipMismatches(currentVersion: Int) {
+        val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(application)
+        if (currentVersion < 2) {
+            migrateProfileOwnedKeyToNamespaced(
+                sharedPreferences = sharedPreferences,
+                baseKey = "show_nsfw_source",
+            )
+            migrateProfileOwnedKeyToNamespaced(
+                sharedPreferences = sharedPreferences,
+                baseKey = Preference.appStateKey("home_screen_startup_tab"),
+            )
+        }
+
+        migrateKeyBackToGlobal(
+            sharedPreferences = sharedPreferences,
+            baseKey = "mark_duplicate_read_chapter_read",
+        )
+        migrateKeyBackToGlobal(
+            sharedPreferences = sharedPreferences,
+            baseKey = "anilist_score_type",
+        )
+        migrateKeyBackToGlobal(
+            sharedPreferences = sharedPreferences,
+            baseKey = "auto_clear_chapter_cache",
+        )
+        migrateKeyBackToGlobal(
+            sharedPreferences = sharedPreferences,
+            baseKey = "disallow_non_ascii_filenames",
+        )
+    }
+
+    private fun migrateProfileOwnedKeyToNamespaced(
+        sharedPreferences: android.content.SharedPreferences,
+        baseKey: String,
+    ) {
+        val namespacedKey = ProfileAwarePreferenceStore.Namespace.namespacedKey(baseKey, ProfileConstants.defaultProfileId)
+        if (!sharedPreferences.contains(baseKey) || sharedPreferences.contains(namespacedKey)) return
+
+        sharedPreferences.edit(commit = true) {
+            when (val value = sharedPreferences.all[baseKey]) {
+                is String -> putString(namespacedKey, value)
+                is Int -> putInt(namespacedKey, value)
+                is Long -> putLong(namespacedKey, value)
+                is Float -> putFloat(namespacedKey, value)
+                is Boolean -> putBoolean(namespacedKey, value)
+                is Set<*> -> putStringSet(namespacedKey, value.filterIsInstance<String>().toSet())
+            }
+            remove(baseKey)
+        }
+    }
+
+    private fun migrateKeyBackToGlobal(
+        sharedPreferences: android.content.SharedPreferences,
+        baseKey: String,
+    ) {
+        val namespacedKey = ProfileAwarePreferenceStore.Namespace.namespacedKey(baseKey, ProfileConstants.defaultProfileId)
+        if (!sharedPreferences.contains(namespacedKey)) return
+
+        sharedPreferences.edit(commit = true) {
+            if (!sharedPreferences.contains(baseKey)) {
+                when (val value = sharedPreferences.all[namespacedKey]) {
+                    is String -> putString(baseKey, value)
+                    is Int -> putInt(baseKey, value)
+                    is Long -> putLong(baseKey, value)
+                    is Float -> putFloat(baseKey, value)
+                    is Boolean -> putBoolean(baseKey, value)
+                    is Set<*> -> putStringSet(baseKey, value.filterIsInstance<String>().toSet())
+                }
+            }
+            remove(namespacedKey)
+        }
+    }
+
+    private fun migrateLegacySourcePreferences() {
+        val sharedPrefsDir = File(application.applicationInfo.dataDir, "shared_prefs")
+        val sourceIds = sharedPrefsDir.listFiles()
+            ?.asSequence()
+            ?.map { it.name.removeSuffix(".xml") }
+            ?.mapNotNull { name ->
+                name.removePrefix("source_")
+                    .takeIf { name.startsWith("source_") }
+                    ?.toLongOrNull()
+            }
+            ?.toSet()
+            .orEmpty()
+
+        sourceIds.forEach { sourceId ->
+            migrateLegacySourcePreferences(sourceId)
+        }
+    }
+
+    private fun migrateLegacySourcePreferences(sourceId: Long) {
+        val legacyName = "source_$sourceId"
+        val legacyPrefs = application.getSharedPreferences(legacyName, Context.MODE_PRIVATE)
+        if (legacyPrefs.all.isEmpty()) return
+
+        val targetName = profileStore.sourcePreferenceKey(sourceId, ProfileConstants.defaultProfileId)
+        val targetPrefs = application.getSharedPreferences(targetName, Context.MODE_PRIVATE)
+
+        targetPrefs.edit(commit = true) {
+            legacyPrefs.all.forEach { (key, value) ->
+                if (targetPrefs.contains(key)) return@forEach
+
+                when (value) {
+                    is String -> putString(key, value)
+                    is Int -> putInt(key, value)
+                    is Long -> putLong(key, value)
+                    is Float -> putFloat(key, value)
+                    is Boolean -> putBoolean(key, value)
+                    is Set<*> -> putStringSet(key, value.filterIsInstance<String>().toSet())
+                }
+            }
+        }
+
+        if (targetPrefs.all.isNotEmpty()) {
+            application.deleteSharedPreferences(legacyName)
+        }
     }
 
     suspend fun getProfileBundles(includeArchived: Boolean = true): List<ProfileBundle> {
@@ -185,5 +319,9 @@ class ProfileManager(
     @OptIn(ExperimentalUuidApi::class)
     private fun newUuid(): String {
         return Uuid.random().toString()
+    }
+
+    companion object {
+        private const val LEGACY_PROFILE_MIGRATION_VERSION = 3
     }
 }

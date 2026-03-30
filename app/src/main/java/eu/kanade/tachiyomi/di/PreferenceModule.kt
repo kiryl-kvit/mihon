@@ -2,7 +2,9 @@ package eu.kanade.tachiyomi.di
 
 import android.app.Application
 import eu.kanade.domain.base.BasePreferences
+import eu.kanade.domain.source.service.GlobalSourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.track.service.GlobalTrackPreferences
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.tachiyomi.core.security.PrivacyPreferences
@@ -11,6 +13,7 @@ import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.system.isDebugBuildType
 import mihon.core.common.CustomPreferences
+import mihon.core.common.GlobalCustomPreferences
 import mihon.feature.profiles.core.ProfileAwareStore
 import mihon.feature.profiles.core.ProfileStore
 import mihon.feature.profiles.core.ProfileStoreImpl
@@ -21,6 +24,7 @@ import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.storage.AndroidStorageFolderProvider
 import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.library.service.GlobalLibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.storage.service.StoragePreferences
 import tachiyomi.domain.updates.service.UpdatesPreferences
@@ -49,9 +53,9 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory {
             SourcePreferences(
                 preferenceStore = get<ProfileStore>().profileStore(),
-                globalPreferenceStore = get<ProfileStore>().basePreferenceStore(),
             )
         }
+        addSingletonFactory { GlobalSourcePreferences(get<ProfileStore>().basePreferenceStore()) }
         addSingletonFactory {
             SecurityPreferences(get<ProfileStore>().profileStore())
         }
@@ -61,6 +65,7 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory {
             LibraryPreferences(get<ProfileStore>().profileStore())
         }
+        addSingletonFactory { GlobalLibraryPreferences(get<ProfileStore>().basePreferenceStore()) }
         addSingletonFactory {
             UpdatesPreferences(get<ProfileStore>().profileStore())
         }
@@ -70,6 +75,7 @@ class PreferenceModule(val app: Application) : InjektModule {
         addSingletonFactory {
             TrackPreferences(get<ProfileStore>().privateStore())
         }
+        addSingletonFactory { GlobalTrackPreferences(get<ProfileStore>().basePreferenceStore()) }
         addSingletonFactory {
             DownloadPreferences(get<ProfileStore>().basePreferenceStore())
         }
@@ -89,7 +95,8 @@ class PreferenceModule(val app: Application) : InjektModule {
             BasePreferences(app, get<ProfileStore>().basePreferenceStore())
         }
         addSingletonFactory {
-            CustomPreferences(get<ProfileStore>().basePreferenceStore())
+            CustomPreferences(get<ProfileStore>().appStateStore())
         }
+        addSingletonFactory { GlobalCustomPreferences(get<ProfileStore>().basePreferenceStore()) }
     }
 }

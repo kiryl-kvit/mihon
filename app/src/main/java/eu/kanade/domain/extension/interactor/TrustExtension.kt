@@ -2,13 +2,13 @@ package eu.kanade.domain.extension.interactor
 
 import android.content.pm.PackageInfo
 import androidx.core.content.pm.PackageInfoCompat
-import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.source.service.GlobalSourcePreferences
 import mihon.domain.extensionrepo.repository.ExtensionRepoRepository
 import tachiyomi.core.common.preference.getAndSet
 
 class TrustExtension(
     private val extensionRepoRepository: ExtensionRepoRepository,
-    private val preferences: SourcePreferences,
+    private val preferences: GlobalSourcePreferences,
 ) {
 
     suspend fun isTrusted(pkgInfo: PackageInfo, fingerprints: List<String>): Boolean {

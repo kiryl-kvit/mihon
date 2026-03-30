@@ -10,7 +10,7 @@ import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.storage.displayablePath
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.chapter.model.Chapter
-import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.library.service.GlobalLibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.storage.service.StorageManager
 import tachiyomi.i18n.MR
@@ -27,7 +27,7 @@ import java.io.IOException
 class DownloadProvider(
     private val context: Context,
     private val storageManager: StorageManager = Injekt.get(),
-    private val libraryPreferences: LibraryPreferences = Injekt.get(),
+    private val libraryPreferences: GlobalLibraryPreferences = Injekt.get(),
 ) {
 
     private val downloadsDir: UniFile?

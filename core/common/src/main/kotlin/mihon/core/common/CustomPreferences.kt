@@ -9,9 +9,6 @@ class CustomPreferences(
 ) {
     val homeScreenStartupTab: Preference<HomeScreenTabs> = preferenceStore.getEnum(
         Preference.appStateKey("home_screen_startup_tab"),
-        HomeScreenTabs.Library)
-
-    val extensionsAutoUpdates: Preference<Boolean> = preferenceStore.getBoolean(
-        Preference.appStateKey("extensions_auto_updates"),
-        false)
+        HomeScreenTabs.Library,
+    )
 }

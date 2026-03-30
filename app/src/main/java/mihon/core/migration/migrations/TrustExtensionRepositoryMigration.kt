@@ -1,6 +1,6 @@
 package mihon.core.migration.migrations
 
-import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.source.service.GlobalSourcePreferences
 import logcat.LogPriority
 import mihon.core.migration.Migration
 import mihon.core.migration.MigrationContext
@@ -13,7 +13,7 @@ class TrustExtensionRepositoryMigration : Migration {
     override val version: Float = 7f
 
     override suspend fun invoke(migrationContext: MigrationContext): Boolean = withIOContext {
-        val sourcePreferences = migrationContext.get<SourcePreferences>() ?: return@withIOContext false
+        val sourcePreferences = migrationContext.get<GlobalSourcePreferences>() ?: return@withIOContext false
         val extensionRepositoryRepository =
             migrationContext.get<ExtensionRepoRepository>() ?: return@withIOContext false
         for ((index, source) in sourcePreferences.extensionRepos.get().withIndex()) {

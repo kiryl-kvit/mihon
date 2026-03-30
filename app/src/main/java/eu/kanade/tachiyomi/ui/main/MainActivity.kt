@@ -114,6 +114,7 @@ import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.library.service.GlobalLibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
@@ -125,6 +126,7 @@ import uy.kohesive.injekt.injectLazy
 class MainActivity : BaseActivity() {
 
     private val libraryPreferences: LibraryPreferences by injectLazy()
+    private val globalLibraryPreferences: GlobalLibraryPreferences by injectLazy()
     private val preferences: BasePreferences by injectLazy()
     private val uiPreferences: UiPreferences by injectLazy()
     private val securityPreferences: SecurityPreferences by injectLazy()
@@ -604,7 +606,7 @@ class MainActivity : BaseActivity() {
             // Reset Incognito Mode on relaunch
             preferences.incognitoMode.set(false)
 
-            if (libraryPreferences.autoClearChapterCache.get()) {
+            if (globalLibraryPreferences.autoClearChapterCache.get()) {
                 lifecycleScope.launchIO {
                     chapterCache.clear()
                 }

@@ -62,11 +62,6 @@ class LibraryPreferences(
         false,
     )
 
-    val markDuplicateReadChapterAsRead: Preference<Set<String>> = preferenceStore.getStringSet(
-        "mark_duplicate_read_chapter_read",
-        emptySet(),
-    )
-
     // region Filter
 
     val filterDownloaded: Preference<TriState> = preferenceStore.getEnum(
@@ -198,8 +193,6 @@ class LibraryPreferences(
         )
     }
 
-    val autoClearChapterCache: Preference<Boolean> = preferenceStore.getBoolean("auto_clear_chapter_cache", false)
-
     val hideMissingChapters: Preference<Boolean> = preferenceStore.getBoolean(
         "pref_hide_missing_chapter_indicators",
         false,
@@ -219,11 +212,6 @@ class LibraryPreferences(
     )
 
     val updateMangaTitles: Preference<Boolean> = preferenceStore.getBoolean("pref_update_library_manga_titles", false)
-
-    val disallowNonAsciiFilenames: Preference<Boolean> = preferenceStore.getBoolean(
-        "disallow_non_ascii_filenames",
-        false,
-    )
 
     // endregion
 

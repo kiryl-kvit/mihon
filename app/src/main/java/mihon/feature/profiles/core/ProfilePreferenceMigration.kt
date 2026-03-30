@@ -12,27 +12,54 @@ class ProfilePreferenceMigration(
         profileKeys: Set<String>,
         appStateKeys: Set<String> = emptySet(),
         privateKeys: Set<String> = emptySet(),
-    ) {
+        ) {
         sharedPreferences.edit(commit = true) {
             profileKeys.forEach { key ->
-                migrateKey(
-                    key,
-                    targetKey = ProfileAwarePreferenceStore.Namespace.namespacedKey(key, profileId),
-                    editor = this,
-                )
+                migrateKey(key, ProfileAwarePreferenceStore.Namespace.namespacedKey(key, profileId), this)
             }
             appStateKeys.forEach { key ->
+                val sourceKey = Preference.appStateKey(key)
                 migrateKey(
-                    Preference.appStateKey(key),
-                    targetKey = ProfileAwarePreferenceStore.Namespace.namespacedKey(Preference.appStateKey(key), profileId),
-                    editor = this,
+                    sourceKey,
+                    ProfileAwarePreferenceStore.Namespace.namespacedKey(sourceKey, profileId),
+                    this,
                 )
             }
             privateKeys.forEach { key ->
+                val sourceKey = Preference.privateKey(key)
                 migrateKey(
-                    Preference.privateKey(key),
-                    targetKey = ProfileAwarePreferenceStore.Namespace.namespacedKey(Preference.privateKey(key), profileId),
-                    editor = this,
+                    sourceKey,
+                    ProfileAwarePreferenceStore.Namespace.namespacedKey(sourceKey, profileId),
+                    this,
+                )
+            }
+        }
+    }
+
+    fun cleanupLegacyPreferenceKeys(
+        profileId: Long,
+        profileKeys: Set<String>,
+        appStateKeys: Set<String> = emptySet(),
+        privateKeys: Set<String> = emptySet(),
+    ) {
+        sharedPreferences.edit(commit = true) {
+            profileKeys.forEach { key ->
+                cleanupKey(key, ProfileAwarePreferenceStore.Namespace.namespacedKey(key, profileId), this)
+            }
+            appStateKeys.forEach { key ->
+                val sourceKey = Preference.appStateKey(key)
+                cleanupKey(
+                    sourceKey,
+                    ProfileAwarePreferenceStore.Namespace.namespacedKey(sourceKey, profileId),
+                    this,
+                )
+            }
+            privateKeys.forEach { key ->
+                val sourceKey = Preference.privateKey(key)
+                cleanupKey(
+                    sourceKey,
+                    ProfileAwarePreferenceStore.Namespace.namespacedKey(sourceKey, profileId),
+                    this,
                 )
             }
         }
@@ -53,5 +80,15 @@ class ProfilePreferenceMigration(
             is Boolean -> editor.putBoolean(targetKey, value)
             is Set<*> -> editor.putStringSet(targetKey, value.filterIsInstance<String>().toSet())
         }
+    }
+
+    private fun cleanupKey(
+        sourceKey: String,
+        targetKey: String,
+        editor: SharedPreferences.Editor,
+    ) {
+        if (!sharedPreferences.contains(sourceKey)) return
+        if (!sharedPreferences.contains(targetKey)) return
+        editor.remove(sourceKey)
     }
 }

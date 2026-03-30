@@ -16,7 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
-import mihon.core.common.CustomPreferences
+import mihon.core.common.GlobalCustomPreferences
 import mihon.domain.extensionrepo.interactor.GetExtensionRepo
 import mihon.domain.extensionrepo.interactor.UpdateExtensionRepo
 import mihon.domain.extensionrepo.model.ExtensionRepo
@@ -35,7 +35,7 @@ internal class ExtensionApi {
     private val getExtensionRepo: GetExtensionRepo by injectLazy()
     private val updateExtensionRepo: UpdateExtensionRepo by injectLazy()
     private val extensionManager: ExtensionManager by injectLazy()
-    private val customPreferences: CustomPreferences by injectLazy()
+    private val customPreferences: GlobalCustomPreferences by injectLazy()
     private val json: Json by injectLazy()
 
     private val lastExtCheck: Preference<Long> by lazy {

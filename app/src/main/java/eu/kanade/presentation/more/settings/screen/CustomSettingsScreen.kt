@@ -9,6 +9,7 @@ import eu.kanade.presentation.more.settings.Preference
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import mihon.core.common.CustomPreferences
+import mihon.core.common.GlobalCustomPreferences
 import mihon.core.common.HomeScreenTabs
 import mihon.feature.profiles.core.ProfilesPreferences
 import mihon.feature.profiles.ui.ProfilesSettingsScreen
@@ -27,6 +28,7 @@ object CustomSettingsScreen : SearchableSettings {
     @Composable
     override fun getPreferences(): List<Preference> {
         val customPreferences = remember { Injekt.get<CustomPreferences>() }
+        val globalCustomPreferences = remember { Injekt.get<GlobalCustomPreferences>() }
         val profilesPreferences = remember { Injekt.get<ProfilesPreferences>() }
         val navigator = LocalNavigator.currentOrThrow
         return listOf(
@@ -60,7 +62,7 @@ object CustomSettingsScreen : SearchableSettings {
                         title = stringResource(MR.strings.pref_startup_screen),
                     ),
                     Preference.PreferenceItem.SwitchPreference(
-                        preference = customPreferences.extensionsAutoUpdates,
+                        preference = globalCustomPreferences.extensionsAutoUpdates,
                         title = stringResource(MR.strings.pref_extensions_auto_update),
                     ),
                 ),

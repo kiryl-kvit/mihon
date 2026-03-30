@@ -6,9 +6,9 @@ import tachiyomi.core.common.preference.PreferenceStore
 class ProfilesPreferences(
     preferenceStore: PreferenceStore,
 ) {
-    val legacyPreferenceMigrationCompleted: Preference<Boolean> = preferenceStore.getBoolean(
-        Preference.appStateKey("legacy_profile_preference_migration_completed"),
-        false,
+    val legacyPreferenceMigrationVersion: Preference<Int> = preferenceStore.getInt(
+        Preference.appStateKey("legacy_profile_preference_migration_version"),
+        0,
     )
 
     val activeProfileId: Preference<Long> = preferenceStore.getLong(

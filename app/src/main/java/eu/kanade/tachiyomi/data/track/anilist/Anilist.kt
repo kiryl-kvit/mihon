@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.data.track.anilist
 
 import dev.icerock.moko.resources.StringResource
+import eu.kanade.domain.track.service.GlobalTrackPreferences
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.database.models.Track
@@ -43,7 +44,8 @@ class Anilist(id: Long) : BaseTracker(id, "AniList"), DeletableTracker {
 
     override val supportsPrivateTracking: Boolean = true
 
-    private val scorePreference = trackPreferences.anilistScoreType
+    private val globalTrackPreferences: GlobalTrackPreferences by injectLazy()
+    private val scorePreference = globalTrackPreferences.anilistScoreType
 
     init {
         // If the preference is an int from APIv1, logout user to force using APIv2

@@ -34,6 +34,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
+import eu.kanade.domain.source.service.GlobalSourcePreferences
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
@@ -85,8 +86,8 @@ object HomeScreen : Screen() {
 
     @Composable
     override fun Content() {
-        val basePreferences = remember { Injekt.get<CustomPreferences>() }
-        val configuredTab = basePreferences.homeScreenStartupTab.get()
+        val customPreferences = remember { Injekt.get<CustomPreferences>() }
+        val configuredTab = customPreferences.homeScreenStartupTab.get()
         val launchTab = when (configuredTab) {
             HomeScreenTabs.Library -> LibraryTab
             HomeScreenTabs.Updates -> UpdatesTab
@@ -276,7 +277,7 @@ object HomeScreen : Screen() {
                     }
                     BrowseTab::class.isInstance(tab) -> {
                         val count by produceState(initialValue = 0) {
-                            val preferences = Injekt.get<SourcePreferences>()
+                            val preferences = Injekt.get<GlobalSourcePreferences>()
                             val extensionManager = Injekt.get<ExtensionManager>()
                             combine(
                                 preferences.extensionUpdatesCount.changes(),
