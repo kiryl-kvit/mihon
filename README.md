@@ -5,6 +5,8 @@
 - Settings → Custom settings → Application startup screen
 - Settings → Custom settings → Enable extensions auto-update
 - Library → Settings → Group
+- Settings → Custom settings → User profiles
+- Manga merge
 
 ### Disclaimer
 
