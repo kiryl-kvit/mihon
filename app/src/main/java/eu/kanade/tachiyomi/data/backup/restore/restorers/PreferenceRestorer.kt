@@ -90,7 +90,9 @@ class PreferenceRestorer(
 
     suspend fun restoreSource(preferences: List<BackupSourcePreferences>) {
         preferences.forEach {
-            val targetKey = it.sourceId?.let(profileStore::sourcePreferenceKey) ?: it.sourceKey
+            val targetKey = it.sourceId
+                ?.let(profileStore::sourcePreferenceKey)
+                ?: it.sourceKey.toProfileAwareSourceKey(profileStore.currentProfileId)
             val sourcePrefs = AndroidPreferenceStore(context, sourcePreferences(targetKey))
             restorePreferences(it.prefs, sourcePrefs)
         }
@@ -100,10 +102,18 @@ class PreferenceRestorer(
         preferences.forEach {
             val targetKey = it.sourceId
                 ?.let { sourceId -> profileStore.sourcePreferenceKey(sourceId, profileId) }
-                ?: it.sourceKey
+                ?: it.sourceKey.toProfileAwareSourceKey(profileId)
             val sourcePrefs = AndroidPreferenceStore(context, sourcePreferences(targetKey))
             restorePreferences(it.prefs, sourcePrefs)
         }
+    }
+
+    private fun String.toProfileAwareSourceKey(profileId: Long): String {
+        val sourceId = removePrefix("source_")
+            .takeIf { startsWith("source_") }
+            ?.toLongOrNull()
+            ?: return this
+        return profileStore.sourcePreferenceKey(sourceId, profileId)
     }
 
     private suspend fun restorePreferences(

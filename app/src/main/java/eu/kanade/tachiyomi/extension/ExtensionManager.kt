@@ -334,7 +334,9 @@ class ExtensionManager(
      * @param extension The extension to be registered.
      */
     private fun registerNewExtension(extension: Extension.Installed) {
-        initializeExtensionVisibility(extension)
+        initializeExtensionVisibility(
+            extension.sources.map { it.id.toString() }.toSet(),
+        )
         installedExtensionMapFlow.value += extension.copy(isObsolete = false)
     }
 
@@ -345,12 +347,18 @@ class ExtensionManager(
      * @param extension The extension to be registered.
      */
     private fun registerUpdatedExtension(extension: Extension.Installed) {
-        initializeExtensionVisibility(extension)
+        val existingSourceIds = installedExtensionMapFlow.value[extension.pkgName]
+            ?.sources
+            ?.map { it.id.toString() }
+            ?.toSet()
+            .orEmpty()
+        initializeExtensionVisibility(
+            extension.sources.map { it.id.toString() }.toSet() - existingSourceIds,
+        )
         installedExtensionMapFlow.value += extension.copy(isObsolete = false)
     }
 
-    private fun initializeExtensionVisibility(extension: Extension.Installed) {
-        val sourceIds = extension.sources.map { it.id.toString() }.toSet()
+    private fun initializeExtensionVisibility(sourceIds: Set<String>) {
         if (sourceIds.isEmpty()) return
 
         scope.launch {
