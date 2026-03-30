@@ -1,14 +1,8 @@
 package eu.kanade.tachiyomi.ui.library
 
-import eu.kanade.tachiyomi.source.getNameForMangaInfo
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.presentationTitle
-import tachiyomi.domain.source.service.SourceManager
-import tachiyomi.i18n.MR
-import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.source.local.LocalSource
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 private const val LOCAL_SOURCE_ID_ALIAS = "local"
 private const val MULTI_SOURCE_ID_ALIAS = "multi"
@@ -19,7 +13,7 @@ data class LibraryItem(
     val unreadCount: Long = -1,
     val isLocal: Boolean = false,
     val sourceLanguage: String = "",
-    private val sourceManager: SourceManager = Injekt.get(),
+    val sourceName: String,
 ) {
     val id: Long = libraryManga.id
 
@@ -30,12 +24,6 @@ data class LibraryItem(
      * @return true if the manga matches the query, false otherwise.
      */
     fun matches(constraint: String): Boolean {
-        val sourceName by lazy {
-            when (libraryManga.displaySourceId) {
-                LibraryManga.MULTI_SOURCE_ID -> Injekt.get<android.content.Context>().stringResource(MR.strings.multi_lang)
-                else -> sourceManager.getOrStub(libraryManga.displaySourceId).getNameForMangaInfo()
-            }
-        }
         if (constraint.startsWith("id:", true)) {
             return id == constraint.substringAfter("id:").toLongOrNull()
         } else if (constraint.startsWith("src:", true)) {

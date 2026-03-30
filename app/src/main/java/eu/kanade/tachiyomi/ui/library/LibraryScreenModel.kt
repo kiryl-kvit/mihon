@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.library
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastFilter
@@ -78,6 +79,7 @@ import uy.kohesive.injekt.api.get
 import kotlin.random.Random
 
 class LibraryScreenModel(
+    private val context: Context,
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val getTracksPerManga: GetTracksPerManga = Injekt.get(),
@@ -293,7 +295,7 @@ class LibraryScreenModel(
             .distinct()
             .associateWith { sourceId ->
                 if (sourceId == LibraryManga.MULTI_SOURCE_ID) {
-                    Injekt.get<android.content.Context>().stringResource(MR.strings.multi_lang)
+                    context.stringResource(MR.strings.multi_lang)
                 } else {
                     sourceManager.getOrStub(sourceId).getNameForMangaInfo()
                 }
@@ -526,7 +528,13 @@ class LibraryScreenModel(
             getLibraryItemPreferencesFlow(),
             downloadCache.changes,
         ) { libraryManga, preferences, _ ->
+            val multiSourceName = context.stringResource(MR.strings.multi_lang)
             libraryManga.map { manga ->
+                val sourceName = if (manga.displaySourceId == LibraryManga.MULTI_SOURCE_ID) {
+                    multiSourceName
+                } else {
+                    sourceManager.getOrStub(manga.displaySourceId).getNameForMangaInfo()
+                }
                 LibraryItem(
                     libraryManga = manga,
                     downloadCount = if (preferences.downloadBadge) {
@@ -555,6 +563,7 @@ class LibraryScreenModel(
                     } else {
                         ""
                     },
+                    sourceName = sourceName,
                 )
             }
         }
