@@ -1,6 +1,7 @@
 package tachiyomi.domain.history.interactor
 
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.chapter.service.getChapterSort
 import tachiyomi.domain.history.repository.HistoryRepository
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.GetMangaWithChapters
@@ -21,8 +22,9 @@ class GetNextChapters(
     }
 
     suspend fun await(mangaId: Long, onlyUnread: Boolean = true): List<Chapter> {
-        getManga.await(mangaId) ?: return emptyList()
+        val manga = getManga.await(mangaId) ?: return emptyList()
         val chapters = getMangaWithChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
+            .sortedWith(getChapterSort(manga, sortDescending = false))
 
         return if (onlyUnread) {
             chapters.filterNot { it.read }

@@ -7,11 +7,7 @@ import eu.kanade.tachiyomi.ui.manga.ChapterList
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.service.getChapterSort
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.manga.model.applyFilter
-import tachiyomi.source.local.isLocal
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 
 /**
  * Gets next unread chapter with filters and sorting applied
@@ -21,24 +17,30 @@ suspend fun List<Chapter>.getNextUnread(manga: Manga, downloadManager: DownloadM
     val chapters = if (!isMerged) {
         applyFilters(manga, downloadManager)
     } else {
-        val mangaRepository = Injekt.get<MangaRepository>()
         val unreadFilter = manga.unreadFilter
         val downloadedFilter = manga.downloadedFilter
         val bookmarkedFilter = manga.bookmarkedFilter
         filter { chapter -> applyFilter(unreadFilter) { !chapter.read } }
             .filter { chapter -> applyFilter(bookmarkedFilter) { chapter.bookmark } }
-            .filter { chapter ->
-                applyFilter(downloadedFilter) {
-                    val chapterManga = mangaRepository.getMangaById(chapter.mangaId)
-                    val downloaded = downloadManager.isChapterDownloaded(
+            .filterNot { chapter ->
+                manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_DOWNLOADED &&
+                    !downloadManager.isChapterDownloaded(
                         chapter.name,
                         chapter.scanlator,
                         chapter.url,
-                        chapterManga.title,
-                        chapterManga.source,
+                        manga.title,
+                        manga.source,
                     )
-                    downloaded || chapterManga.isLocal()
-                }
+            }
+            .filterNot { chapter ->
+                manga.downloadedFilterRaw == Manga.CHAPTER_SHOW_NOT_DOWNLOADED &&
+                    downloadManager.isChapterDownloaded(
+                        chapter.name,
+                        chapter.scanlator,
+                        chapter.url,
+                        manga.title,
+                        manga.source,
+                    )
             }
             .let { filtered ->
                 filtered.map { it.mangaId }
@@ -49,7 +51,11 @@ suspend fun List<Chapter>.getNextUnread(manga: Manga, downloadManager: DownloadM
                     }
             }
     }
-    return chapters.firstOrNull { !it.read }
+    return if (manga.sortDescending()) {
+        chapters.findLast { !it.read }
+    } else {
+        chapters.find { !it.read }
+    }
 }
 
 /**
@@ -57,7 +63,11 @@ suspend fun List<Chapter>.getNextUnread(manga: Manga, downloadManager: DownloadM
  */
 fun List<ChapterList.Item>.getNextUnread(manga: Manga): Chapter? {
     val isMerged = map { it.manga.id }.distinct().size > 1
-    return applyFilters(manga, isMerged = isMerged)
-        .firstOrNull { !it.chapter.read }
-        ?.chapter
+    return applyFilters(manga, isMerged = isMerged).let { chapters ->
+        if (manga.sortDescending()) {
+            chapters.findLast { !it.chapter.read }
+        } else {
+            chapters.find { !it.chapter.read }
+        }
+    }?.chapter
 }
