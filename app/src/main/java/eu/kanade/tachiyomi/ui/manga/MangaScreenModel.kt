@@ -1165,7 +1165,7 @@ class MangaScreenModel(
         data class DeleteChapters(val chapters: List<Chapter>) : Dialog
         data class DuplicateManga(val manga: Manga, val duplicates: List<MangaWithChapterCount>) : Dialog
         data class EditDisplayName(val manga: Manga, val initialValue: String) : Dialog
-        data class ManageMerge(val targetId: Long, val members: ImmutableList<Manga>) : Dialog
+        data class ManageMerge(val targetId: Long, val members: ImmutableList<MergeMember>) : Dialog
         data class Migrate(val target: Manga, val current: Manga) : Dialog
         data class RemoveMergedManga(val members: ImmutableList<Manga>, val containsLocalManga: Boolean) : Dialog
         data class SetFetchInterval(val manga: Manga) : Dialog
@@ -1228,7 +1228,14 @@ class MangaScreenModel(
         if (state.memberIds.size <= 1) return
         screenModelScope.launchIO {
             val targetId = getVisibleMangaId(state.manga.id)
-            val members = state.memberIds.mapNotNull { memberId -> mangaRepository.getMangaById(memberId) }
+            val members = state.memberIds.mapNotNull { memberId ->
+                mangaRepository.getMangaById(memberId).let { manga ->
+                    MergeMember(
+                        id = manga.id,
+                        manga = manga,
+                    )
+                }
+            }
                 .toImmutableList()
             updateSuccessState {
                 it.copy(dialog = Dialog.ManageMerge(targetId = targetId, members = members))
@@ -1254,6 +1261,26 @@ class MangaScreenModel(
         screenModelScope.launchIO {
             if (mangaIds.isEmpty()) return@launchIO
             updateMergedManga.awaitRemoveMembers(getVisibleMangaId(state.manga.id), mangaIds)
+            dismissDialog()
+        }
+    }
+
+    fun reorderMergeMembers(fromIndex: Int, toIndex: Int) {
+        updateSuccessState { state ->
+            val dialog = state.dialog as? Dialog.ManageMerge ?: return@updateSuccessState state
+            if (fromIndex !in dialog.members.indices || toIndex !in dialog.members.indices) return@updateSuccessState state
+            val reordered = dialog.members.toMutableList().apply {
+                val item = removeAt(fromIndex)
+                add(toIndex, item)
+            }
+            state.copy(dialog = dialog.copy(members = reordered.toImmutableList()))
+        }
+    }
+
+    fun saveMergeOrder() {
+        val dialog = successState?.dialog as? Dialog.ManageMerge ?: return
+        screenModelScope.launchIO {
+            updateMergedManga.awaitMerge(dialog.targetId, dialog.members.map { it.id })
             dismissDialog()
         }
     }
@@ -1321,7 +1348,7 @@ class MangaScreenModel(
 
     private suspend fun updateMergedMemberManga(block: suspend (Manga) -> Unit) {
         getMergedMemberIds().forEach { memberId ->
-            mangaRepository.getMangaById(memberId)?.let { memberManga ->
+            mangaRepository.getMangaById(memberId).let { memberManga ->
                 block(memberManga)
             }
         }
@@ -1340,6 +1367,12 @@ class MangaScreenModel(
         val memberIds: ImmutableList<Long>,
         val memberTitleById: Map<Long, String>,
         val mergedMemberTitles: ImmutableList<String>,
+    )
+
+    @Immutable
+    data class MergeMember(
+        val id: Long,
+        val manga: Manga,
     )
 
     sealed interface State {

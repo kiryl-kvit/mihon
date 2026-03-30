@@ -234,6 +234,8 @@ class MangaScreen(
                     targetId = dialog.targetId,
                     members = dialog.members,
                     onDismissRequest = onDismissRequest,
+                    onMove = screenModel::reorderMergeMembers,
+                    onSaveOrder = screenModel::saveMergeOrder,
                     onOpenManga = { navigator.push(MangaScreen(it)) },
                     onRemoveMembers = screenModel::removeMergedMembers,
                     onUnmergeAll = screenModel::unmergeAll,

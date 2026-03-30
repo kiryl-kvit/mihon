@@ -6,21 +6,21 @@ import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -75,11 +75,18 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.isLocal
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 
 data object LibraryTab : Tab {
 
@@ -298,8 +305,7 @@ data object LibraryTab : Tab {
                 MergeLibraryMangaDialog(
                     dialog = dialog,
                     onDismissRequest = onDismissRequest,
-                    onMoveUp = { screenModel.reorderMergeSelection(it, it - 1) },
-                    onMoveDown = { screenModel.reorderMergeSelection(it, it + 1) },
+                    onMove = screenModel::reorderMergeSelection,
                     onSelectTarget = screenModel::setMergeTarget,
                     onConfirm = screenModel::confirmMergeSelection,
                 )
@@ -343,11 +349,18 @@ data object LibraryTab : Tab {
 private fun MergeLibraryMangaDialog(
     dialog: LibraryScreenModel.Dialog.MergeManga,
     onDismissRequest: () -> Unit,
-    onMoveUp: (Int) -> Unit,
-    onMoveDown: (Int) -> Unit,
+    onMove: (Int, Int) -> Unit,
     onSelectTarget: (Long) -> Unit,
     onConfirm: () -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
+        val fromIndex = dialog.entries.indexOfFirst { it.id == from.key }
+        val toIndex = dialog.entries.indexOfFirst { it.id == to.key }
+        if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
+        onMove(fromIndex, toIndex)
+    }
+
     AlertDialog(
         onDismissRequest = onDismissRequest,
         dismissButton = {
@@ -368,54 +381,30 @@ private fun MergeLibraryMangaDialog(
         },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
             ) {
-                dialog.entries.forEachIndexed { index, entry ->
-                    val isTarget = entry.id == dialog.targetId
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        RadioButton(
-                            selected = isTarget,
-                            onClick = if (dialog.targetLocked) null else { { onSelectTarget(entry.id) } },
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = entry.manga.presentationTitle())
-                            Text(
-                                text = if (entry.isExistingMerge) {
-                                    stringResource(MR.strings.merge_members_count, entry.memberMangas.size)
-                                } else {
-                                    stringResource(MR.strings.manga)
-                                },
+                Text(
+                    text = "Top to bottom = chapter reading order",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                ) {
+                    items(
+                        items = dialog.entries,
+                        key = { it.id },
+                    ) { entry ->
+                        ReorderableItem(reorderableState, entry.id, enabled = dialog.entries.size > 1) {
+                            MergeLibraryMangaItem(
+                                entry = entry,
+                                index = dialog.entries.indexOf(entry),
+                                isTarget = entry.id == dialog.targetId,
+                                targetLocked = dialog.targetLocked,
+                                onSelectTarget = onSelectTarget,
                             )
-                        }
-                        if (dialog.targetLocked && isTarget) {
-                            Icon(
-                                imageVector = Icons.Outlined.Lock,
-                                contentDescription = null,
-                            )
-                        }
-                        Column {
-                            IconButton(
-                                enabled = index > 0,
-                                onClick = { onMoveUp(index) },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ArrowUpward,
-                                    contentDescription = null,
-                                )
-                            }
-                            IconButton(
-                                enabled = index < dialog.entries.lastIndex,
-                                onClick = { onMoveDown(index) },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.ArrowDownward,
-                                    contentDescription = null,
-                                )
-                            }
                         }
                     }
                 }
@@ -432,4 +421,58 @@ private fun MergeLibraryMangaDialog(
             }
         },
     )
+}
+
+@Composable
+private fun ReorderableCollectionItemScope.MergeLibraryMangaItem(
+    entry: LibraryScreenModel.MergeEntry,
+    index: Int,
+    isTarget: Boolean,
+    targetLocked: Boolean,
+    onSelectTarget: (Long) -> Unit,
+) {
+    ElevatedCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MaterialTheme.padding.small, vertical = MaterialTheme.padding.extraSmall),
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        ) {
+            Text(
+                text = "${index + 1}.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = MaterialTheme.padding.small),
+            )
+            RadioButton(
+                selected = isTarget,
+                onClick = if (targetLocked) null else { { onSelectTarget(entry.id) } },
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = entry.title)
+                Text(
+                    text = if (entry.isExistingMerge) {
+                        stringResource(MR.strings.merge_members_count, entry.memberMangas.size)
+                    } else {
+                        stringResource(MR.strings.manga)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (targetLocked && isTarget) {
+                Icon(
+                    imageVector = Icons.Outlined.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.padding(top = MaterialTheme.padding.small),
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(top = MaterialTheme.padding.small)
+                    .draggableHandle(),
+            )
+        }
+    }
 }

@@ -1,16 +1,15 @@
 package tachiyomi.domain.history.interactor
 
-import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
-import tachiyomi.domain.chapter.service.getChapterSort
 import tachiyomi.domain.history.repository.HistoryRepository
 import tachiyomi.domain.manga.interactor.GetManga
+import tachiyomi.domain.manga.interactor.GetMangaWithChapters
 import tachiyomi.domain.source.service.HiddenSourceIds
 import kotlin.math.max
 
 class GetNextChapters(
-    private val getChaptersByMangaId: GetChaptersByMangaId,
     private val getManga: GetManga,
+    private val getMangaWithChapters: GetMangaWithChapters,
     private val historyRepository: HistoryRepository,
     private val hiddenSourceIds: HiddenSourceIds,
 ) {
@@ -22,9 +21,8 @@ class GetNextChapters(
     }
 
     suspend fun await(mangaId: Long, onlyUnread: Boolean = true): List<Chapter> {
-        val manga = getManga.await(mangaId) ?: return emptyList()
-        val chapters = getChaptersByMangaId.await(mangaId, applyScanlatorFilter = true)
-            .sortedWith(getChapterSort(manga, sortDescending = false))
+        getManga.await(mangaId) ?: return emptyList()
+        val chapters = getMangaWithChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
 
         return if (onlyUnread) {
             chapters.filterNot { it.read }

@@ -984,7 +984,10 @@ class LibraryScreenModel(
         val manga: Manga,
         val memberMangas: ImmutableList<Manga>,
         val isExistingMerge: Boolean,
-    )
+    ) {
+        val title: String
+            get() = manga.presentationTitle()
+    }
 
     @Immutable
     private data class ItemPreferences(

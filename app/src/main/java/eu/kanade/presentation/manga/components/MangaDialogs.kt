@@ -3,13 +3,23 @@ package eu.kanade.presentation.manga.components
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -26,8 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import kotlinx.collections.immutable.toImmutableList
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
@@ -179,8 +193,13 @@ fun EditDisplayNameDialog(
             )
         },
         dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(text = stringResource(MR.strings.action_cancel))
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                TextButton(onClick = { onConfirm("") }) {
+                    Text(text = stringResource(MR.strings.action_reset))
+                }
+                TextButton(onClick = onDismissRequest) {
+                    Text(text = stringResource(MR.strings.action_cancel))
+                }
             }
         },
         confirmButton = {
@@ -194,45 +213,58 @@ fun EditDisplayNameDialog(
 @Composable
 fun ManageMergeDialog(
     targetId: Long,
-    members: List<Manga>,
+    members: List<MangaScreenModel.MergeMember>,
     onDismissRequest: () -> Unit,
+    onMove: (Int, Int) -> Unit,
+    onSaveOrder: () -> Unit,
     onOpenManga: (Long) -> Unit,
     onRemoveMembers: (List<Long>) -> Unit,
     onUnmergeAll: () -> Unit,
 ) {
     val removableIds = remember { mutableStateListOf<Long>() }
+    val listState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
+        val fromIndex = members.indexOfFirst { it.id == from.key }
+        val toIndex = members.indexOfFirst { it.id == to.key }
+        if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
+        onMove(fromIndex, toIndex)
+    }
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(text = stringResource(MR.strings.action_manage_merge)) },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
             ) {
-                members.forEach { member ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = member.presentationTitle())
-                            Text(text = stringResource(if (member.id == targetId) MR.strings.label_target else MR.strings.label_member))
-                        }
-                        if (member.id != targetId) {
-                            TextButton(
-                                onClick = {
+                Text(
+                    text = "Top to bottom = chapter reading order",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                ) {
+                    items(
+                        items = members,
+                        key = { it.id },
+                    ) { member ->
+                        ReorderableItem(reorderableState, member.id, enabled = members.size > 1) {
+                            ManageMergeItem(
+                                member = member,
+                                index = members.indexOf(member),
+                                isTarget = member.id == targetId,
+                                markedForRemoval = member.id in removableIds,
+                                onToggleRemove = {
                                     if (member.id in removableIds) {
                                         removableIds.remove(member.id)
                                     } else {
                                         removableIds.add(member.id)
                                     }
                                 },
-                            ) {
-                                Text(text = stringResource(if (member.id in removableIds) MR.strings.action_keep else MR.strings.action_remove))
-                            }
-                        }
-                        TextButton(onClick = { onOpenManga(member.id) }) {
-                            Text(text = stringResource(MR.strings.action_open))
+                                onOpenManga = onOpenManga,
+                            )
                         }
                     }
                 }
@@ -249,12 +281,63 @@ fun ManageMergeDialog(
             }
         },
         confirmButton = {
-            TextButton(
-                enabled = removableIds.isNotEmpty(),
-                onClick = { onRemoveMembers(removableIds.toList()) },
-            ) {
-                Text(text = stringResource(MR.strings.action_ok))
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+                TextButton(onClick = onSaveOrder) {
+                    Text(text = stringResource(MR.strings.action_save))
+                }
+                TextButton(
+                    enabled = removableIds.isNotEmpty(),
+                    onClick = { onRemoveMembers(removableIds.toList()) },
+                ) {
+                    Text(text = stringResource(MR.strings.action_remove))
+                }
             }
         },
     )
+}
+
+@Composable
+private fun ReorderableCollectionItemScope.ManageMergeItem(
+    member: MangaScreenModel.MergeMember,
+    index: Int,
+    isTarget: Boolean,
+    markedForRemoval: Boolean,
+    onToggleRemove: () -> Unit,
+    onOpenManga: (Long) -> Unit,
+) {
+    ElevatedCard {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MaterialTheme.padding.small, vertical = MaterialTheme.padding.extraSmall),
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "${index + 1}.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = member.manga.presentationTitle())
+                Text(
+                    text = stringResource(if (isTarget) MR.strings.label_target else MR.strings.label_member),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!isTarget) {
+                TextButton(onClick = onToggleRemove) {
+                    Text(text = stringResource(if (markedForRemoval) MR.strings.action_keep else MR.strings.action_remove))
+                }
+            }
+            TextButton(onClick = { onOpenManga(member.id) }) {
+                Text(text = stringResource(MR.strings.action_open))
+            }
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = null,
+                modifier = Modifier.draggableHandle(),
+            )
+        }
+    }
 }

@@ -3,6 +3,7 @@ package tachiyomi.domain.manga.interactor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.chapter.service.getChapterSort
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaMerge
@@ -52,9 +53,11 @@ class GetMangaWithChapters(
         merges: List<MangaMerge>,
         applyScanlatorFilter: Boolean,
     ): List<Chapter> {
-        @Suppress("UNUSED_VARIABLE")
-        val ignored = manga.id
+        val chapterSort = getChapterSort(manga, sortDescending = false)
         return merges.sortedBy { it.position }
-            .flatMap { merge -> chapterRepository.getChapterByMangaId(merge.mangaId, applyScanlatorFilter) }
+            .flatMap { merge ->
+                chapterRepository.getChapterByMangaId(merge.mangaId, applyScanlatorFilter)
+                    .sortedWith(chapterSort)
+            }
     }
 }

@@ -40,13 +40,7 @@ suspend fun List<Chapter>.getNextUnread(manga: Manga, downloadManager: DownloadM
                 }
             }
     }
-    return chapters.let { filteredChapters ->
-        if (manga.sortDescending()) {
-            filteredChapters.findLast { !it.read }
-        } else {
-            filteredChapters.find { !it.read }
-        }
-    }
+    return chapters.firstOrNull { !it.read }
 }
 
 /**
@@ -54,11 +48,5 @@ suspend fun List<Chapter>.getNextUnread(manga: Manga, downloadManager: DownloadM
  */
 fun List<ChapterList.Item>.getNextUnread(manga: Manga): Chapter? {
     val isMerged = map { it.manga.id }.distinct().size > 1
-    return applyFilters(manga, isMerged = isMerged).let { chapters ->
-        if (manga.sortDescending()) {
-            chapters.findLast { !it.chapter.read }
-        } else {
-            chapters.find { !it.chapter.read }
-        }
-    }?.chapter
+    return applyFilters(manga, isMerged = isMerged).firstOrNull { !it.chapter.read }?.chapter
 }
