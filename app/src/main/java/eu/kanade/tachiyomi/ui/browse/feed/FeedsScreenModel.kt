@@ -20,8 +20,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
-import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
