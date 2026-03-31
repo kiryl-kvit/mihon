@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -101,9 +102,22 @@ fun Screen.feedsTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
     val screenModel = rememberScreenModel { FeedsScreenModel() }
     val state by screenModel.state.collectAsState()
+    val singleEnabledFeed = state.enabledFeeds.singleOrNull()
+    val singleEnabledFeedSource = singleEnabledFeed?.let { screenModel.sourceFor(it.sourceId) }
+    val singleEnabledFeedPreset = singleEnabledFeed?.let(screenModel::presetFor)
 
     return TabContent(
         titleRes = MR.strings.browse_feeds,
+        tabLabel = if (singleEnabledFeedSource != null && singleEnabledFeedPreset != null) {
+            {
+                SingleFeedTabLabel(
+                    source = singleEnabledFeedSource,
+                    preset = singleEnabledFeedPreset,
+                )
+            }
+        } else {
+            null
+        },
         actions = persistentListOf(
             AppBar.Action(
                 title = stringResource(MR.strings.action_add),
@@ -125,6 +139,31 @@ fun Screen.feedsTab(): TabContent {
             )
         },
     )
+}
+
+@Composable
+private fun SingleFeedTabLabel(
+    source: Source,
+    preset: SourceFeedPreset,
+) {
+    Row(
+        modifier = Modifier.wrapContentWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        SourceIcon(
+            source = source,
+            modifier = Modifier
+                .size(18.dp)
+                .clip(MaterialTheme.shapes.extraSmall),
+        )
+        Text(
+            text = preset.name,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
 }
 
 @Composable
