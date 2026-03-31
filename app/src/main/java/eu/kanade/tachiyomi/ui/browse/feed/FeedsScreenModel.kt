@@ -127,6 +127,10 @@ class FeedsScreenModel(
         browseFeedService.removeFeed(feedId)
     }
 
+    fun reorderFeed(fromIndex: Int, toIndex: Int) {
+        browseFeedService.reorderFeed(fromIndex, toIndex)
+    }
+
     fun presetsFor(source: Source): List<SourceFeedPreset> {
         val builtin = buildList {
             add(popularFeedPreset(source.id, "Popular"))

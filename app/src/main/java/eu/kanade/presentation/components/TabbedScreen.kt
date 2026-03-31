@@ -70,7 +70,10 @@ fun TabbedScreen(
                     Tab(
                         selected = state.currentPage == index,
                         onClick = { scope.launch { state.animateScrollToPage(index) } },
-                        text = { TabText(text = stringResource(tab.titleRes), badgeCount = tab.badgeNumber) },
+                        text = {
+                            tab.tabLabel?.invoke()
+                                ?: TabText(text = stringResource(tab.titleRes), badgeCount = tab.badgeNumber)
+                        },
                         unselectedContentColor = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -93,6 +96,7 @@ fun TabbedScreen(
 data class TabContent(
     val titleRes: StringResource,
     val badgeNumber: Int? = null,
+    val tabLabel: (@Composable () -> Unit)? = null,
     val searchEnabled: Boolean = false,
     val actions: ImmutableList<AppBar.AppBarAction> = persistentListOf(),
     val content: @Composable (contentPadding: PaddingValues, snackbarHostState: SnackbarHostState) -> Unit,
