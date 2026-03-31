@@ -5,17 +5,11 @@
 - Settings → Custom settings → Application startup screen
 - Settings → Custom settings → Enable extensions auto-update
 - Library → Settings → Group
-
-  <img src=".github/assets/Library-Group.png" alt="Library Group" width="300" />
-
 - Settings → Custom settings → User profiles
-
-  <img src=".github/assets/User-Profiles.png" alt="User Profiles" width="300" />
-
 - Manga merge
-
-  <img src=".github/assets/Manga-merge.gif" alt="Manga merge" width="300" />
 - Browse → Feeds
+
+<img src=".github/assets/Manga-merge.gif" alt="Manga merge" width="300" /> <img src=".github/assets/User-Profiles.png" alt="User Profiles" width="300" /><img src=".github/assets/Library-Group.png" alt="Library Group" width="300" /><img src=".github/assets/Manga-Preview.gif" alt="Library Group" width="300" />
 
 ### Disclaimer
 
