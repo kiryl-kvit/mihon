@@ -7,6 +7,7 @@
 - Library → Settings → Group
 - Settings → Custom settings → User profiles
 - Manga merge
+- Browse → Feeds
 
 ### Disclaimer
 
