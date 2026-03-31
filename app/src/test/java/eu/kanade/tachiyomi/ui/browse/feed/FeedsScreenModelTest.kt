@@ -18,7 +18,9 @@ class FeedsScreenModelTest {
             presets = listOf(
                 SourceFeedPreset(id = "preset", sourceId = 1L, name = "Custom", listingMode = FeedListingMode.Search),
             ).toImmutableListForTest(),
-            feeds = listOf(SourceFeed(id = "feed", sourceId = 2L, presetId = BUILTIN_POPULAR_PRESET_ID)).toImmutableListForTest(),
+            feeds = listOf(
+                SourceFeed(id = "feed", sourceId = 2L, presetId = BUILTIN_POPULAR_PRESET_ID),
+            ).toImmutableListForTest(),
             sourcesLoaded = true,
         )
 
@@ -32,7 +34,9 @@ class FeedsScreenModelTest {
             sources = listOf(
                 Source(id = 1L, lang = "en", name = "Source", supportsLatest = false, isStub = false),
             ).toImmutableListForTest(),
-            feeds = listOf(SourceFeed(id = "feed", sourceId = 1L, presetId = BUILTIN_LATEST_PRESET_ID)).toImmutableListForTest(),
+            feeds = listOf(
+                SourceFeed(id = "feed", sourceId = 1L, presetId = BUILTIN_LATEST_PRESET_ID),
+            ).toImmutableListForTest(),
             sourcesLoaded = true,
         )
 

@@ -1,15 +1,15 @@
 package eu.kanade.tachiyomi.ui.browse.feed
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -41,30 +41,33 @@ import cafe.adriel.voyager.core.screen.ScreenKey
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import eu.kanade.domain.source.model.FeedListingMode
+import eu.kanade.domain.source.model.SourceFeedPreset
+import eu.kanade.domain.source.model.applySnapshot
+import eu.kanade.domain.source.model.toListing
 import eu.kanade.presentation.browse.BrowseSourceContent
 import eu.kanade.presentation.browse.components.BaseSourceItem
 import eu.kanade.presentation.browse.components.RemoveMangaDialog
+import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
-import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
-import eu.kanade.tachiyomi.ui.category.CategoryScreen
+import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
+import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.collections.immutable.persistentListOf
-import tachiyomi.core.common.util.lang.launchIO
+import mihon.feature.migration.dialog.MigrateMangaDialog
+import mihon.presentation.core.util.collectAsLazyPagingItems
 import tachiyomi.core.common.Constants
-import eu.kanade.domain.source.model.FeedListingMode
+import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.model.Source
-import eu.kanade.domain.source.model.SourceFeedPreset
-import eu.kanade.domain.source.model.applySnapshot
-import eu.kanade.domain.source.model.toListing
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.padding
@@ -73,9 +76,6 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.LocalSource
-import mihon.feature.migration.dialog.MigrateMangaDialog
-import mihon.presentation.core.util.collectAsLazyPagingItems
-import eu.kanade.presentation.util.animateItemFastScroll
 
 @Composable
 fun Screen.feedsTab(): TabContent {
@@ -368,7 +368,10 @@ private fun FeedPresetPickerDialog(
         Column(modifier = Modifier.padding(vertical = MaterialTheme.padding.small)) {
             Text(
                 text = source.name,
-                modifier = Modifier.padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+                modifier = Modifier.padding(
+                    horizontal = MaterialTheme.padding.medium,
+                    vertical = MaterialTheme.padding.small,
+                ),
                 style = MaterialTheme.typography.titleMedium,
             )
             presets.forEach { preset ->

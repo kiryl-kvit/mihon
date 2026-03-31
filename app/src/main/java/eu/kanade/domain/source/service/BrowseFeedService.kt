@@ -1,9 +1,9 @@
 package eu.kanade.domain.source.service
 
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import eu.kanade.domain.source.model.SourceFeed
 import eu.kanade.domain.source.model.SourceFeedPreset
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 
 class BrowseFeedService(
     private val preferences: SourcePreferences,
