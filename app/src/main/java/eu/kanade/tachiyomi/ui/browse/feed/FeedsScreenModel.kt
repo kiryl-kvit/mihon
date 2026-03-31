@@ -14,9 +14,13 @@ import eu.kanade.domain.source.service.BrowseFeedService
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
+import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.service.SourceManager
@@ -28,46 +32,23 @@ class FeedsScreenModel(
     private val browseFeedService: BrowseFeedService = Injekt.get(),
     private val getEnabledSources: GetEnabledSources = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
+    private val activeProfileProvider: ActiveProfileProvider = Injekt.get(),
 ) : StateScreenModel<FeedsScreenModel.State>(State()) {
 
     init {
         screenModelScope.launchIO {
-            combine(
-                getEnabledSources.subscribe(),
-                sourceManager.isInitialized,
-            ) { sources, sourcesLoaded -> sources to sourcesLoaded }
-                .collectLatest { (sources, sourcesLoaded) ->
-                    mutableState.update { state ->
-                        val nextState = state.copy(
-                            sources = sources
-                                .groupBy { it.id }
-                                .values
-                                .map { entries ->
-                                    entries.firstOrNull { !it.isUsedLast } ?: entries.first()
-                                }
-                                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-                                .toImmutableList(),
-                            sourcesLoaded = sourcesLoaded,
-                        )
-
-                        nextState.copy(
-                            selectedFeedId = resolveSelectedFeedId(
-                                requestedId = nextState.selectedFeedId,
-                                state = nextState,
-                            ),
-                        )
-                    }
-
-                    pruneInvalidFeedsIfReady()
-                }
-        }
-
-        screenModelScope.launchIO {
-            browseFeedService.state().collectLatest { browseState ->
+            observeProfileAwareFeedState(
+                activeProfileIdFlow = activeProfileProvider.activeProfileIdFlow,
+                enabledSources = { getEnabledSources.subscribe() },
+                browseState = { browseFeedService.state() },
+                sourcesLoaded = sourceManager.isInitialized,
+            ).collectLatest { observedState ->
                 mutableState.update { state ->
                     val nextState = state.copy(
-                        presets = browseState.presets.toImmutableList(),
-                        feeds = browseState.feeds.toImmutableList(),
+                        sources = observedState.sources,
+                        presets = observedState.presets,
+                        feeds = observedState.feeds,
+                        sourcesLoaded = observedState.sourcesLoaded,
                     )
                     val nextDialog = when {
                         nextState.validFeeds.isEmpty() && state.dialog == Dialog.ManageFeeds -> null
@@ -76,7 +57,7 @@ class FeedsScreenModel(
 
                     nextState.copy(
                         selectedFeedId = resolveSelectedFeedId(
-                            requestedId = browseState.selectedFeedId,
+                            requestedId = observedState.selectedFeedId,
                             state = nextState,
                         ),
                         dialog = nextDialog,
@@ -232,4 +213,36 @@ class FeedsScreenModel(
         val enabledFeeds: ImmutableList<SourceFeed>
             get() = validFeeds.filter { it.enabled }.toImmutableList()
     }
+}
+
+internal fun observeProfileAwareFeedState(
+    activeProfileIdFlow: Flow<Long>,
+    enabledSources: (Long) -> Flow<List<Source>>,
+    browseState: (Long) -> Flow<BrowseFeedService.State>,
+    sourcesLoaded: Flow<Boolean>,
+): Flow<FeedsScreenModel.State> {
+    return activeProfileIdFlow
+        .distinctUntilChanged()
+        .flatMapLatest { profileId ->
+            combine(
+                enabledSources(profileId),
+                browseState(profileId),
+                sourcesLoaded,
+            ) { sources, browseState, sourcesLoaded ->
+                FeedsScreenModel.State(
+                    sources = sources
+                        .groupBy { it.id }
+                        .values
+                        .map { entries ->
+                            entries.firstOrNull { !it.isUsedLast } ?: entries.first()
+                        }
+                        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                        .toImmutableList(),
+                    presets = browseState.presets.toImmutableList(),
+                    feeds = browseState.feeds.toImmutableList(),
+                    sourcesLoaded = sourcesLoaded,
+                    selectedFeedId = browseState.selectedFeedId,
+                )
+            }
+        }
 }
