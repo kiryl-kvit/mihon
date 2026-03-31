@@ -130,6 +130,10 @@ fun AppBar(
 
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
+    val containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
+        elevation = if (isActionMode) 3.dp else 0.dp,
+    )
+
     Column(
         modifier = modifier,
     ) {
@@ -153,9 +157,8 @@ fun AppBar(
             title = titleContent,
             actions = actions,
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
-                    elevation = if (isActionMode) 3.dp else 0.dp,
-                ),
+                containerColor = containerColor,
+                scrolledContainerColor = containerColor,
             ),
             scrollBehavior = scrollBehavior,
         )
