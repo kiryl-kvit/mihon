@@ -37,28 +37,28 @@ class FeedsScreenModel(
                 sourceManager.isInitialized,
             ) { sources, sourcesLoaded -> sources to sourcesLoaded }
                 .collectLatest { (sources, sourcesLoaded) ->
-                mutableState.update { state ->
-                    val nextState = state.copy(
-                        sources = sources
-                            .groupBy { it.id }
-                            .values
-                            .map { entries ->
-                                entries.firstOrNull { !it.isUsedLast } ?: entries.first()
-                            }
-                            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
-                            .toImmutableList(),
-                        sourcesLoaded = sourcesLoaded,
-                    )
+                    mutableState.update { state ->
+                        val nextState = state.copy(
+                            sources = sources
+                                .groupBy { it.id }
+                                .values
+                                .map { entries ->
+                                    entries.firstOrNull { !it.isUsedLast } ?: entries.first()
+                                }
+                                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+                                .toImmutableList(),
+                            sourcesLoaded = sourcesLoaded,
+                        )
 
-                    nextState.copy(
-                        selectedFeedId = resolveSelectedFeedId(
-                            requestedId = nextState.selectedFeedId,
-                            state = nextState,
-                        ),
-                    )
-                }
+                        nextState.copy(
+                            selectedFeedId = resolveSelectedFeedId(
+                                requestedId = nextState.selectedFeedId,
+                                state = nextState,
+                            ),
+                        )
+                    }
 
-                pruneInvalidFeedsIfReady()
+                    pruneInvalidFeedsIfReady()
                 }
         }
 
@@ -167,9 +167,10 @@ class FeedsScreenModel(
         val source = state.value.sources.firstOrNull { it.id == feed.sourceId } ?: return null
         return when (feed.presetId) {
             BUILTIN_POPULAR_PRESET_ID -> popularFeedPreset(source.id, "Popular")
-            BUILTIN_LATEST_PRESET_ID -> source
-                .takeIf(Source::supportsLatest)
-                ?.let { latestFeedPreset(it.id, "Latest") }
+            BUILTIN_LATEST_PRESET_ID ->
+                source
+                    .takeIf(Source::supportsLatest)
+                    ?.let { latestFeedPreset(it.id, "Latest") }
 
             else -> state.value.presets.firstOrNull {
                 it.id == feed.presetId && it.sourceId == source.id
