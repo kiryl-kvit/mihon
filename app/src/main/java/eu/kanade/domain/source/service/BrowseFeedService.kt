@@ -93,6 +93,17 @@ class BrowseFeedService(
         }
     }
 
+    fun reorderFeed(fromIndex: Int, toIndex: Int) {
+        val feeds = preferences.savedFeeds.get().toMutableList()
+        if (fromIndex !in feeds.indices || toIndex !in feeds.indices || fromIndex == toIndex) {
+            return
+        }
+
+        val movedFeed = feeds.removeAt(fromIndex)
+        feeds.add(toIndex, movedFeed)
+        preferences.savedFeeds.set(feeds)
+    }
+
     fun selectFeed(feedId: String) {
         preferences.selectedFeedId.set(feedId)
     }
