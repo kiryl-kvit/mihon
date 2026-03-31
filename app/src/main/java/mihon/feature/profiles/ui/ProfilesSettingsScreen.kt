@@ -1,7 +1,5 @@
 package mihon.feature.profiles.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.AlertDialog
@@ -21,7 +18,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,16 +27,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.util.Screen
-import eu.kanade.tachiyomi.util.system.toast
-import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.isAuthenticationSupported
 import kotlinx.coroutines.launch
 import mihon.feature.profiles.core.Profile
 import mihon.feature.profiles.core.ProfileConstants
@@ -55,7 +47,6 @@ class ProfilesSettingsScreen : Screen() {
 
     @Composable
     override fun Content() {
-        val context = LocalContext.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
         val profileManager = remember { Injekt.get<ProfileManager>() }
@@ -64,7 +55,6 @@ class ProfilesSettingsScreen : Screen() {
         val activeProfile by profileManager.activeProfile.collectAsState()
         val visibleProfiles = remember(profiles) { profiles.filterNot(Profile::isArchived) }
         val archivedProfiles = remember(profiles) { profiles.filter(Profile::isArchived) }
-        val authSupported = context.isAuthenticationSupported()
 
         var dialog by remember { mutableStateOf<ProfilesDialog?>(null) }
 
@@ -100,18 +90,9 @@ class ProfilesSettingsScreen : Screen() {
                     ProfileCard(
                         profile = profile,
                         isActive = activeProfile?.id == profile.id,
-                        authSupported = authSupported,
                         onRename = { dialog = ProfilesDialog.Rename(profile) },
                         onArchive = { dialog = ProfilesDialog.Archive(profile) },
                         onDelete = null,
-                        onToggleAuth = { enabled ->
-                            scope.launch {
-                                profileManager.setProfileRequiresAuth(profile.id, enabled)
-                            }
-                        },
-                        onAuthUnavailable = {
-                            context.toast(MR.strings.profiles_require_unlock_unavailable)
-                        },
                     )
                 }
                 if (archivedProfiles.isNotEmpty()) {
@@ -122,7 +103,6 @@ class ProfilesSettingsScreen : Screen() {
                         ProfileCard(
                             profile = profile,
                             isActive = activeProfile?.id == profile.id,
-                            authSupported = authSupported,
                             onRename = { dialog = ProfilesDialog.Rename(profile) },
                             onArchive = {
                                 scope.launch {
@@ -130,14 +110,6 @@ class ProfilesSettingsScreen : Screen() {
                                 }
                             },
                             onDelete = { dialog = ProfilesDialog.Delete(profile) },
-                            onToggleAuth = { enabled ->
-                                scope.launch {
-                                    profileManager.setProfileRequiresAuth(profile.id, enabled)
-                                }
-                            },
-                            onAuthUnavailable = {
-                                context.toast(MR.strings.profiles_require_unlock_unavailable)
-                            },
                         )
                     }
                 }
@@ -234,12 +206,9 @@ private fun SectionHeader(
 private fun ProfileCard(
     profile: Profile,
     isActive: Boolean,
-    authSupported: Boolean,
     onRename: () -> Unit,
     onArchive: () -> Unit,
     onDelete: (() -> Unit)?,
-    onToggleAuth: (Boolean) -> Unit,
-    onAuthUnavailable: () -> Unit,
 ) {
     ElevatedCard(
         modifier = Modifier
@@ -255,46 +224,9 @@ private fun ProfileCard(
                 if (profile.id == ProfileConstants.defaultProfileId) {
                     StatusLabel(stringResource(MR.strings.profiles_default))
                 }
-                if (profile.requiresAuth) {
-                    StatusLabel(stringResource(MR.strings.lock_with_biometrics))
-                }
                 if (profile.isArchived) {
                     StatusLabel(stringResource(MR.strings.profiles_archived))
                 }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp))
-                    .clickable {
-                        if (authSupported) {
-                            onToggleAuth(!profile.requiresAuth)
-                        } else {
-                            onAuthUnavailable()
-                        }
-                    }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stringResource(MR.strings.lock_with_biometrics),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (!authSupported) {
-                        Text(
-                            text = stringResource(MR.strings.profiles_require_unlock_unavailable),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Switch(
-                    checked = profile.requiresAuth,
-                    onCheckedChange = null,
-                    enabled = authSupported,
-                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),

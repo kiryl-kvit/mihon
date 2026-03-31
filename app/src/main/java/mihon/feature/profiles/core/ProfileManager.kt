@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.Context
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import tachiyomi.core.common.preference.Preference
@@ -50,6 +51,10 @@ class ProfileManager(
 
     val shouldShowPicker: Flow<Boolean> = profileDatabase.subscribeProfiles(includeArchived = false)
         .map { it.size > 1 }
+
+    suspend fun shouldShowPickerOnLaunch(): Boolean {
+        return profilesPreferences.pickerEnabled.get() && profileDatabase.getVisibleProfileCount() > 1
+    }
 
     suspend fun ensureDefaultProfile() {
         val defaultProfile = profileDatabase.getProfileById(ProfileConstants.defaultProfileId)
@@ -121,10 +126,6 @@ class ProfileManager(
         profileDatabase.updateProfile(id = profileId, isArchived = archived)
     }
 
-    suspend fun setProfileRequiresAuth(profileId: Long, enabled: Boolean) {
-        profileDatabase.updateProfile(id = profileId, requiresAuth = enabled)
-    }
-
     suspend fun permanentlyDeleteProfile(profileId: Long) {
         if (profileId == ProfileConstants.defaultProfileId) return
         val profile = profileDatabase.getProfileById(profileId) ?: return
@@ -143,7 +144,11 @@ class ProfileManager(
         profileStore.deleteProfileState(profileId)
     }
 
-    private fun migrateLegacyPreferencesIfNeeded() {
+    fun profileRequiresUnlock(profileId: Long): Boolean {
+        return SecurityPreferences(profileStore.profileStore(profileId)).useAuthenticator.get()
+    }
+
+    private suspend fun migrateLegacyPreferencesIfNeeded() {
         val currentVersion = profilesPreferences.legacyPreferenceMigrationVersion.get()
         if (currentVersion >= LEGACY_PROFILE_MIGRATION_VERSION) return
 
@@ -159,6 +164,7 @@ class ProfileManager(
             appStateKeys = ownership.appState,
             privateKeys = ownership.private,
         )
+        migrateLegacyProfileUnlockSettings()
         migrateLegacySourcePreferences()
         migration.cleanupLegacyPreferenceKeys(
             profileId = ProfileConstants.defaultProfileId,
@@ -167,6 +173,15 @@ class ProfileManager(
             privateKeys = ownership.private,
         )
         profilesPreferences.legacyPreferenceMigrationVersion.set(LEGACY_PROFILE_MIGRATION_VERSION)
+    }
+
+    private suspend fun migrateLegacyProfileUnlockSettings() {
+        profileDatabase.getProfiles(includeArchived = true).forEach { profile ->
+            if (profile.requiresAuth) {
+                SecurityPreferences(profileStore.profileStore(profile.id)).useAuthenticator.set(true)
+                profileDatabase.updateProfile(id = profile.id, requiresAuth = false)
+            }
+        }
     }
 
     private fun correctProfileOwnershipMismatches(currentVersion: Int) {
@@ -291,7 +306,7 @@ class ProfileManager(
     suspend fun getProfileBundles(includeArchived: Boolean = true): List<ProfileBundle> {
         return profileDatabase.getProfiles(includeArchived).map { profile ->
             ProfileBundle(
-                profile = profile,
+                profile = profile.copy(requiresAuth = profileRequiresUnlock(profile.id)),
                 categories = profileDatabase.getAllCategories(profile.id).map { it.id },
                 mangaCount = profileDatabase.getMangaCount(profile.id).toInt(),
             )
@@ -322,6 +337,6 @@ class ProfileManager(
     }
 
     companion object {
-        private const val LEGACY_PROFILE_MIGRATION_VERSION = 3
+        private const val LEGACY_PROFILE_MIGRATION_VERSION = 4
     }
 }

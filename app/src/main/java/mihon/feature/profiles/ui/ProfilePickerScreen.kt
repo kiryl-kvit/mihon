@@ -83,7 +83,7 @@ class ProfilePickerScreen : Screen() {
             activeProfileId = activeProfile?.id,
             onProfileSelected = { profile ->
                 scope.launch {
-                    val authenticated = if (profile.requiresAuth && context is FragmentActivity) {
+                    val authenticated = if (profileManager.profileRequiresUnlock(profile.id) && context is FragmentActivity) {
                         context.authenticate(
                             title = context.contextStringResource(MR.strings.unlock_app_title, profile.name),
                             subtitle = null,

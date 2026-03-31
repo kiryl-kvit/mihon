@@ -672,7 +672,7 @@
     <string name="profiles_summary">Manage profiles</string>
     <string name="profiles_user_profiles">User profiles</string>
     <string name="profiles_manage_title">Manage profiles</string>
-    <string name="profiles_manage_summary">Create, archive, protect, and delete profiles</string>
+    <string name="profiles_manage_summary">Create, archive, and delete profiles</string>
     <string name="profiles_choose_on_launch">Choose profile on launch</string>
     <string name="profiles_info_title">Profile-specific data</string>
     <string name="profiles_info_description">Each profile has its own library data and profile-specific settings. This includes categories, library display and update behavior, source preferences, reader settings, appearance settings, security settings, tracking login/state, and the startup screen preference. Global app settings such as downloads, backups, networking, privacy, storage, and extension repository management stay shared across all profiles.</string>
@@ -690,7 +690,6 @@
     <string name="profiles_name_exists">A profile with this name already exists</string>
     <string name="profiles_archive_profile_confirmation">Archive %1$s?</string>
     <string name="profiles_delete_profile_confirmation">Delete %1$s permanently?</string>
-    <string name="profiles_require_unlock_unavailable">Set a device lock before enabling this</string>
     <string name="pref_startup_screen">Application startup screen</string>
     <string name="pref_extensions_auto_update">Enable extensions auto-update</string>
 

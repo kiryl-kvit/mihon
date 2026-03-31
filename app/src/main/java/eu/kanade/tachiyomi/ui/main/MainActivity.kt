@@ -12,6 +12,7 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -104,6 +105,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
 import mihon.core.migration.Migrator
 import mihon.feature.profiles.core.Profile
@@ -144,13 +146,21 @@ class MainActivity : BaseActivity() {
     private var startupCompleted = false
 
     private var navigator: Navigator? = null
+    private var allowAppUnlockPrompt = true
 
     init {
         registerSecureActivity(this)
     }
 
+    override fun shouldRequestAppUnlock(activity: AppCompatActivity): Boolean {
+        return allowAppUnlockPrompt
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val isLaunch = savedInstanceState == null
+        if (isLaunch) {
+            allowAppUnlockPrompt = !runBlocking { profileManager.shouldShowPickerOnLaunch() }
+        }
 
         // Prevent splash screen showing up on configuration changes
         val splashScreen = if (isLaunch) installSplashScreen() else null
@@ -216,12 +226,15 @@ class MainActivity : BaseActivity() {
                     profilesPreferences.pickerEnabled.get() &&
                         profileManager.shouldShowPicker.first()
                 if (shouldShowPicker) {
+                    allowAppUnlockPrompt = false
                     startupGateState = ProfileStartupGateState.Picker
                     pendingAuthProfile = null
-                } else if (initialProfile?.requiresAuth == true && !shouldSkipStartupProfileAuth()) {
+                } else if (initialProfile != null && profileManager.profileRequiresUnlock(initialProfile.id) && !shouldSkipStartupProfileAuth()) {
+                    allowAppUnlockPrompt = true
                     pendingAuthProfile = initialProfile
                     startupGateState = ProfileStartupGateState.Authenticating
                 } else {
+                    allowAppUnlockPrompt = true
                     pendingAuthProfile = null
                     startupGateState = ProfileStartupGateState.Ready
                 }
@@ -230,10 +243,12 @@ class MainActivity : BaseActivity() {
             LaunchedEffect(startupGateState, visibleProfiles, activeProfile?.id) {
                 if (startupGateState == ProfileStartupGateState.Picker && visibleProfiles.size <= 1) {
                     val profile = activeProfile ?: visibleProfiles.firstOrNull()
-                    if (profile?.requiresAuth == true && !shouldSkipStartupProfileAuth()) {
+                    if (profile != null && profileManager.profileRequiresUnlock(profile.id) && !shouldSkipStartupProfileAuth()) {
+                        allowAppUnlockPrompt = true
                         pendingAuthProfile = profile
                         startupGateState = ProfileStartupGateState.Authenticating
                     } else {
+                        allowAppUnlockPrompt = true
                         pendingAuthProfile = null
                         setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
                         startupGateState = ProfileStartupGateState.Ready
@@ -251,6 +266,8 @@ class MainActivity : BaseActivity() {
                 }
 
                 if (authenticateProfile(profile)) {
+                    SecureActivityDelegate.unlock()
+                    allowAppUnlockPrompt = true
                     startupGateState = ProfileStartupGateState.Ready
                 } else {
                     finishAffinity()
@@ -358,9 +375,13 @@ class MainActivity : BaseActivity() {
                     authProfileName = pendingAuthProfile?.name,
                     onProfileSelected = { profile ->
                         scope.launch {
-                            if (profile.requiresAuth && !authenticateProfile(profile)) {
+                            if (profileManager.profileRequiresUnlock(profile.id) && !authenticateProfile(profile)) {
                                 return@launch
                             }
+                            if (profileManager.profileRequiresUnlock(profile.id)) {
+                                SecureActivityDelegate.unlock()
+                            }
+                            allowAppUnlockPrompt = true
                             profileManager.setActiveProfile(profile.id)
                             setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
                             startupGateState = ProfileStartupGateState.Ready

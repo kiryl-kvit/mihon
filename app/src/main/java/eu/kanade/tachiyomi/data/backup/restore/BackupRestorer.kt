@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.data.backup.models.BackupManga
 import eu.kanade.tachiyomi.data.backup.models.BackupPreference
 import eu.kanade.tachiyomi.data.backup.models.BackupSourcePreferences
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
+import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.backup.restore.restorers.CategoriesRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.MangaRestorer
@@ -286,9 +287,12 @@ class BackupRestorer(
                 name = bundle.profile.name,
                 colorSeed = bundle.profile.colorSeed,
                 position = bundle.profile.position,
-                requiresAuth = bundle.profile.requiresAuth,
+                requiresAuth = false,
                 isArchived = bundle.profile.isArchived,
             )
+            if (bundle.profile.requiresAuth) {
+                SecurityPreferences(profileStore.profileStore(existing.id)).useAuthenticator.set(true)
+            }
             return profileDatabase.getProfileById(existing.id) ?: existing
         }
 
@@ -297,9 +301,12 @@ class BackupRestorer(
             name = bundle.profile.name,
             colorSeed = bundle.profile.colorSeed,
             position = bundle.profile.position,
-            requiresAuth = bundle.profile.requiresAuth,
+            requiresAuth = false,
             isArchived = bundle.profile.isArchived,
         )
+        if (bundle.profile.requiresAuth) {
+            SecurityPreferences(profileStore.profileStore(id)).useAuthenticator.set(true)
+        }
         return requireNotNull(profileDatabase.getProfileById(id))
     }
 
