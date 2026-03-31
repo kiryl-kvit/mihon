@@ -71,7 +71,7 @@ abstract class BaseSourcePagingSource(
     override fun getRefreshKey(state: PagingState<Long, Manga>): Long? {
         return state.anchorPosition?.let { anchorPosition ->
             val anchorPage = state.closestPageToPosition(anchorPosition)
-            anchorPage?.prevKey ?: anchorPage?.nextKey
+            anchorPage?.prevKey?.plus(1) ?: anchorPage?.nextKey?.minus(1)
         }
     }
 }

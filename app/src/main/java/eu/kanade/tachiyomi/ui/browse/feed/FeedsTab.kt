@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,6 +51,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.paging.LoadState
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.core.screen.ScreenKey
@@ -90,6 +92,7 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
+import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.components.material.topSmallPaddingValues
 import tachiyomi.presentation.core.i18n.stringResource
@@ -199,6 +202,8 @@ private fun FeedsTabContent(
             initialFilterSnapshot = activePreset.filters,
         )
         val browseModelState by browseModel.state.collectAsState()
+        val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
+        val isRefreshing = mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
         val source = browseModel.source as CatalogueSource
         val browseContentStateHolder = rememberSaveableStateHolder()
         val activeIndex = remember(state.enabledFeeds, activeFeed.id) {
@@ -256,42 +261,49 @@ private fun FeedsTabContent(
                     stateHolder = browseContentStateHolder,
                     activeFeedId = activeFeed.id,
                 ) {
-                    BrowseSourceContent(
-                        source = browseModel.source,
-                        mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems(),
-                        columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                        displayMode = browseModel.displayMode,
-                        snackbarHostState = snackbarHostState,
-                        contentPadding = feedContentPadding,
-                        onWebViewClick = {
-                            val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
-                            navigator.push(
-                                WebViewScreen(
-                                    url = httpSource.baseUrl,
-                                    initialTitle = httpSource.name,
-                                    sourceId = httpSource.id,
-                                ),
-                            )
-                        },
-                        onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                        onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                        onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
-                        onMangaLongClick = { manga ->
-                            scope.launchIO {
-                                val duplicates = browseModel.getDuplicateLibraryManga(manga)
-                                when {
-                                    manga.favorite -> browseModel.setDialog(
-                                        BrowseSourceScreenModel.Dialog.RemoveManga(manga),
-                                    )
-                                    duplicates.isNotEmpty() -> browseModel.setDialog(
-                                        BrowseSourceScreenModel.Dialog.AddDuplicateManga(manga, duplicates),
-                                    )
-                                    else -> browseModel.addFavorite(manga)
+                    PullRefresh(
+                        refreshing = isRefreshing,
+                        enabled = true,
+                        onRefresh = mangaList::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        BrowseSourceContent(
+                            source = browseModel.source,
+                            mangaList = mangaList,
+                            columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                            displayMode = browseModel.displayMode,
+                            snackbarHostState = snackbarHostState,
+                            contentPadding = feedContentPadding,
+                            onWebViewClick = {
+                                val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
+                                navigator.push(
+                                    WebViewScreen(
+                                        url = httpSource.baseUrl,
+                                        initialTitle = httpSource.name,
+                                        sourceId = httpSource.id,
+                                    ),
+                                )
+                            },
+                            onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                            onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
+                            onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
+                            onMangaLongClick = { manga ->
+                                scope.launchIO {
+                                    val duplicates = browseModel.getDuplicateLibraryManga(manga)
+                                    when {
+                                        manga.favorite -> browseModel.setDialog(
+                                            BrowseSourceScreenModel.Dialog.RemoveManga(manga),
+                                        )
+                                        duplicates.isNotEmpty() -> browseModel.setDialog(
+                                            BrowseSourceScreenModel.Dialog.AddDuplicateManga(manga, duplicates),
+                                        )
+                                        else -> browseModel.addFavorite(manga)
+                                    }
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            }
-                        },
-                    )
+                            },
+                        )
+                    }
                 }
             }
 
