@@ -130,11 +130,11 @@ data class FeedSavedListing(
     val query: String? = null,
     val filters: List<FilterStateNode> = emptyList(),
 ) {
-    val requestQuery: String
+    val requestQuery: String?
         get() = when (mode) {
             FeedListingMode.Popular -> GetRemoteManga.QUERY_POPULAR
             FeedListingMode.Latest -> GetRemoteManga.QUERY_LATEST
-            FeedListingMode.Search -> query.orEmpty()
+            FeedListingMode.Search -> query
         }
 }
 

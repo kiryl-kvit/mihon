@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.ui.browse.source.browse
 
 import eu.kanade.domain.source.model.FeedListingMode
+import eu.kanade.domain.source.model.SourceFeedPreset
 import eu.kanade.domain.source.model.snapshot
+import eu.kanade.domain.source.model.toListing
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
 import io.kotest.matchers.shouldBe
@@ -39,6 +41,39 @@ class BrowseSourceScreenModelTest {
         saved.listingMode shouldBe FeedListingMode.Search
         saved.query shouldBe "frieren"
         saved.filters shouldBe filters.snapshot()
+    }
+
+    @Test
+    fun `filter only preset keeps null request query`() {
+        val preset = SourceFeedPreset(
+            id = "preset",
+            sourceId = 1L,
+            name = "Filtered",
+            listingMode = FeedListingMode.Search,
+        )
+
+        preset.toListing().requestQuery shouldBe null
+    }
+
+    @Test
+    fun `search listing initializes with saved filter snapshot`() {
+        val (savedFilters, savedTextFilter) = testFilters()
+        savedTextFilter.state = "romance"
+        val snapshot = savedFilters.snapshot()
+
+        val initialized = BrowseSourceScreenModel.State(
+            listing = BrowseSourceScreenModel.Listing.Search(
+                query = null,
+                filters = FilterList(),
+            ),
+        ).initializeForSource(
+            sourceFilters = testFilters().first,
+            initialFilterSnapshot = snapshot,
+        )
+
+        initialized.filters.snapshot() shouldBe snapshot
+        (initialized.listing as BrowseSourceScreenModel.Listing.Search).query shouldBe null
+        initialized.listing.filters.snapshot() shouldBe snapshot
     }
 
     private fun testFilters(): Pair<FilterList, TestTextFilter> {

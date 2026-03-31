@@ -196,6 +196,7 @@ private fun FeedsTabContent(
             activeFeedId = activeFeed.id,
             sourceId = activeSource.id,
             listingQuery = activePreset.toListing().requestQuery,
+            initialFilterSnapshot = activePreset.filters,
         )
         val browseModelState by browseModel.state.collectAsState()
         val source = browseModel.source as CatalogueSource
@@ -526,7 +527,8 @@ private fun FeedChip(
 private fun rememberActiveFeedScreenModel(
     activeFeedId: String,
     sourceId: Long,
-    listingQuery: String,
+    listingQuery: String?,
+    initialFilterSnapshot: List<eu.kanade.domain.source.model.FilterStateNode>,
 ): BrowseSourceScreenModel {
     return object : Screen {
         override val key: ScreenKey = "feed-screen-model-$activeFeedId"
@@ -539,6 +541,7 @@ private fun rememberActiveFeedScreenModel(
         BrowseSourceScreenModel(
             sourceId = sourceId,
             listingQuery = listingQuery,
+            initialFilterSnapshot = initialFilterSnapshot,
         )
     }
 }

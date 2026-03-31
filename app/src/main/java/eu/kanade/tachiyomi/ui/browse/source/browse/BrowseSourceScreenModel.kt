@@ -67,6 +67,7 @@ import eu.kanade.tachiyomi.source.model.Filter as SourceModelFilter
 class BrowseSourceScreenModel(
     private val sourceId: Long,
     listingQuery: String?,
+    initialFilterSnapshot: List<FilterStateNode> = emptyList(),
     sourceManager: SourceManager = Injekt.get(),
     sourcePreferences: SourcePreferences = Injekt.get(),
     private val browseFeedService: BrowseFeedService = Injekt.get(),
@@ -90,18 +91,9 @@ class BrowseSourceScreenModel(
     init {
         if (source is CatalogueSource) {
             mutableState.update {
-                var query: String? = null
-                var listing = it.listing
-
-                if (listing is Listing.Search) {
-                    query = listing.query
-                    listing = Listing.Search(query, source.getFilterList())
-                }
-
-                it.copy(
-                    listing = listing,
-                    filters = source.getFilterList(),
-                    toolbarQuery = query,
+                it.initializeForSource(
+                    sourceFilters = source.getFilterList(),
+                    initialFilterSnapshot = initialFilterSnapshot,
                 )
             }
         }
@@ -448,6 +440,24 @@ class BrowseSourceScreenModel(
     ) {
         val isUserQuery get() = listing is Listing.Search && !listing.query.isNullOrEmpty()
     }
+}
+
+internal fun BrowseSourceScreenModel.State.initializeForSource(
+    sourceFilters: FilterList,
+    initialFilterSnapshot: List<FilterStateNode> = emptyList(),
+): BrowseSourceScreenModel.State {
+    val filters = sourceFilters.applySnapshot(initialFilterSnapshot)
+    val query = (listing as? BrowseSourceScreenModel.Listing.Search)?.query
+    val updatedListing = when (listing) {
+        is BrowseSourceScreenModel.Listing.Search -> BrowseSourceScreenModel.Listing.Search(query, filters)
+        else -> listing
+    }
+
+    return copy(
+        listing = updatedListing,
+        filters = filters,
+        toolbarQuery = query,
+    )
 }
 
 internal data class SavedPresetState(
