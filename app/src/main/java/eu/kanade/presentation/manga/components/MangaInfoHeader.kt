@@ -1,11 +1,13 @@
 package eu.kanade.presentation.manga.components
 
+import android.graphics.BitmapFactory
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,6 +80,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -106,15 +109,12 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
-import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import kotlinx.coroutines.flow.collectLatest
-import okio.Buffer
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.findChildOfType
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.i18n.MR
@@ -603,8 +603,8 @@ private fun MangaPreviewImage(
     previewPage: MangaScreenModel.PreviewPage,
     onPageStateSync: (Int) -> Unit,
 ) {
-    var imageData by remember(previewPage.page.index, previewPage.page.stream) {
-        mutableStateOf<Pair<Buffer, Boolean>?>(null)
+    var bitmap by remember(previewPage.page.index, previewPage.page.stream) {
+        mutableStateOf<android.graphics.Bitmap?>(null)
     }
 
     LaunchedEffect(previewPage.page.index, previewPage.page.stream) {
@@ -613,10 +613,9 @@ private fun MangaPreviewImage(
             return@LaunchedEffect
         }
 
-        imageData = runCatching {
+        bitmap = runCatching {
             withIOContext {
-                val source = streamFn().use { Buffer().readFrom(it) }
-                source to ImageUtil.isAnimatedAndSupported(source)
+                streamFn().use(BitmapFactory::decodeStream)
             }
         }.getOrElse {
             onPageStateSync(previewPage.page.index)
@@ -624,21 +623,15 @@ private fun MangaPreviewImage(
         }
     }
 
-    AndroidView(
-        factory = { context ->
-            ReaderPageImageView(context).apply {
-                onImageLoaded = { onPageStateSync(previewPage.page.index) }
-                onImageLoadError = { onPageStateSync(previewPage.page.index) }
-            }
-        },
-        update = { view ->
-            val (source, isAnimated) = imageData ?: return@AndroidView
-            view.setImage(
-                source = source.clone(),
-                isAnimated = isAnimated,
-                config = ReaderPageImageView.Config(zoomDuration = 0, cropBorders = false),
-            )
-        },
+    val imageBitmap = bitmap ?: return
+    LaunchedEffect(imageBitmap) {
+        onPageStateSync(previewPage.page.index)
+    }
+
+    Image(
+        bitmap = imageBitmap.asImageBitmap(),
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.72f),

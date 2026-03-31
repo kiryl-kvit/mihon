@@ -107,6 +107,8 @@ import java.io.ByteArrayOutputStream
 
 class ReaderActivity : BaseActivity() {
 
+    private var initialPageIndex: Int? = null
+
     companion object {
         private const val EXTRA_MANGA = "manga"
         private const val EXTRA_CHAPTER = "chapter"
@@ -178,6 +180,7 @@ class ReaderActivity : BaseActivity() {
             val manga = intent.extras?.getLong(EXTRA_MANGA, -1) ?: -1L
             val chapter = intent.extras?.getLong(EXTRA_CHAPTER, -1) ?: -1L
             val pageIndex = intent.extras?.getInt(EXTRA_PAGE, -1) ?: -1
+            initialPageIndex = pageIndex.takeIf { it >= 0 }
             if (manga == -1L || chapter == -1L) {
                 finish()
                 return
@@ -607,6 +610,10 @@ class ReaderActivity : BaseActivity() {
     private fun setChapters(viewerChapters: ViewerChapters) {
         binding.readerContainer.removeView(loadingIndicator)
         viewModel.state.value.viewer?.setChapters(viewerChapters)
+        initialPageIndex?.let { index ->
+            moveToPageIndex(index)
+            initialPageIndex = null
+        }
 
         lifecycleScope.launchIO {
             viewModel.getChapterUrl()?.let { url ->
