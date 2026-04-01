@@ -180,7 +180,7 @@ class MainActivity : BaseActivity() {
             var showChangelog by remember { mutableStateOf(false) }
 
             var incognito by remember { mutableStateOf(getIncognitoState.await(null)) }
-            val downloadOnly by preferences.downloadedOnly.collectAsState()
+            val downloadOnly by libraryPreferences.downloadedOnly.collectAsState()
             val indexing by downloadCache.isInitializing.collectAsState()
             val visibleProfiles by profileManager.visibleProfiles.collectAsState()
             val activeProfile by profileManager.activeProfile.collectAsState()

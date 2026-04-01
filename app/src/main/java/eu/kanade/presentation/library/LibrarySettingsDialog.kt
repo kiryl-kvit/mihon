@@ -84,7 +84,7 @@ private fun FilterPage(
     screenModel: LibrarySettingsScreenModel,
 ) {
     val filterDownloaded by screenModel.libraryPreferences.filterDownloaded.collectAsState()
-    val downloadedOnly by screenModel.preferences.downloadedOnly.collectAsState()
+    val downloadedOnly by screenModel.libraryPreferences.downloadedOnly.collectAsState()
     val autoUpdateMangaRestrictions by screenModel.libraryPreferences.autoUpdateMangaRestrictions.collectAsState()
 
     TriStateItem(
