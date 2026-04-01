@@ -1,6 +1,6 @@
 ## Changes are made based on personal preferences and are not intended to be distributed for a wide-range audience
 
-## Changes from the upstream
+## Changes made
 
 - Settings → Custom settings → Application startup screen
 - Settings → Custom settings → Enable extensions auto-update
