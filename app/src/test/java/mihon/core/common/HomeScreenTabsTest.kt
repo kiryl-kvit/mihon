@@ -19,26 +19,56 @@ class HomeScreenTabsTest {
     @Test
     fun `visible home tabs include profiles only when picker is shown`() {
         val tabs = setOf(HomeScreenTabs.Library, HomeScreenTabs.Profiles)
+        val tabOrder = listOf(
+            HomeScreenTabs.Profiles,
+            HomeScreenTabs.More,
+            HomeScreenTabs.Library,
+        )
 
-        resolveVisibleHomeScreenTabs(tabs, showProfilesTab = false) shouldBe listOf(
+        resolveVisibleHomeScreenTabs(tabs, tabOrder = tabOrder, showProfilesTab = false) shouldBe listOf(
+            HomeScreenTabs.More,
+            HomeScreenTabs.Library,
+        )
+
+        resolveVisibleHomeScreenTabs(tabs, tabOrder = tabOrder, showProfilesTab = true) shouldBe listOf(
+            HomeScreenTabs.Profiles,
+            HomeScreenTabs.More,
+            HomeScreenTabs.Library,
+        )
+    }
+
+    @Test
+    fun `sanitized home tabs preserve profiles in stored selection`() {
+        sanitizeHomeScreenTabs(
+            tabs = setOf(HomeScreenTabs.Library, HomeScreenTabs.Profiles),
+            tabOrder = listOf(HomeScreenTabs.Profiles, HomeScreenTabs.Library, HomeScreenTabs.More),
+        ) shouldBe listOf(
+            HomeScreenTabs.Profiles,
             HomeScreenTabs.Library,
             HomeScreenTabs.More,
         )
+    }
 
-        resolveVisibleHomeScreenTabs(tabs, showProfilesTab = true) shouldBe listOf(
+    @Test
+    fun `sanitized home tab order appends missing tabs`() {
+        sanitizeHomeScreenTabOrder(
+            listOf(HomeScreenTabs.Browse, HomeScreenTabs.Library, HomeScreenTabs.Browse),
+        ) shouldBe listOf(
+            HomeScreenTabs.Browse,
             HomeScreenTabs.Library,
+            HomeScreenTabs.Updates,
+            HomeScreenTabs.History,
             HomeScreenTabs.More,
             HomeScreenTabs.Profiles,
         )
     }
 
     @Test
-    fun `sanitized home tabs preserve profiles in stored selection`() {
-        sanitizeHomeScreenTabs(setOf(HomeScreenTabs.Library, HomeScreenTabs.Profiles)) shouldBe listOf(
-            HomeScreenTabs.Library,
-            HomeScreenTabs.More,
-            HomeScreenTabs.Profiles,
-        )
+    fun `tab order preference round trips with defaults when blank`() {
+        defaultHomeScreenTabOrder().toHomeScreenTabOrderPreferenceValue().toHomeScreenTabOrder() shouldBe
+            defaultHomeScreenTabOrder()
+
+        "".toHomeScreenTabOrder() shouldBe defaultHomeScreenTabOrder()
     }
 
     @Test
@@ -62,6 +92,15 @@ class HomeScreenTabsTest {
         resolveHomeScreenTab(
             requestedTab = HomeScreenTabs.Browse,
             enabledTabs = listOf(HomeScreenTabs.More),
+        ) shouldBe HomeScreenTabs.More
+    }
+
+    @Test
+    fun `startup fallback follows saved tab order`() {
+        resolveHomeScreenTab(
+            requestedTab = HomeScreenTabs.Updates,
+            enabledTabs = listOf(HomeScreenTabs.Browse, HomeScreenTabs.More),
+            tabOrder = listOf(HomeScreenTabs.More, HomeScreenTabs.Browse, HomeScreenTabs.Updates),
         ) shouldBe HomeScreenTabs.More
     }
 }

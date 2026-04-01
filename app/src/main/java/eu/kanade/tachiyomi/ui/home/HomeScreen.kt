@@ -94,24 +94,26 @@ object HomeScreen : Screen() {
         val profileManager = remember { Injekt.get<ProfileManager>() }
         val configuredTab by customPreferences.homeScreenStartupTab.collectAsState()
         val configuredTabs by customPreferences.homeScreenTabs.collectAsState()
+        val configuredTabOrder by customPreferences.homeScreenTabOrder.collectAsState()
         val visibleProfiles by profileManager.visibleProfiles.collectFlowAsState()
-        val enabledTabs = remember(configuredTabs, visibleProfiles) {
+        val enabledTabs = remember(configuredTabs, configuredTabOrder, visibleProfiles) {
             resolveVisibleHomeScreenTabs(
                 tabs = configuredTabs.toHomeScreenTabs(),
+                tabOrder = configuredTabOrder,
                 showProfilesTab = visibleProfiles.size > 1,
             )
         }
         val contentTabs = remember(enabledTabs) {
             enabledTabs.filter { it in homeScreenContentTabOrder }
         }
-        val launchTab = remember(configuredTab, contentTabs) {
-            resolveContentTab(resolveHomeScreenTab(configuredTab, contentTabs))
+        val launchTab = remember(configuredTab, contentTabs, configuredTabOrder) {
+            resolveContentTab(resolveHomeScreenTab(configuredTab, contentTabs, configuredTabOrder))
         }
         val renderedTabs = remember(enabledTabs) {
             enabledTabs
         }
-        val fallbackTab = remember(contentTabs) {
-            resolveContentTab(resolveHomeScreenTab(HomeScreenTabs.Library, contentTabs))
+        val fallbackTab = remember(contentTabs, configuredTabOrder) {
+            resolveContentTab(resolveHomeScreenTab(HomeScreenTabs.Library, contentTabs, configuredTabOrder))
         }
         val navigator = LocalNavigator.currentOrThrow
         TabNavigator(
@@ -187,12 +189,12 @@ object HomeScreen : Screen() {
 
             BackHandler(enabled = tabNavigator.current != fallbackTab, onBack = goToFallbackTab)
 
-            LaunchedEffect(contentTabs) {
-                val resolvedCurrentTab = resolveVisibleTab(tabNavigator.current, contentTabs)
+            LaunchedEffect(contentTabs, configuredTabOrder) {
+                val resolvedCurrentTab = resolveVisibleTab(tabNavigator.current, contentTabs, configuredTabOrder)
                 if (resolvedCurrentTab::class != tabNavigator.current::class) {
                     tabNavigator.current = resolvedCurrentTab
                 }
-                val resolvedStartupTab = resolveHomeScreenTab(configuredTab, contentTabs)
+                val resolvedStartupTab = resolveHomeScreenTab(configuredTab, contentTabs, configuredTabOrder)
                 if (resolvedStartupTab != configuredTab) {
                     customPreferences.homeScreenStartupTab.set(resolvedStartupTab)
                 }
@@ -227,7 +229,7 @@ object HomeScreen : Screen() {
                             is Tab.More -> MoreTab
                             Tab.Profiles -> error("Handled above")
                         }
-                        val resolvedTab = resolveVisibleTab(requestedTab, contentTabs)
+                        val resolvedTab = resolveVisibleTab(requestedTab, contentTabs, configuredTabOrder)
                         tabNavigator.current = resolvedTab
 
                         if (it is Tab.Browse && resolvedTab::class == BrowseTab::class && it.toExtensions) {
@@ -429,8 +431,9 @@ object HomeScreen : Screen() {
     private fun resolveVisibleTab(
         tab: VoyagerTab,
         contentTabs: Collection<HomeScreenTabs>,
+        tabOrder: Collection<HomeScreenTabs>,
     ): eu.kanade.presentation.util.Tab {
-        return resolveContentTab(resolveHomeScreenTab(tab.toHomeScreenTab(), contentTabs))
+        return resolveContentTab(resolveHomeScreenTab(tab.toHomeScreenTab(), contentTabs, tabOrder))
     }
 
     private fun resolveContentTab(tab: HomeScreenTabs): eu.kanade.presentation.util.Tab {

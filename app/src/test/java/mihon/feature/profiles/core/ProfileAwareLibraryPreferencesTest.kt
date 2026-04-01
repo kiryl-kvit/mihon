@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import mihon.core.common.CustomPreferences
 import mihon.core.common.HomeScreenTabs
+import mihon.core.common.defaultHomeScreenTabOrder
 import mihon.core.common.defaultHomeScreenTabs
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.AndroidPreferenceStore
@@ -123,6 +124,30 @@ class ProfileAwareLibraryPreferencesTest {
             HomeScreenTabs.Library.name,
             HomeScreenTabs.More.name,
             HomeScreenTabs.Profiles.name,
+        )
+    }
+
+    @Test
+    fun `home screen tab order stays isolated per profile`() {
+        val fixture = createFixture()
+
+        fixture.customPreferences.homeScreenTabOrder.set(
+            listOf(HomeScreenTabs.More, HomeScreenTabs.Library, HomeScreenTabs.Updates),
+        )
+        fixture.activeProfileId.value = 2L
+        fixture.customPreferences.homeScreenTabOrder.get() shouldBe defaultHomeScreenTabOrder()
+
+        fixture.customPreferences.homeScreenTabOrder.set(
+            listOf(HomeScreenTabs.Browse, HomeScreenTabs.More, HomeScreenTabs.Library),
+        )
+        fixture.activeProfileId.value = 1L
+        fixture.customPreferences.homeScreenTabOrder.get() shouldBe listOf(
+            HomeScreenTabs.More,
+            HomeScreenTabs.Library,
+            HomeScreenTabs.Updates,
+            HomeScreenTabs.History,
+            HomeScreenTabs.Browse,
+            HomeScreenTabs.Profiles,
         )
     }
 

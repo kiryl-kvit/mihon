@@ -200,6 +200,12 @@ class ProfileManager(
                 baseKey = Preference.appStateKey("home_screen_startup_tab"),
             )
         }
+        if (currentVersion < 7) {
+            migrateProfileOwnedKeyToNamespaced(
+                sharedPreferences = sharedPreferences,
+                baseKey = Preference.appStateKey("home_screen_tab_order"),
+            )
+        }
         if (currentVersion < 5) {
             migrateProfileOwnedKeyToNamespaced(
                 sharedPreferences = sharedPreferences,
@@ -384,6 +390,6 @@ class ProfileManager(
     }
 
     companion object {
-        private const val LEGACY_PROFILE_MIGRATION_VERSION = 6
+        private const val LEGACY_PROFILE_MIGRATION_VERSION = 7
     }
 }

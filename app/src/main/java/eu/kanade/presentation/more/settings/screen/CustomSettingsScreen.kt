@@ -1,10 +1,21 @@
 package eu.kanade.presentation.more.settings.screen
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -15,6 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
@@ -25,15 +39,19 @@ import kotlinx.collections.immutable.toImmutableMap
 import mihon.core.common.CustomPreferences
 import mihon.core.common.GlobalCustomPreferences
 import mihon.core.common.HomeScreenTabs
-import mihon.core.common.homeScreenTabOrder
 import mihon.core.common.resolveHomeScreenTab
+import mihon.core.common.sanitizeHomeScreenTabOrder
 import mihon.core.common.sanitizeHomeScreenTabs
 import mihon.core.common.toHomeScreenTabPreferenceValue
 import mihon.core.common.toHomeScreenTabs
 import mihon.feature.profiles.core.ProfilesPreferences
 import mihon.feature.profiles.ui.ProfilesSettingsScreen
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LabeledCheckbox
+import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
@@ -55,12 +73,13 @@ object CustomSettingsScreen : SearchableSettings {
         val previewPageCount by customPreferences.mangaPreviewPageCount.collectAsState()
         val startupTab by customPreferences.homeScreenStartupTab.collectAsState()
         val homeScreenTabs by customPreferences.homeScreenTabs.collectAsState()
+        val storedHomeTabOrder by customPreferences.homeScreenTabOrder.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
         var showProfilesInfo by rememberSaveable { mutableStateOf(false) }
         var showHomeTabsDialog by rememberSaveable { mutableStateOf(false) }
         val homeTabEntries = rememberHomeTabEntries()
-        val enabledHomeTabs = remember(homeScreenTabs) {
-            sanitizeHomeScreenTabs(homeScreenTabs.toHomeScreenTabs())
+        val enabledHomeTabs = remember(homeScreenTabs, storedHomeTabOrder) {
+            sanitizeHomeScreenTabs(homeScreenTabs.toHomeScreenTabs(), storedHomeTabOrder)
         }
         val startupTabEntries = remember(enabledHomeTabs, homeTabEntries) {
             enabledHomeTabs
@@ -83,22 +102,40 @@ object CustomSettingsScreen : SearchableSettings {
         }
 
         if (showHomeTabsDialog) {
-            val selectedTabs = remember(homeScreenTabs) {
-                enabledHomeTabs.toMutableStateList()
+            val selectedTabs = remember(homeScreenTabs, storedHomeTabOrder) {
+                sanitizeHomeScreenTabs(homeScreenTabs.toHomeScreenTabs(), storedHomeTabOrder).toMutableStateList()
+            }
+            val orderedTabs = remember(storedHomeTabOrder) {
+                sanitizeHomeScreenTabOrder(storedHomeTabOrder).toMutableStateList()
+            }
+            val listState = rememberLazyListState()
+            val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
+                val fromIndex = orderedTabs.indexOfFirst { it.name == from.key }
+                val toIndex = orderedTabs.indexOfFirst { it.name == to.key }
+                if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
+                orderedTabs.add(toIndex, orderedTabs.removeAt(fromIndex))
             }
             AlertDialog(
                 onDismissRequest = { showHomeTabsDialog = false },
                 title = { Text(text = stringResource(MR.strings.pref_home_screen_tabs)) },
                 text = {
-                    androidx.compose.foundation.lazy.LazyColumn {
-                        homeScreenTabOrder.forEach { tab ->
-                            item {
-                                val isSelected = tab in selectedTabs
-                                val isLocked = tab == HomeScreenTabs.More
-                                LabeledCheckbox(
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 360.dp),
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                    ) {
+                        items(
+                            items = orderedTabs,
+                            key = { it.name },
+                        ) { tab ->
+                            val isSelected = tab in selectedTabs
+                            val isLocked = tab == HomeScreenTabs.More
+                            ReorderableItem(reorderableState, tab.name, enabled = orderedTabs.size > 1) {
+                                HomeTabItem(
                                     label = homeTabEntries.getValue(tab),
                                     checked = isSelected,
-                                    enabled = !isLocked,
+                                    visibilityLocked = isLocked,
+                                    dragEnabled = orderedTabs.size > 1,
                                     onCheckedChange = { checked ->
                                         if (checked) {
                                             if (tab !in selectedTabs) {
@@ -116,11 +153,14 @@ object CustomSettingsScreen : SearchableSettings {
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            val newTabs = sanitizeHomeScreenTabs(selectedTabs.toSet())
+                            val updatedTabOrder = sanitizeHomeScreenTabOrder(orderedTabs)
+                            val newTabs = sanitizeHomeScreenTabs(selectedTabs.toSet(), updatedTabOrder)
+                            customPreferences.homeScreenTabOrder.set(updatedTabOrder)
                             customPreferences.homeScreenTabs.set(newTabs.toHomeScreenTabPreferenceValue())
                             val resolvedStartupTab = resolveHomeScreenTab(
                                 requestedTab = startupTab,
                                 enabledTabs = newTabs.filterNot { it == HomeScreenTabs.Profiles },
+                                tabOrder = updatedTabOrder,
                             )
                             if (resolvedStartupTab != startupTab) {
                                 customPreferences.homeScreenStartupTab.set(resolvedStartupTab)
@@ -181,6 +221,7 @@ object CustomSettingsScreen : SearchableSettings {
                                 resolveHomeScreenTab(
                                     requestedTab = it,
                                     enabledTabs = enabledHomeTabs.filterNot { it == HomeScreenTabs.Profiles },
+                                    tabOrder = storedHomeTabOrder,
                                 ),
                             )
                             false
@@ -234,5 +275,36 @@ object CustomSettingsScreen : SearchableSettings {
             HomeScreenTabs.More to stringResource(MR.strings.label_more),
             HomeScreenTabs.Profiles to stringResource(MR.strings.profiles_title),
         )
+    }
+
+    @Composable
+    private fun ReorderableCollectionItemScope.HomeTabItem(
+        label: String,
+        checked: Boolean,
+        visibilityLocked: Boolean,
+        dragEnabled: Boolean,
+        onCheckedChange: (Boolean) -> Unit,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        ) {
+            LabeledCheckbox(
+                label = label,
+                checked = checked,
+                enabled = !visibilityLocked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.Outlined.DragHandle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .then(if (dragEnabled) Modifier.draggableHandle() else Modifier)
+                    .padding(MaterialTheme.padding.small),
+            )
+        }
     }
 }

@@ -1,6 +1,7 @@
 package mihon.core.common
 
 import dev.icerock.moko.resources.StringResource
+import mihon.core.common.HomeScreenTabs
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
@@ -17,6 +18,13 @@ class CustomPreferences(
     val homeScreenTabs: Preference<Set<String>> = preferenceStore.getStringSet(
         Preference.appStateKey("home_screen_tabs"),
         defaultHomeScreenTabs(),
+    )
+
+    val homeScreenTabOrder: Preference<List<HomeScreenTabs>> = preferenceStore.getObjectFromString(
+        Preference.appStateKey("home_screen_tab_order"),
+        defaultHomeScreenTabOrder(),
+        serializer = { it.toHomeScreenTabOrderPreferenceValue() },
+        deserializer = { it.toHomeScreenTabOrder() },
     )
 
     val enableMangaPreview: Preference<Boolean> = preferenceStore.getBoolean(
