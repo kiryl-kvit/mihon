@@ -135,7 +135,6 @@ fun MangaScreen(
     onPreviewExpandedChange: (Boolean) -> Unit,
     onPreviewRetry: () -> Unit,
     onPreviewPageLoad: (Int) -> Unit,
-    onPreviewPageStateSync: (Int) -> Unit,
     onPreviewPageClick: (Long, Int) -> Unit,
 ) {
     val context = LocalContext.current
@@ -188,7 +187,6 @@ fun MangaScreen(
             onPreviewExpandedChange = onPreviewExpandedChange,
             onPreviewRetry = onPreviewRetry,
             onPreviewPageLoad = onPreviewPageLoad,
-            onPreviewPageStateSync = onPreviewPageStateSync,
             onPreviewPageClick = onPreviewPageClick,
         )
     } else {
@@ -234,7 +232,6 @@ fun MangaScreen(
             onPreviewExpandedChange = onPreviewExpandedChange,
             onPreviewRetry = onPreviewRetry,
             onPreviewPageLoad = onPreviewPageLoad,
-            onPreviewPageStateSync = onPreviewPageStateSync,
             onPreviewPageClick = onPreviewPageClick,
         )
     }
@@ -296,7 +293,6 @@ private fun MangaScreenSmallImpl(
     onPreviewExpandedChange: (Boolean) -> Unit,
     onPreviewRetry: () -> Unit,
     onPreviewPageLoad: (Int) -> Unit,
-    onPreviewPageStateSync: (Int) -> Unit,
     onPreviewPageClick: (Long, Int) -> Unit,
 ) {
     val chapterListState = rememberLazyListState()
@@ -466,7 +462,6 @@ private fun MangaScreenSmallImpl(
                             onPreviewExpandedChange = onPreviewExpandedChange,
                             onPreviewRetry = onPreviewRetry,
                             onPreviewPageLoad = onPreviewPageLoad,
-                            onPreviewPageStateSync = onPreviewPageStateSync,
                             onPreviewPageClick = onPreviewPageClick,
                         )
                     }
@@ -561,7 +556,6 @@ fun MangaScreenLargeImpl(
     onPreviewExpandedChange: (Boolean) -> Unit,
     onPreviewRetry: () -> Unit,
     onPreviewPageLoad: (Int) -> Unit,
-    onPreviewPageStateSync: (Int) -> Unit,
     onPreviewPageClick: (Long, Int) -> Unit,
 ) {
     val layoutDirection = LocalLayoutDirection.current
@@ -713,7 +707,6 @@ fun MangaScreenLargeImpl(
                             onPreviewExpandedChange = onPreviewExpandedChange,
                             onPreviewRetry = onPreviewRetry,
                             onPreviewPageLoad = onPreviewPageLoad,
-                            onPreviewPageStateSync = onPreviewPageStateSync,
                             onPreviewPageClick = onPreviewPageClick,
                         )
                     }

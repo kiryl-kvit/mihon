@@ -1,13 +1,11 @@
 package eu.kanade.presentation.manga.components
 
-import android.graphics.BitmapFactory
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -80,7 +78,6 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
@@ -98,8 +95,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Precision
 import com.mikepenz.markdown.model.markdownAnnotator
 import com.mikepenz.markdown.model.markdownAnnotatorConfig
 import com.mikepenz.markdown.utils.getUnescapedTextInNode
@@ -114,7 +113,6 @@ import kotlinx.coroutines.flow.collectLatest
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.findChildOfType
-import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.i18n.MR
@@ -284,7 +282,6 @@ fun ExpandableMangaDescription(
     onPreviewExpandedChange: (Boolean) -> Unit,
     onPreviewRetry: () -> Unit,
     onPreviewPageLoad: (Int) -> Unit,
-    onPreviewPageStateSync: (Int) -> Unit,
     onPreviewPageClick: (Long, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -377,7 +374,6 @@ fun ExpandableMangaDescription(
                 onExpandedChange = onPreviewExpandedChange,
                 onRetry = onPreviewRetry,
                 onPageLoad = onPreviewPageLoad,
-                onPageStateSync = onPreviewPageStateSync,
                 onPageClick = onPreviewPageClick,
             )
         }
@@ -397,7 +393,6 @@ private fun MangaPreviewSection(
     onExpandedChange: (Boolean) -> Unit,
     onRetry: () -> Unit,
     onPageLoad: (Int) -> Unit,
-    onPageStateSync: (Int) -> Unit,
     onPageClick: (Long, Int) -> Unit,
 ) {
     Column(
@@ -466,7 +461,6 @@ private fun MangaPreviewSection(
                         size = size,
                         chapterId = state.chapterId,
                         onPageLoad = onPageLoad,
-                        onPageStateSync = onPageStateSync,
                         onPageClick = onPageClick,
                     )
                 }
@@ -481,7 +475,6 @@ private fun MangaPreviewGrid(
     size: MangaPreviewSizeUi,
     chapterId: Long?,
     onPageLoad: (Int) -> Unit,
-    onPageStateSync: (Int) -> Unit,
     onPageClick: (Long, Int) -> Unit,
 ) {
     val minTileWidth = when (size) {
@@ -506,7 +499,6 @@ private fun MangaPreviewGrid(
                             chapterId = chapterId,
                             modifier = Modifier.weight(1f),
                             onPageLoad = onPageLoad,
-                            onPageStateSync = onPageStateSync,
                             onPageClick = onPageClick,
                         )
                     }
@@ -524,7 +516,6 @@ private fun MangaPreviewTile(
     previewPage: MangaScreenModel.PreviewPage,
     chapterId: Long?,
     onPageLoad: (Int) -> Unit,
-    onPageStateSync: (Int) -> Unit,
     onPageClick: (Long, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -549,8 +540,7 @@ private fun MangaPreviewTile(
             when (status) {
                 Page.State.Ready -> {
                     MangaPreviewImage(
-                        previewPage = previewPage,
-                        onPageStateSync = onPageStateSync,
+                        page = previewPage.page,
                     )
                 }
                 Page.State.Queue,
@@ -600,36 +590,16 @@ private fun MangaPreviewTile(
 
 @Composable
 private fun MangaPreviewImage(
-    previewPage: MangaScreenModel.PreviewPage,
-    onPageStateSync: (Int) -> Unit,
+    page: eu.kanade.tachiyomi.ui.reader.model.ReaderPage,
 ) {
-    var bitmap by remember(previewPage.page.index, previewPage.page.stream) {
-        mutableStateOf<android.graphics.Bitmap?>(null)
-    }
-
-    LaunchedEffect(previewPage.page.index, previewPage.page.stream) {
-        val streamFn = previewPage.page.stream ?: run {
-            onPageStateSync(previewPage.page.index)
-            return@LaunchedEffect
-        }
-
-        bitmap = runCatching {
-            withIOContext {
-                streamFn().use(BitmapFactory::decodeStream)
-            }
-        }.getOrElse {
-            onPageStateSync(previewPage.page.index)
-            null
-        }
-    }
-
-    val imageBitmap = bitmap ?: return
-    LaunchedEffect(imageBitmap) {
-        onPageStateSync(previewPage.page.index)
-    }
-
-    Image(
-        bitmap = imageBitmap.asImageBitmap(),
+    AsyncImage(
+        model = ImageRequest.Builder(LocalContext.current)
+            .data(page)
+            .memoryCachePolicy(CachePolicy.DISABLED)
+            .diskCachePolicy(CachePolicy.DISABLED)
+            .precision(Precision.INEXACT)
+            .crossfade(false)
+            .build(),
         contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier = Modifier

@@ -409,8 +409,6 @@ class MangaScreenModel(
                     .map { page ->
                         PreviewPage(
                             page = page,
-                            status = page.status,
-                            progress = page.progress,
                         )
                     }
 
@@ -443,10 +441,7 @@ class MangaScreenModel(
     fun loadPreviewPage(pageIndex: Int) {
         val chapter = previewReaderChapter ?: return
         val page = chapter.pages?.getOrNull(pageIndex) ?: return
-        if (page.status == eu.kanade.tachiyomi.source.model.Page.State.Ready) {
-            updatePreviewPage(page)
-            return
-        }
+        if (page.status == eu.kanade.tachiyomi.source.model.Page.State.Ready) return
         if (previewPageJobs[pageIndex]?.isActive == true) return
 
         previewPageJobs = previewPageJobs + (
@@ -455,34 +450,9 @@ class MangaScreenModel(
                     chapter.pageLoader?.loadPage(page)
                 } catch (_: Throwable) {
                     // Page state carries the failure.
-                } finally {
-                    updatePreviewPage(page)
                 }
             }
             )
-    }
-
-    fun refreshPreviewPage(pageIndex: Int) {
-        val page = previewReaderChapter?.pages?.getOrNull(pageIndex) ?: return
-        updatePreviewPage(page)
-    }
-
-    private fun updatePreviewPage(page: ReaderPage) {
-        updatePreviewState { preview ->
-            preview.copy(
-                pages = preview.pages.map { previewPage ->
-                    if (previewPage.page.index == page.index) {
-                        previewPage.copy(
-                            page = page,
-                            status = page.status,
-                            progress = page.progress,
-                        )
-                    } else {
-                        previewPage
-                    }
-                },
-            )
-        }
     }
 
     private suspend fun getFirstPreviewChapter(state: State.Success): ChapterList.Item? {
@@ -1748,8 +1718,6 @@ class MangaScreenModel(
     @Immutable
     data class PreviewPage(
         val page: ReaderPage,
-        val status: eu.kanade.tachiyomi.source.model.Page.State,
-        val progress: Int,
     )
 }
 

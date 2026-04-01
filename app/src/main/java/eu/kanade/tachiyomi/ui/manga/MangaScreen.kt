@@ -196,7 +196,6 @@ class MangaScreen(
             onPreviewExpandedChange = screenModel::setPreviewExpanded,
             onPreviewRetry = screenModel::retryPreview,
             onPreviewPageLoad = screenModel::loadPreviewPage,
-            onPreviewPageStateSync = screenModel::refreshPreviewPage,
             onPreviewPageClick = { chapterId, pageIndex ->
                 scope.launch {
                     openChapter(
