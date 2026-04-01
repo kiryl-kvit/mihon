@@ -13,6 +13,11 @@ class LibraryPreferences(
     private val preferenceStore: PreferenceStore,
 ) {
 
+    val downloadedOnly: Preference<Boolean> = preferenceStore.getBoolean(
+        Preference.appStateKey("pref_downloaded_only"),
+        false,
+    )
+
     val displayMode: Preference<LibraryDisplayMode> = preferenceStore.getObjectFromString(
         "pref_display_mode_library",
         LibraryDisplayMode.default,

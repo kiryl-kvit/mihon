@@ -10,7 +10,6 @@ import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.core.preference.asState
 import eu.kanade.core.util.fastFilterNot
-import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
@@ -92,7 +91,6 @@ class LibraryScreenModel(
     private val getMergedManga: GetMergedManga = Injekt.get(),
     private val updateMergedManga: UpdateMergedManga = Injekt.get(),
     private val setMangaCategories: SetMangaCategories = Injekt.get(),
-    private val preferences: BasePreferences = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val coverCache: CoverCache = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
@@ -499,7 +497,7 @@ class LibraryScreenModel(
             libraryPreferences.languageBadge.changes(),
             libraryPreferences.autoUpdateMangaRestrictions.changes(),
 
-            preferences.downloadedOnly.changes(),
+            libraryPreferences.downloadedOnly.changes(),
             libraryPreferences.filterDownloaded.changes(),
             libraryPreferences.filterUnread.changes(),
             libraryPreferences.filterStarted.changes(),

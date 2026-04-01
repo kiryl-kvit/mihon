@@ -196,6 +196,12 @@ class ProfileManager(
                 baseKey = Preference.appStateKey("home_screen_startup_tab"),
             )
         }
+        if (currentVersion < 5) {
+            migrateProfileOwnedKeyToNamespaced(
+                sharedPreferences = sharedPreferences,
+                baseKey = Preference.appStateKey("pref_downloaded_only"),
+            )
+        }
 
         migrateKeyBackToGlobal(
             sharedPreferences = sharedPreferences,
@@ -343,6 +349,6 @@ class ProfileManager(
     }
 
     companion object {
-        private const val LEGACY_PROFILE_MIGRATION_VERSION = 4
+        private const val LEGACY_PROFILE_MIGRATION_VERSION = 5
     }
 }

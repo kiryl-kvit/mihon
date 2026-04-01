@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.Manga
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.fullType
@@ -22,7 +23,9 @@ class ChapterGetNextUnreadTest {
     fun setUp() {
         val context = mockk<Context>(relaxed = true)
         every { context.getString(any()) } returns ""
-        Injekt.addSingleton(fullType<BasePreferences>(), BasePreferences(context, InMemoryPreferenceStore()))
+        val preferenceStore = InMemoryPreferenceStore()
+        Injekt.addSingleton(fullType<BasePreferences>(), BasePreferences(context, preferenceStore))
+        Injekt.addSingleton(fullType<LibraryPreferences>(), LibraryPreferences(preferenceStore))
     }
 
     @Test

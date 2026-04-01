@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import mihon.feature.profiles.ui.ProfilePickerScreen
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
@@ -81,11 +82,12 @@ data object MoreTab : Tab {
 
 private class MoreScreenModel(
     private val downloadManager: DownloadManager = Injekt.get(),
-    preferences: BasePreferences = Injekt.get(),
+    basePreferences: BasePreferences = Injekt.get(),
+    libraryPreferences: LibraryPreferences = Injekt.get(),
 ) : ScreenModel {
 
-    var downloadedOnly by preferences.downloadedOnly.asState(screenModelScope)
-    var incognitoMode by preferences.incognitoMode.asState(screenModelScope)
+    var downloadedOnly by libraryPreferences.downloadedOnly.asState(screenModelScope)
+    var incognitoMode by basePreferences.incognitoMode.asState(screenModelScope)
 
     private var _downloadQueueState: MutableStateFlow<DownloadQueueState> = MutableStateFlow(DownloadQueueState.Stopped)
     val downloadQueueState: StateFlow<DownloadQueueState> = _downloadQueueState.asStateFlow()
