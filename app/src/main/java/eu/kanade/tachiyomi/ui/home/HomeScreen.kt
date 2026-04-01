@@ -28,6 +28,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,7 +38,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
 import eu.kanade.domain.source.service.GlobalSourcePreferences
-import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.extension.ExtensionManager
@@ -61,6 +62,7 @@ import mihon.core.common.resolveVisibleHomeScreenTabs
 import mihon.core.common.toHomeScreenTabs
 import mihon.feature.profiles.core.ProfileManager
 import mihon.feature.profiles.ui.ProfilePickerScreen
+import mihon.feature.profiles.ui.handleProfileShortcut
 import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
@@ -90,8 +92,10 @@ object HomeScreen : Screen() {
 
     @Composable
     override fun Content() {
+        val context = LocalContext.current
         val customPreferences = remember { Injekt.get<CustomPreferences>() }
         val profileManager = remember { Injekt.get<ProfileManager>() }
+        val uiPreferences = remember { Injekt.get<UiPreferences>() }
         val configuredTab by customPreferences.homeScreenStartupTab.collectAsState()
         val configuredTabs by customPreferences.homeScreenTabs.collectAsState()
         val configuredTabOrder by customPreferences.homeScreenTabOrder.collectAsState()
@@ -116,6 +120,7 @@ object HomeScreen : Screen() {
             resolveContentTab(resolveHomeScreenTab(HomeScreenTabs.Library, contentTabs, configuredTabOrder))
         }
         val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
         TabNavigator(
             tab = launchTab,
             key = TabNavigatorKey,
@@ -129,7 +134,14 @@ object HomeScreen : Screen() {
                                 renderedTabs.fastForEach {
                                     if (it == HomeScreenTabs.Profiles) {
                                         ProfileShortcutNavigationRailItem(onClick = {
-                                            navigator.push(ProfilePickerScreen())
+                                            scope.launch {
+                                                handleProfileShortcut(
+                                                    context = context,
+                                                    profileManager = profileManager,
+                                                    uiPreferences = uiPreferences,
+                                                    onOpenProfilePicker = { navigator.push(ProfilePickerScreen()) },
+                                                )
+                                            }
                                         })
                                     } else {
                                         TabNavigationRailItem(resolveContentTab(it))
@@ -152,7 +164,18 @@ object HomeScreen : Screen() {
                                     renderedTabs.fastForEach {
                                         if (it == HomeScreenTabs.Profiles) {
                                             ProfileShortcutNavigationBarItem(
-                                                onClick = { navigator.push(ProfilePickerScreen()) },
+                                                onClick = {
+                                                    scope.launch {
+                                                        handleProfileShortcut(
+                                                            context = context,
+                                                            profileManager = profileManager,
+                                                            uiPreferences = uiPreferences,
+                                                            onOpenProfilePicker = {
+                                                                navigator.push(ProfilePickerScreen())
+                                                            },
+                                                        )
+                                                    }
+                                                },
                                             )
                                         } else {
                                             TabNavigationBarItem(resolveContentTab(it))
@@ -215,7 +238,12 @@ object HomeScreen : Screen() {
                     openTabEvent.receiveAsFlow().collectLatest {
                         if (it == Tab.Profiles) {
                             if (HomeScreenTabs.Profiles in enabledTabs) {
-                                navigator.push(ProfilePickerScreen())
+                                handleProfileShortcut(
+                                    context = context,
+                                    profileManager = profileManager,
+                                    uiPreferences = uiPreferences,
+                                    onOpenProfilePicker = { navigator.push(ProfilePickerScreen()) },
+                                )
                             } else {
                                 goToFallbackTab()
                             }
@@ -306,14 +334,15 @@ object HomeScreen : Screen() {
 
     @Composable
     private fun RowScope.ProfileShortcutNavigationBarItem(onClick: () -> Unit) {
-        val title = stringResource(MR.strings.profiles_title)
+        val title = stringResource(MR.strings.action_switch)
+        val contentDescription = stringResource(MR.strings.profiles_switch_summary)
         NavigationBarItem(
             selected = false,
             onClick = onClick,
             icon = {
                 Icon(
                     imageVector = Icons.Outlined.AccountCircle,
-                    contentDescription = title,
+                    contentDescription = contentDescription,
                 )
             },
             label = {
@@ -330,14 +359,15 @@ object HomeScreen : Screen() {
 
     @Composable
     private fun ProfileShortcutNavigationRailItem(onClick: () -> Unit) {
-        val title = stringResource(MR.strings.profiles_title)
+        val title = stringResource(MR.strings.action_switch)
+        val contentDescription = stringResource(MR.strings.profiles_switch_summary)
         NavigationRailItem(
             selected = false,
             onClick = onClick,
             icon = {
                 Icon(
                     imageVector = Icons.Outlined.AccountCircle,
-                    contentDescription = title,
+                    contentDescription = contentDescription,
                 )
             },
             label = {

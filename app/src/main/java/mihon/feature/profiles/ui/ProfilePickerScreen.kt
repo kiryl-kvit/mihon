@@ -48,14 +48,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.fragment.app.FragmentActivity
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.util.system.AuthenticatorUtil.authenticate
 import kotlinx.coroutines.launch
 import mihon.feature.profiles.core.Profile
 import mihon.feature.profiles.core.ProfileManager
@@ -63,7 +60,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import tachiyomi.core.common.i18n.stringResource as contextStringResource
 
 class ProfilePickerScreen : Screen() {
 
@@ -83,21 +79,15 @@ class ProfilePickerScreen : Screen() {
             activeProfileId = activeProfile?.id,
             onProfileSelected = { profile ->
                 scope.launch {
-                    val authenticated = if (profileManager.profileRequiresUnlock(profile.id) &&
-                        context is FragmentActivity
-                    ) {
-                        context.authenticate(
-                            title = context.contextStringResource(MR.strings.unlock_app_title, profile.name),
-                            subtitle = null,
-                        )
-                    } else {
-                        true
+                    val switched = switchToProfile(
+                        context = context,
+                        profileManager = profileManager,
+                        uiPreferences = uiPreferences,
+                        profile = profile,
+                    )
+                    if (switched) {
+                        navigator.pop()
                     }
-                    if (!authenticated) return@launch
-
-                    profileManager.setActiveProfile(profile.id)
-                    setAppCompatDelegateThemeMode(uiPreferences.themeMode.get())
-                    navigator.pop()
                 }
             },
             onOpenManagement = null,

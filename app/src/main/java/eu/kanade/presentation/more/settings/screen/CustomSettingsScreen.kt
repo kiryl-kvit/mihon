@@ -273,7 +273,7 @@ object CustomSettingsScreen : SearchableSettings {
             HomeScreenTabs.History to stringResource(MR.strings.history),
             HomeScreenTabs.Browse to stringResource(MR.strings.browse),
             HomeScreenTabs.More to stringResource(MR.strings.label_more),
-            HomeScreenTabs.Profiles to stringResource(MR.strings.profiles_title),
+            HomeScreenTabs.Profiles to stringResource(MR.strings.profiles_switch_summary),
         )
     }
 
