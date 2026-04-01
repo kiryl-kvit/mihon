@@ -9,6 +9,7 @@
 - Manga merge
 - Browse → Feeds
 - Manga preview
+- Settings → Custom settings → Home screen tabs
 
 <table>
   <tr>
