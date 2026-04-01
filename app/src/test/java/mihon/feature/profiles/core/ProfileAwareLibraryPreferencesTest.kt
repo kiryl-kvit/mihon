@@ -165,11 +165,15 @@ class ProfileAwareLibraryPreferencesTest {
 
         override fun edit(): SharedPreferences.Editor = Editor()
 
-        override fun registerOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {
+        override fun registerOnSharedPreferenceChangeListener(
+            listener: SharedPreferences.OnSharedPreferenceChangeListener?,
+        ) {
             if (listener != null) listeners += listener
         }
 
-        override fun unregisterOnSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener?) {
+        override fun unregisterOnSharedPreferenceChangeListener(
+            listener: SharedPreferences.OnSharedPreferenceChangeListener?,
+        ) {
             if (listener != null) listeners -= listener
         }
 
@@ -241,7 +245,9 @@ class ProfileAwareLibraryPreferencesTest {
                     }
                 }
                 changedKeys.forEach { key ->
-                    listeners.forEach { listener -> listener.onSharedPreferenceChanged(this@FakeSharedPreferences, key) }
+                    listeners.forEach { listener ->
+                        listener.onSharedPreferenceChanged(this@FakeSharedPreferences, key)
+                    }
                 }
             }
         }
