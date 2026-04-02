@@ -419,8 +419,8 @@ private fun MangaPreviewSection(
                 Text(
                     text = pluralStringResource(
                         MR.plurals.pref_pages,
-                        state.pageCount.coerceIn(1, 30),
-                        state.pageCount.coerceIn(1, 30),
+                        state.pageCount,
+                        state.pageCount,
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.secondaryItemAlpha(),

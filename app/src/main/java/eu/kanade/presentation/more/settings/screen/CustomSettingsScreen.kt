@@ -247,14 +247,14 @@ object CustomSettingsScreen : SearchableSettings {
                         subtitle = stringResource(MR.strings.pref_enable_manga_preview_summary),
                     ),
                     Preference.PreferenceItem.SliderPreference(
-                        value = previewPageCount.coerceIn(1, 30),
+                        value = previewPageCount,
                         preference = customPreferences.mangaPreviewPageCount,
-                        valueRange = 1..30,
+                        valueRange = CustomPreferences.MANGA_PREVIEW_PAGE_COUNT_RANGE,
                         title = stringResource(MR.strings.pref_manga_preview_page_count),
-                        valueString = previewPageCount.coerceIn(1, 30).toString(),
+                        valueString = previewPageCount.toString(),
                         enabled = previewEnabled,
                         onValueChanged = {
-                            customPreferences.mangaPreviewPageCount.set(it.coerceIn(1, 30))
+                            customPreferences.mangaPreviewPageCount.set(it)
                         },
                     ),
                     Preference.PreferenceItem.ListPreference(

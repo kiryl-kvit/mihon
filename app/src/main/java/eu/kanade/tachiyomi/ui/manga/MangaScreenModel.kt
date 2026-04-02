@@ -167,7 +167,7 @@ class MangaScreenModel(
     val mangaPreviewPageCount by customPreferences.mangaPreviewPageCount.asState(screenModelScope)
     val mangaPreviewSize by customPreferences.mangaPreviewSize.asState(screenModelScope)
 
-    private val previewLoaderState = MutableStateFlow(MangaPreviewState())
+    private val previewLoaderState = MutableStateFlow(MangaPreviewState(pageCount = mangaPreviewPageCount))
     val previewState = previewLoaderState.asStateFlow()
 
     private var previewReaderChapter: ReaderChapter? = null
@@ -199,14 +199,13 @@ class MangaScreenModel(
     init {
         screenModelScope.launchIO {
             customPreferences.mangaPreviewPageCount.changes().collectLatest { newCount ->
-                val clampedCount = newCount.coerceIn(1, 30)
                 updatePreviewState { preview ->
                     val updatedPages = if (preview.isExpanded && preview.pages.isNotEmpty()) {
-                        preview.pages.take(clampedCount)
+                        preview.pages.take(newCount)
                     } else {
                         preview.pages
                     }
-                    preview.copy(pageCount = clampedCount, pages = updatedPages)
+                    preview.copy(pageCount = newCount, pages = updatedPages)
                 }
                 if (previewState.value.isExpanded) {
                     loadPreview(force = true)
@@ -379,7 +378,7 @@ class MangaScreenModel(
                     error = null,
                     chapterId = null,
                     pages = emptyList(),
-                    pageCount = mangaPreviewPageCount.coerceIn(1, 30),
+                    pageCount = mangaPreviewPageCount,
                 )
             }
 
@@ -405,7 +404,7 @@ class MangaScreenModel(
 
                 val loadedPages = readerChapter.pages
                     .orEmpty()
-                    .take(mangaPreviewPageCount.coerceIn(1, 30))
+                    .take(mangaPreviewPageCount)
                     .map { page ->
                         PreviewPage(
                             page = page,
@@ -419,7 +418,7 @@ class MangaScreenModel(
                         error = null,
                         chapterId = previewChapter.chapter.id,
                         pages = loadedPages,
-                        pageCount = mangaPreviewPageCount.coerceIn(1, 30),
+                        pageCount = mangaPreviewPageCount,
                     )
                 }
             }.onFailure { error ->
@@ -431,7 +430,7 @@ class MangaScreenModel(
                         error = error,
                         chapterId = null,
                         pages = emptyList(),
-                        pageCount = mangaPreviewPageCount.coerceIn(1, 30),
+                        pageCount = mangaPreviewPageCount,
                     )
                 }
             }
@@ -468,7 +467,7 @@ class MangaScreenModel(
         updatePreviewState {
             MangaPreviewState(
                 isExpanded = false,
-                pageCount = mangaPreviewPageCount.coerceIn(1, 30),
+                pageCount = mangaPreviewPageCount,
             )
         }
     }
@@ -483,7 +482,7 @@ class MangaScreenModel(
         previewReaderChapter?.unref()
         previewReaderChapter = null
         if (resetState) {
-            previewLoaderState.value = MangaPreviewState(pageCount = mangaPreviewPageCount.coerceIn(1, 30))
+            previewLoaderState.value = MangaPreviewState(pageCount = mangaPreviewPageCount)
         }
     }
 
