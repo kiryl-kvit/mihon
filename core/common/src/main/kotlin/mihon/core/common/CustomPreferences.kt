@@ -4,12 +4,17 @@ import dev.icerock.moko.resources.StringResource
 import mihon.core.common.HomeScreenTabs
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.coerceIn
 import tachiyomi.core.common.preference.getEnum
 import tachiyomi.i18n.MR
 
 class CustomPreferences(
     preferenceStore: PreferenceStore,
 ) {
+    companion object {
+        val MANGA_PREVIEW_PAGE_COUNT_RANGE = 1..50
+    }
+
     val homeScreenStartupTab: Preference<HomeScreenTabs> = preferenceStore.getEnum(
         Preference.appStateKey("home_screen_startup_tab"),
         HomeScreenTabs.Library,
@@ -35,7 +40,7 @@ class CustomPreferences(
     val mangaPreviewPageCount: Preference<Int> = preferenceStore.getInt(
         Preference.appStateKey("manga_preview_page_count"),
         5,
-    )
+    ).coerceIn(MANGA_PREVIEW_PAGE_COUNT_RANGE)
 
     val mangaPreviewSize: Preference<MangaPreviewSize> = preferenceStore.getEnum(
         Preference.appStateKey("manga_preview_size"),
