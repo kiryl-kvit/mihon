@@ -26,23 +26,27 @@ class ReaderTransitionView @JvmOverloads constructor(context: Context, attrs: At
     }
 
     fun bind(transition: ChapterTransition, downloadManager: DownloadManager) {
-        data = transition.to?.manga?.let { toManga ->
-            Data(
-                transition = transition,
-                currChapterDownloaded = transition.from.pageLoader?.isLocal == true,
-                goingToChapterDownloaded = toManga.source == tachiyomi.source.local.LocalSource.ID ||
-                    transition.to?.chapter?.let { goingToChapter ->
-                        downloadManager.isChapterDownloaded(
-                            chapterName = goingToChapter.name,
-                            chapterScanlator = goingToChapter.scanlator,
-                            chapterUrl = goingToChapter.url,
-                            mangaTitle = toManga.title,
-                            sourceId = toManga.source,
-                            skipCache = true,
-                        )
-                    } ?: false,
-            )
-        }
+        val toChapter = transition.to
+        val toManga = toChapter?.manga
+
+        data = Data(
+            transition = transition,
+            currChapterDownloaded = transition.from.pageLoader?.isLocal == true,
+            goingToChapterDownloaded =
+            if (toManga == null) {
+                false
+            } else {
+                toManga.source == tachiyomi.source.local.LocalSource.ID ||
+                    downloadManager.isChapterDownloaded(
+                        chapterName = toChapter.chapter.name,
+                        chapterScanlator = toChapter.chapter.scanlator,
+                        chapterUrl = toChapter.chapter.url,
+                        mangaTitle = toManga.title,
+                        sourceId = toManga.source,
+                        skipCache = true,
+                    )
+            },
+        )
     }
 
     @Composable
