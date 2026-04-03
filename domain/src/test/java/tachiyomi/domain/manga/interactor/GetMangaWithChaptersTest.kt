@@ -81,6 +81,55 @@ class GetMangaWithChaptersTest {
         job.join()
     }
 
+    @Test
+    fun `subscribe bypasses merged chapters when requested`() = runTest {
+        val mangaId = 1L
+        val mergedMemberId = 2L
+        val manga = Manga.create().copy(id = mangaId)
+        val mangaFlow = MutableStateFlow(manga)
+        val mergesFlow = MutableStateFlow(
+            listOf(
+                MangaMerge(targetId = mangaId, mangaId = mangaId, position = 0),
+                MangaMerge(targetId = mangaId, mangaId = mergedMemberId, position = 1),
+            ),
+        )
+        val targetChaptersFlow = MutableStateFlow(
+            listOf(
+                chapter(id = 101, mangaId = mangaId, sourceOrder = 1),
+            ),
+        )
+
+        coEvery { mangaRepository.getMangaByIdAsFlow(mangaId) } returns mangaFlow
+        every { mergedMangaRepository.subscribeGroupByMangaId(mangaId) } returns mergesFlow
+        coEvery { chapterRepository.getChapterByMangaIdAsFlow(mangaId, false) } returns targetChaptersFlow
+
+        val emissions = mutableListOf<Pair<Manga, List<Chapter>>>()
+
+        val job = launch {
+            getMangaWithChapters.subscribe(mangaId, bypassMerge = true)
+                .take(1)
+                .toList(emissions)
+        }
+
+        advanceUntilIdle()
+
+        emissions.single().second.map(Chapter::id) shouldBe listOf(101L)
+
+        job.join()
+    }
+
+    @Test
+    fun `awaitChapters bypasses merged chapters when requested`() = runTest {
+        val mangaId = 1L
+        val chapters = listOf(
+            chapter(id = 101, mangaId = mangaId, sourceOrder = 1),
+        )
+
+        coEvery { chapterRepository.getChapterByMangaId(mangaId, false) } returns chapters
+
+        getMangaWithChapters.awaitChapters(mangaId, bypassMerge = true) shouldBe chapters
+    }
+
     private fun chapter(
         id: Long,
         mangaId: Long,

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -38,7 +39,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -228,14 +228,15 @@ fun EditDisplayNameDialog(
 fun ManageMergeDialog(
     targetId: Long,
     members: List<MangaScreenModel.MergeMember>,
+    removableIds: List<Long>,
     onDismissRequest: () -> Unit,
     onMove: (Int, Int) -> Unit,
     onSaveOrder: () -> Unit,
     onOpenManga: (Long) -> Unit,
+    onToggleRemoveMember: (Long) -> Unit,
     onRemoveMembers: (List<Long>) -> Unit,
     onUnmergeAll: () -> Unit,
 ) {
-    val removableIds = remember { mutableStateListOf<Long>() }
     val listState = rememberLazyListState()
     val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
         val fromIndex = members.indexOfFirst { it.id == from.key }
@@ -269,13 +270,7 @@ fun ManageMergeDialog(
                                 member = member,
                                 isTarget = member.id == targetId,
                                 markedForRemoval = member.id in removableIds,
-                                onToggleRemove = {
-                                    if (member.id in removableIds) {
-                                        removableIds.remove(member.id)
-                                    } else {
-                                        removableIds.add(member.id)
-                                    }
-                                },
+                                onToggleRemove = { onToggleRemoveMember(member.id) },
                                 onOpenManga = onOpenManga,
                             )
                         }
@@ -300,7 +295,7 @@ fun ManageMergeDialog(
                 }
                 TextButton(
                     enabled = removableIds.isNotEmpty(),
-                    onClick = { onRemoveMembers(removableIds.toList()) },
+                    onClick = { onRemoveMembers(removableIds) },
                 ) {
                     Text(text = stringResource(MR.strings.action_remove))
                 }
@@ -319,7 +314,15 @@ private fun ReorderableCollectionItemScope.ManageMergeItem(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    ElevatedCard {
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = if (markedForRemoval) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            },
+        ),
+    ) {
         Box {
             Row(
                 modifier = Modifier
@@ -348,8 +351,19 @@ private fun ReorderableCollectionItemScope.ManageMergeItem(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (markedForRemoval) {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
+                    if (markedForRemoval) {
+                        Text(
+                            text = stringResource(MR.strings.action_remove),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
                 }
 
                 Box {

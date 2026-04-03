@@ -48,6 +48,7 @@ import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -77,6 +78,7 @@ import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.SetMangaDefaultChapterFlags
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.Chapter
@@ -96,6 +98,7 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.domain.manga.repository.MangaRepository
+import tachiyomi.domain.source.model.SourceNotInstalledException
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.i18n.MR
@@ -109,6 +112,7 @@ class MangaScreenModel(
     private val lifecycle: Lifecycle,
     private val mangaId: Long,
     private val isFromSource: Boolean,
+    private val bypassMerge: Boolean = false,
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val trackPreferences: TrackPreferences = Injekt.get(),
     readerPreferences: ReaderPreferences = Injekt.get(),
@@ -127,6 +131,7 @@ class MangaScreenModel(
     private val setExcludedScanlators: SetExcludedScanlators = Injekt.get(),
     private val setMangaChapterFlags: SetMangaChapterFlags = Injekt.get(),
     private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags = Injekt.get(),
+    private val getChaptersByMangaId: GetChaptersByMangaId = Injekt.get(),
     private val setReadStatus: SetReadStatus = Injekt.get(),
     private val updateChapter: UpdateChapter = Injekt.get(),
     private val updateManga: UpdateManga = Injekt.get(),
@@ -215,7 +220,11 @@ class MangaScreenModel(
 
         screenModelScope.launchIO {
             combine(
-                getMangaAndChapters.subscribe(mangaId, applyScanlatorFilter = true).distinctUntilChanged(),
+                getMangaAndChapters.subscribe(
+                    mangaId,
+                    applyScanlatorFilter = true,
+                    bypassMerge = bypassMerge,
+                ).distinctUntilChanged(),
                 downloadCache.changes,
                 downloadManager.queueState,
             ) { mangaAndChapters, _, _ -> mangaAndChapters }
@@ -235,40 +244,42 @@ class MangaScreenModel(
                 }
         }
 
-        screenModelScope.launchIO {
-            combine(
-                getMergedManga.subscribeGroupByMangaId(mangaId).distinctUntilChanged(),
-                getExcludedScanlators.subscribe(mangaId).distinctUntilChanged(),
-            ) { _, _ -> Unit }
-                .flowWithLifecycle(lifecycle)
-                .collectLatest {
-                    val mergedMemberIds = getMergedMemberIds()
-                    updateSuccessState {
-                        it.copy(
-                            excludedScanlators = mergedMemberIds.flatMapTo(linkedSetOf()) { memberId ->
-                                getExcludedScanlators.await(memberId)
-                            },
-                        )
+        if (!bypassMerge) {
+            screenModelScope.launchIO {
+                combine(
+                    getMergedManga.subscribeGroupByMangaId(mangaId).distinctUntilChanged(),
+                    getExcludedScanlators.subscribe(mangaId).distinctUntilChanged(),
+                ) { _, _ -> Unit }
+                    .flowWithLifecycle(lifecycle)
+                    .collectLatest {
+                        val mergedMemberIds = getMergedMemberIds()
+                        updateSuccessState {
+                            it.copy(
+                                excludedScanlators = mergedMemberIds.flatMapTo(linkedSetOf()) { memberId ->
+                                    getExcludedScanlators.await(memberId)
+                                },
+                            )
+                        }
                     }
-                }
-        }
+            }
 
-        screenModelScope.launchIO {
-            combine(
-                getMergedManga.subscribeGroupByMangaId(mangaId).distinctUntilChanged(),
-                getAvailableScanlators.subscribe(mangaId).distinctUntilChanged(),
-            ) { _, _ -> Unit }
-                .flowWithLifecycle(lifecycle)
-                .collectLatest {
-                    val mergedMemberIds = getMergedMemberIds()
-                    updateSuccessState {
-                        it.copy(
-                            availableScanlators = mergedMemberIds.flatMapTo(linkedSetOf()) { memberId ->
-                                getAvailableScanlators.await(memberId)
-                            },
-                        )
+            screenModelScope.launchIO {
+                combine(
+                    getMergedManga.subscribeGroupByMangaId(mangaId).distinctUntilChanged(),
+                    getAvailableScanlators.subscribe(mangaId).distinctUntilChanged(),
+                ) { _, _ -> Unit }
+                    .flowWithLifecycle(lifecycle)
+                    .collectLatest {
+                        val mergedMemberIds = getMergedMemberIds()
+                        updateSuccessState {
+                            it.copy(
+                                availableScanlators = mergedMemberIds.flatMapTo(linkedSetOf()) { memberId ->
+                                    getAvailableScanlators.await(memberId)
+                                },
+                            )
+                        }
                     }
-                }
+            }
         }
 
         observeDownloads()
@@ -276,15 +287,28 @@ class MangaScreenModel(
         screenModelScope.launchIO {
             val manga = getMangaAndChapters.awaitManga(mangaId)
             val mergePresentation = getMergePresentation(manga)
-            val chapters = getMangaAndChapters.awaitChapters(mangaId, applyScanlatorFilter = true)
+            val chapters = getMangaAndChapters.awaitChapters(
+                mangaId,
+                applyScanlatorFilter = true,
+                bypassMerge = bypassMerge,
+            )
                 .toChapterListItems(manga)
 
             if (!manga.favorite) {
                 setMangaDefaultChapterFlags.await(manga)
             }
 
-            val needRefreshInfo = !manga.initialized
-            val needRefreshChapter = chapters.isEmpty()
+            val membersNeedingRefresh = getMergeMembersNeedingRefresh()
+            val needRefreshInfo = if (mergePresentation.memberIds.size > 1) {
+                membersNeedingRefresh.any { !it.initialized }
+            } else {
+                !manga.initialized
+            }
+            val needRefreshChapter = if (mergePresentation.memberIds.size > 1) {
+                membersNeedingRefresh.isNotEmpty()
+            } else {
+                chapters.isEmpty()
+            }
 
             // Show what we have earlier
             mutableState.update {
@@ -500,8 +524,11 @@ class MangaScreenModel(
         val state = successState ?: return
         try {
             withIOContext {
-                val networkManga = state.source.getMangaDetails(state.manga.toSManga())
-                updateManga.awaitUpdateFromSource(state.manga, networkManga, manualFetch)
+                getMembersToRefreshFromSource(manualFetch).forEach { memberManga ->
+                    val source = Injekt.get<SourceManager>().getOrStub(memberManga.source)
+                    val networkManga = source.getMangaDetails(memberManga.toSManga())
+                    updateManga.awaitUpdateFromSource(memberManga, networkManga, manualFetch)
+                }
             }
         } catch (e: Throwable) {
             // Ignore early hints "errors" that aren't handled by OkHttp
@@ -800,22 +827,31 @@ class MangaScreenModel(
         val state = successState ?: return
         try {
             withIOContext {
-                val chapters = state.source.getChapterList(state.manga.toSManga())
+                val newChapters = buildList {
+                    getMembersToRefreshFromSource(manualFetch).forEach { memberManga ->
+                        val source = Injekt.get<SourceManager>().getOrStub(memberManga.source)
+                        val chapters = source.getChapterList(memberManga.toSManga())
 
-                val newChapters = syncChaptersWithSource.await(
-                    chapters,
-                    state.manga,
-                    state.source,
-                    manualFetch,
-                )
+                        addAll(
+                            syncChaptersWithSource.await(
+                                chapters,
+                                memberManga,
+                                source,
+                                manualFetch,
+                            ),
+                        )
+                    }
+                }
 
-                if (manualFetch) {
+                if (manualFetch && newChapters.isNotEmpty()) {
                     downloadNewChapters(newChapters)
                 }
             }
         } catch (e: Throwable) {
             val message = if (e is NoChaptersException) {
                 context.stringResource(MR.strings.no_chapters_error)
+            } else if (e is SourceNotInstalledException) {
+                context.stringResource(MR.strings.loader_not_implemented_error)
             } else {
                 logcat(LogPriority.ERROR, e)
                 with(context) { e.formattedMessage }
@@ -1366,6 +1402,7 @@ class MangaScreenModel(
         data class ManageMerge(
             val targetId: Long,
             val members: ImmutableList<MergeMember>,
+            val removableIds: ImmutableList<Long> = persistentListOf(),
         ) : Dialog
         data class Migrate(val target: Manga, val current: Manga) : Dialog
         data class RemoveMergedManga(val members: ImmutableList<Manga>, val containsLocalManga: Boolean) : Dialog
@@ -1459,9 +1496,14 @@ class MangaScreenModel(
 
     fun removeMergedMembers(mangaIds: List<Long>) {
         val state = successState ?: return
+        val dialog = state.dialog as? Dialog.ManageMerge
         screenModelScope.launchIO {
             if (mangaIds.isEmpty()) return@launchIO
-            updateMergedManga.awaitRemoveMembers(getVisibleMangaId(state.manga.id), mangaIds)
+            if (dialog != null) {
+                saveManageMerge(dialog, mangaIds)
+            } else {
+                updateMergedManga.awaitRemoveMembers(getVisibleMangaId(state.manga.id), mangaIds)
+            }
             dismissDialog()
         }
     }
@@ -1478,15 +1520,48 @@ class MangaScreenModel(
                 val item = removeAt(fromIndex)
                 add(toIndex, item)
             }
-            state.copy(dialog = dialog.copy(members = reordered.toImmutableList()))
+            val reorderedRemovalIds = reordered.mapNotNull { member ->
+                member.id.takeIf { it in dialog.removableIds }
+            }.toImmutableList()
+            state.copy(dialog = dialog.copy(members = reordered.toImmutableList(), removableIds = reorderedRemovalIds))
+        }
+    }
+
+    fun toggleMergedMemberRemoval(mangaId: Long) {
+        updateSuccessState { state ->
+            val dialog = state.dialog as? Dialog.ManageMerge ?: return@updateSuccessState state
+            if (mangaId == dialog.targetId || dialog.members.none { it.id == mangaId }) return@updateSuccessState state
+
+            val updatedIds = dialog.removableIds.toMutableList().apply {
+                if (mangaId in this) {
+                    remove(mangaId)
+                } else {
+                    add(mangaId)
+                }
+            }.toImmutableList()
+
+            state.copy(dialog = dialog.copy(removableIds = updatedIds))
         }
     }
 
     fun saveMergeOrder() {
         val dialog = successState?.dialog as? Dialog.ManageMerge ?: return
         screenModelScope.launchIO {
-            updateMergedManga.awaitMerge(dialog.targetId, dialog.members.map { it.id })
+            saveManageMerge(dialog, dialog.removableIds)
             dismissDialog()
+        }
+    }
+
+    private suspend fun saveManageMerge(dialog: Dialog.ManageMerge, mangaIdsToRemove: Collection<Long>) {
+        val mangaIdsToRemoveSet = mangaIdsToRemove.toSet()
+        val remainingIds = dialog.members.map { it.id }
+            .filterNot(mangaIdsToRemoveSet::contains)
+        val targetId = remainingIds.firstOrNull { it == dialog.targetId } ?: remainingIds.firstOrNull()
+
+        if (targetId != null && remainingIds.size > 1) {
+            updateMergedManga.awaitMerge(targetId, remainingIds)
+        } else {
+            updateMergedManga.awaitDeleteGroup(dialog.targetId)
         }
     }
 
@@ -1522,6 +1597,7 @@ class MangaScreenModel(
     }
 
     suspend fun getVisibleMangaId(mangaId: Long): Long {
+        if (bypassMerge) return mangaId
         return getMergedManga.awaitVisibleTargetId(mangaId)
     }
 
@@ -1534,6 +1610,7 @@ class MangaScreenModel(
     }
 
     private suspend fun getMergedMemberIds(): List<Long> {
+        if (bypassMerge) return listOf(mangaId)
         return getMergedManga.awaitGroupByMangaId(mangaId)
             .sortedBy { it.position }
             .map { it.mangaId }
@@ -1556,6 +1633,35 @@ class MangaScreenModel(
             mangaRepository.getMangaById(memberId).let { memberManga ->
                 block(memberManga)
             }
+        }
+    }
+
+    private suspend fun getMergeMembers(): List<Manga> {
+        return getMergedMemberIds().mapNotNull { memberId ->
+            runCatching { mangaRepository.getMangaById(memberId) }.getOrNull()
+        }
+    }
+
+    private suspend fun getMergeMembersNeedingRefresh(): List<Manga> {
+        val members = getMergeMembers()
+        if (members.size <= 1) return members
+
+        return members.filter { memberManga ->
+            !memberManga.initialized ||
+                getChaptersByMangaId.await(memberManga.id, applyScanlatorFilter = false).isEmpty()
+        }
+    }
+
+    private suspend fun getMembersToRefreshFromSource(manualFetch: Boolean): List<Manga> {
+        val mergedMembers = getMergeMembers()
+        if (mergedMembers.size <= 1) {
+            return listOf(successState?.manga ?: mangaRepository.getMangaById(mangaId))
+        }
+
+        return if (manualFetch) {
+            mergedMembers
+        } else {
+            getMergeMembersNeedingRefresh()
         }
     }
 
