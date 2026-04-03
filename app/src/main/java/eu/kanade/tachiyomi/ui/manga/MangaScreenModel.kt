@@ -1496,9 +1496,14 @@ class MangaScreenModel(
 
     fun removeMergedMembers(mangaIds: List<Long>) {
         val state = successState ?: return
+        val dialog = state.dialog as? Dialog.ManageMerge
         screenModelScope.launchIO {
             if (mangaIds.isEmpty()) return@launchIO
-            updateMergedManga.awaitRemoveMembers(getVisibleMangaId(state.manga.id), mangaIds)
+            if (dialog != null) {
+                saveManageMerge(dialog, mangaIds)
+            } else {
+                updateMergedManga.awaitRemoveMembers(getVisibleMangaId(state.manga.id), mangaIds)
+            }
             dismissDialog()
         }
     }
@@ -1542,8 +1547,21 @@ class MangaScreenModel(
     fun saveMergeOrder() {
         val dialog = successState?.dialog as? Dialog.ManageMerge ?: return
         screenModelScope.launchIO {
-            updateMergedManga.awaitMerge(dialog.targetId, dialog.members.map { it.id })
+            saveManageMerge(dialog, dialog.removableIds)
             dismissDialog()
+        }
+    }
+
+    private suspend fun saveManageMerge(dialog: Dialog.ManageMerge, mangaIdsToRemove: Collection<Long>) {
+        val mangaIdsToRemoveSet = mangaIdsToRemove.toSet()
+        val remainingIds = dialog.members.map { it.id }
+            .filterNot(mangaIdsToRemoveSet::contains)
+        val targetId = remainingIds.firstOrNull { it == dialog.targetId } ?: remainingIds.firstOrNull()
+
+        if (targetId != null && remainingIds.size > 1) {
+            updateMergedManga.awaitMerge(targetId, remainingIds)
+        } else {
+            updateMergedManga.awaitDeleteGroup(dialog.targetId)
         }
     }
 
