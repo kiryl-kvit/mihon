@@ -18,12 +18,16 @@ class GetMangaWithChapters(
     private val mergedMangaRepository: MergedMangaRepository,
 ) {
 
-    suspend fun subscribe(id: Long, applyScanlatorFilter: Boolean = false): Flow<Pair<Manga, List<Chapter>>> {
+    suspend fun subscribe(
+        id: Long,
+        applyScanlatorFilter: Boolean = false,
+        bypassMerge: Boolean = false,
+    ): Flow<Pair<Manga, List<Chapter>>> {
         return combine(
             mangaRepository.getMangaByIdAsFlow(id),
             mergedMangaRepository.subscribeGroupByMangaId(id),
         ) { manga, merges ->
-            manga to merges
+            manga to if (bypassMerge) emptyList() else merges
         }
             .flatMapLatest { (manga, merges) ->
                 if (merges.isEmpty()) {
@@ -40,8 +44,16 @@ class GetMangaWithChapters(
         return mangaRepository.getMangaById(id)
     }
 
-    suspend fun awaitChapters(id: Long, applyScanlatorFilter: Boolean = false): List<Chapter> {
-        val merges = mergedMangaRepository.getGroupByMangaId(id)
+    suspend fun awaitChapters(
+        id: Long,
+        applyScanlatorFilter: Boolean = false,
+        bypassMerge: Boolean = false,
+    ): List<Chapter> {
+        val merges = if (bypassMerge) {
+            emptyList()
+        } else {
+            mergedMangaRepository.getGroupByMangaId(id)
+        }
         return if (merges.isEmpty()) {
             chapterRepository.getChapterByMangaId(id, applyScanlatorFilter)
         } else {

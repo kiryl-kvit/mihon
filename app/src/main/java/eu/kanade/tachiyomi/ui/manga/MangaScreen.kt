@@ -72,6 +72,7 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 class MangaScreen(
     private val mangaId: Long,
     val fromSource: Boolean = false,
+    private val bypassMerge: Boolean = false,
 ) : Screen(), AssistContentScreen {
 
     private var assistUrl: String? = null
@@ -91,7 +92,7 @@ class MangaScreen(
         val scope = rememberCoroutineScope()
         val lifecycleOwner = LocalLifecycleOwner.current
         val screenModel = rememberScreenModel {
-            MangaScreenModel(context, lifecycleOwner.lifecycle, mangaId, fromSource)
+            MangaScreenModel(context, lifecycleOwner.lifecycle, mangaId, fromSource, bypassMerge = bypassMerge)
         }
 
         val state by screenModel.state.collectAsStateWithLifecycle()
@@ -257,10 +258,15 @@ class MangaScreen(
                 ManageMergeDialog(
                     targetId = dialog.targetId,
                     members = dialog.members,
+                    removableIds = dialog.removableIds,
                     onDismissRequest = onDismissRequest,
                     onMove = screenModel::reorderMergeMembers,
                     onSaveOrder = screenModel::saveMergeOrder,
-                    onOpenManga = { navigator.push(MangaScreen(it)) },
+                    onOpenManga = { mangaIdToOpen ->
+                        screenModel.dismissDialog()
+                        navigator.push(MangaScreen(mangaIdToOpen, bypassMerge = true))
+                    },
+                    onToggleRemoveMember = screenModel::toggleMergedMemberRemoval,
                     onRemoveMembers = screenModel::removeMergedMembers,
                     onUnmergeAll = screenModel::unmergeAll,
                 )
