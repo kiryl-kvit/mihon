@@ -8,8 +8,8 @@
 - Settings → Custom settings → Duplicate detection
 - Settings → Custom settings → User profiles
 - Library → Settings → Group
-- Manga merge
 - Browse → Feeds
+- Manga merge
 - Manga preview
 
 <table>
