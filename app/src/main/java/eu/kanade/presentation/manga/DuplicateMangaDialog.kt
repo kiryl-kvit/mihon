@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +64,7 @@ import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.DuplicateMangaMatchReason
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
+import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
@@ -71,6 +73,7 @@ import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -179,6 +182,8 @@ private fun DuplicateMangaListItem(
 ) {
     val source = getSource()
     val manga = duplicate.manga
+    val duplicatePreferences = remember { Injekt.get<GlobalDuplicatePreferences>() }
+    val extendedEnabled by duplicatePreferences.extendedDuplicateDetectionEnabled.collectAsState()
 
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -287,22 +292,24 @@ private fun DuplicateMangaListItem(
                         )
                     }
 
-                FlowRow(
-                    modifier = Modifier.padding(top = MaterialTheme.padding.extraSmall),
-                    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
-                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
-                ) {
-                    Badge(
-                        text = stringResource(MR.strings.possible_duplicates_score, duplicate.scorePercent),
-                        color = duplicate.scoreBadgeColor(),
-                        textColor = duplicate.scoreBadgeTextColor(),
-                    )
-                    duplicate.reasons.forEach { reason ->
+                if (extendedEnabled) {
+                    FlowRow(
+                        modifier = Modifier.padding(top = MaterialTheme.padding.extraSmall),
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
+                    ) {
                         Badge(
-                            text = reason.label(),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            textColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            text = stringResource(MR.strings.possible_duplicates_score, duplicate.scorePercent),
+                            color = duplicate.scoreBadgeColor(),
+                            textColor = duplicate.scoreBadgeTextColor(),
                         )
+                        duplicate.reasons.forEach { reason ->
+                            Badge(
+                                text = reason.label(),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                textColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
                     }
                 }
 
