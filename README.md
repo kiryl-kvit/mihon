@@ -4,13 +4,13 @@
 
 - Settings → Custom settings → Application startup screen
 - Settings → Custom settings → Enable extensions auto-update
-- Library → Settings → Group
+- Settings → Custom settings → Home screen tabs
+- Settings → Custom settings → Duplicate detection
 - Settings → Custom settings → User profiles
+- Library → Settings → Group
 - Manga merge
 - Browse → Feeds
 - Manga preview
-- Settings → Custom settings → Home screen tabs
-- Settings → Custom settings → Duplicate detection
 
 <table>
   <tr>
