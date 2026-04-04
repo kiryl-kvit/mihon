@@ -46,7 +46,8 @@ class GetDuplicateLibraryMangaTest {
     private val coverWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_COVER_WEIGHT)
     private val genreWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_GENRE_WEIGHT)
     private val statusWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_STATUS_WEIGHT)
-    private val chapterCountWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_CHAPTER_COUNT_WEIGHT)
+    private val chapterCountWeightPreference =
+        MutablePreference(GlobalDuplicatePreferences.DEFAULT_CHAPTER_COUNT_WEIGHT)
     private val titleWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_TITLE_WEIGHT)
     private val libraryFlow = MutableStateFlow<List<LibraryManga>>(emptyList())
     private val mergeFlow = MutableStateFlow<List<MangaMerge>>(emptyList())
@@ -350,7 +351,8 @@ class GetDuplicateLibraryMangaTest {
     @Test
     fun `subscribe updates when library entries change`() = runTest {
         val current = manga(id = 1, title = "Alpha Series", description = "Short description")
-        val trackedDuplicate = libraryManga(manga = manga(id = 2, title = "Totally Different Title"), totalChapters = 12)
+        val trackedDuplicate =
+            libraryManga(manga = manga(id = 2, title = "Totally Different Title"), totalChapters = 12)
         val trackerId = 7L
         val remoteId = 99L
 
