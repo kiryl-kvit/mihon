@@ -175,6 +175,7 @@
     <string name="action_not_now">Not now</string>
     <string name="action_add_anyway">Add anyway</string>
     <string name="action_open">Open</string>
+    <string name="action_duplicates">Duplicate</string>
     <string name="action_keep">Keep</string>
     <string name="action_merge">Merge</string>
     <string name="action_set_display_name">Set display name</string>
@@ -802,7 +803,17 @@
     <string name="remove_from_library">Remove from library</string>
     <string name="unknown_title">Unknown title</string>
     <string name="possible_duplicates_title">Possible duplicates</string>
-    <string name="possible_duplicates_summary">You have entries in your library with a similar name.\n\nSelect an entry to migrate or add anyway.</string>
+    <string name="possible_duplicates_summary">You have entries in your library that may match this manga.\n\nSelect an entry to migrate or add anyway.</string>
+    <string name="possible_duplicates_score">Score: %1$d%%</string>
+    <string name="possible_duplicates_reason_author">Author</string>
+    <string name="possible_duplicates_reason_artist">Artist</string>
+    <string name="possible_duplicates_reason_chapter_count">Chapters</string>
+    <string name="possible_duplicates_reason_cover">Cover</string>
+    <string name="possible_duplicates_reason_description">Description</string>
+    <string name="possible_duplicates_reason_genre">Genre</string>
+    <string name="possible_duplicates_reason_status">Status</string>
+    <string name="possible_duplicates_reason_tracker">Tracker</string>
+    <string name="possible_duplicates_reason_title">Title</string>
     <string name="manga_added_library">Added to library</string>
     <string name="manga_removed_library">Removed from library</string>
     <string name="manga_info_expand">More</string>
@@ -814,6 +825,39 @@
     <string name="source_not_installed">Source not installed: %1$s</string>
     <string name="snack_add_to_library">Add to library?</string>
     <string name="description_placeholder">No description</string>
+
+    <string name="pref_duplicate_detection">Duplicate detection</string>
+    <string name="pref_duplicate_detection_summary">Configure the extended duplicate matching used by the Duplicate action and add warnings.</string>
+    <string name="pref_duplicate_detection_behavior">Behavior</string>
+    <string name="pref_duplicate_detection_confidence_budget">Confidence budget</string>
+    <string name="pref_duplicate_detection_preview">Preview</string>
+    <string name="pref_duplicate_detection_actions">Actions</string>
+    <string name="pref_enable_extended_duplicate_detection">Enable extended duplicate detection</string>
+    <string name="pref_enable_extended_duplicate_detection_summary">Uses richer multi-signal matching. When disabled, duplicate detection falls back to legacy title-based logic.</string>
+    <string name="pref_duplicate_detection_minimum_score">Minimum match score</string>
+    <string name="pref_duplicate_detection_minimum_score_summary">Candidates below this score are ignored unless matched by tracker.</string>
+    <string name="pref_duplicate_detection_matching_info">Weights contribute to confidence, but score alone is not always enough. Duplicate detection also checks for convincing title, description, creator, genre, chapter-count, or tracker evidence before showing a match.</string>
+    <string name="pref_duplicate_detection_unused_budget">Unused confidence budget: %1$d / %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_description">Helps when titles differ. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_author">Confirms matching creators. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_artist">Confirms matching artists. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_cover">Applies after cover comparison completes. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_genre">Adds supporting genre overlap. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_status">Adds supporting status agreement. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_chapter_count">Adds supporting chapter-count similarity. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_summary_title">Primary title match signal. Allocated: %1$d / Max: %2$d</string>
+    <string name="pref_duplicate_detection_weight_description">Description weight</string>
+    <string name="pref_duplicate_detection_weight_author">Author weight</string>
+    <string name="pref_duplicate_detection_weight_artist">Artist weight</string>
+    <string name="pref_duplicate_detection_weight_cover">Cover weight</string>
+    <string name="pref_duplicate_detection_weight_genre">Genre weight</string>
+    <string name="pref_duplicate_detection_weight_status">Status weight</string>
+    <string name="pref_duplicate_detection_weight_chapter_count">Chapter count weight</string>
+    <string name="pref_duplicate_detection_weight_title">Title weight</string>
+    <string name="pref_duplicate_detection_reset_settings">Reset duplicate detection settings</string>
+    <string name="pref_duplicate_detection_reset_settings_summary">Restore the default threshold and confidence budget.</string>
+    <string name="pref_duplicate_detection_match_preview">Match preview</string>
+    <string name="pref_duplicate_detection_match_preview_summary">Preview how current duplicate settings affect example matches. Coming in a future update.</string>
 
     <!-- Manga chapters -->
     <string name="display_mode_chapter">Chapter %1$s</string>

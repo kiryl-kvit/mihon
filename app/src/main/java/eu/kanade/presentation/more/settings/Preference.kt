@@ -62,7 +62,7 @@ sealed class Preference {
             val valueString: String? = null,
             val preference: PreferenceData<Int>? = null,
             val valueRange: IntProgression = 0..1,
-            @IntRange(from = 0) val steps: Int = with(valueRange) { (last - first) - 1 },
+            @IntRange(from = 0) val steps: Int = with(valueRange) { ((last - first) - 1).coerceAtLeast(0) },
             override val enabled: Boolean = true,
             override val isProfileSpecific: Boolean = preference?.isProfileSpecificKey() ?: false,
             override val onValueChanged: suspend (value: Int) -> Unit = {},
@@ -169,6 +169,7 @@ sealed class Preference {
 
         data class InfoPreference(
             override val title: String,
+            val showIcon: Boolean = true,
         ) : PreferenceItem<String, Unit>() {
             override val enabled: Boolean = true
             override val subtitle: String? = null

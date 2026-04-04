@@ -182,7 +182,10 @@ internal fun PreferenceItem(
                 )
             }
             is Preference.PreferenceItem.InfoPreference -> {
-                InfoWidget(text = item.title)
+                InfoWidget(
+                    text = item.title,
+                    showIcon = item.showIcon,
+                )
             }
             is Preference.PreferenceItem.CustomPreference -> {
                 item.content()

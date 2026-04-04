@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.insertSeparators
+import eu.kanade.domain.manga.interactor.GetEnhancedDuplicateLibraryManga
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.presentation.history.HistoryUiModel
@@ -37,11 +38,10 @@ import tachiyomi.domain.history.interactor.GetNextChapters
 import tachiyomi.domain.history.interactor.RemoveHistory
 import tachiyomi.domain.history.model.HistoryWithRelations
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.GetMergedManga
+import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.asMangaCover
 import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.domain.source.service.SourceManager
@@ -51,7 +51,7 @@ import uy.kohesive.injekt.api.get
 class HistoryScreenModel(
     private val addTracks: AddTracks = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
-    private val getDuplicateLibraryManga: GetDuplicateLibraryManga = Injekt.get(),
+    private val getEnhancedDuplicateLibraryManga: GetEnhancedDuplicateLibraryManga = Injekt.get(),
     private val getHistory: GetHistory = Injekt.get(),
     private val getManga: GetManga = Injekt.get(),
     private val getMergedManga: GetMergedManga = Injekt.get(),
@@ -195,7 +195,7 @@ class HistoryScreenModel(
         screenModelScope.launchIO {
             val manga = getManga.await(mangaId) ?: return@launchIO
 
-            val duplicates = getDuplicateLibraryManga(manga)
+            val duplicates = getEnhancedDuplicateLibraryManga(manga)
             if (duplicates.isNotEmpty()) {
                 mutableState.update { it.copy(dialog = Dialog.DuplicateManga(manga, duplicates)) }
                 return@launchIO
@@ -271,7 +271,7 @@ class HistoryScreenModel(
     sealed interface Dialog {
         data object DeleteAll : Dialog
         data class Delete(val history: HistoryWithRelations) : Dialog
-        data class DuplicateManga(val manga: Manga, val duplicates: List<MangaWithChapterCount>) : Dialog
+        data class DuplicateManga(val manga: Manga, val duplicates: List<DuplicateMangaCandidate>) : Dialog
         data class ChangeCategory(
             val manga: Manga,
             val initialSelection: ImmutableList<CheckboxState<Category>>,

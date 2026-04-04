@@ -236,6 +236,13 @@ object CustomSettingsScreen : SearchableSettings {
                         preference = globalCustomPreferences.extensionsAutoUpdates,
                         title = stringResource(MR.strings.pref_extensions_auto_update),
                     ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_duplicate_detection),
+                        subtitle = stringResource(MR.strings.pref_duplicate_detection_summary),
+                        onClick = {
+                            navigator.push(DuplicateDetectionSettingsScreen)
+                        },
+                    ),
                 ),
             ),
             Preference.PreferenceGroup(

@@ -21,6 +21,7 @@ dependencies {
 
     implementation(libs.bundles.kotlinx.coroutines)
     implementation(libs.bundles.serialization)
+    implementation(libs.stringSimilarity)
 
     implementation(libs.unifile)
 

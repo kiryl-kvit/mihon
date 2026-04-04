@@ -11,7 +11,6 @@ import tachiyomi.data.UpdateStrategyColumnAdapter
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaUpdate
-import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.repository.MangaRepository
 import java.time.LocalDate
 import java.time.ZoneId
@@ -107,17 +106,6 @@ class MangaRepositoryImpl(
         }
     }
 
-    override suspend fun getDuplicateLibraryManga(id: Long, title: String): List<MangaWithChapterCount> {
-        return handler.awaitList {
-            mangasQueries.getDuplicateLibraryManga(
-                profileProvider.activeProfileId,
-                id,
-                title,
-                MangaMapper::mapMangaWithChapterCount,
-            )
-        }
-    }
-
     override suspend fun getUpcomingManga(statuses: Set<Long>): Flow<List<Manga>> {
         val epochMillis = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond() * 1000
         return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
@@ -198,6 +186,27 @@ class MangaRepositoryImpl(
                     .executeAsOne()
                     .let { MangaMapper.mapManga(it) }
             }
+        }
+    }
+
+    override suspend fun getCoverHash(mangaId: Long, coverLastModified: Long): Long? {
+        return handler.awaitOneOrNull {
+            manga_cover_hashesQueries.getCoverHash(
+                mangaId = mangaId,
+                profileId = profileProvider.activeProfileId,
+                coverLastModified = coverLastModified,
+            )
+        }
+    }
+
+    override suspend fun upsertCoverHash(mangaId: Long, coverLastModified: Long, hash: Long) {
+        handler.await {
+            manga_cover_hashesQueries.upsertCoverHash(
+                mangaId = mangaId,
+                profileId = profileProvider.activeProfileId,
+                coverLastModified = coverLastModified,
+                hash = hash,
+            )
         }
     }
 

@@ -10,6 +10,7 @@
 - Browse → Feeds
 - Manga preview
 - Settings → Custom settings → Home screen tabs
+- Settings → Custom settings → Duplicate detection
 
 <table>
   <tr>

@@ -4,7 +4,6 @@ import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import tachiyomi.data.Mangas
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.model.MangaWithChapterCount
 
 object MangaMapper {
     fun mapManga(manga: Mangas): Manga {
@@ -201,68 +200,5 @@ object MangaMapper {
                 notes,
             ),
         ),
-    )
-
-    fun mapMangaWithChapterCount(
-        id: Long,
-        @Suppress("UNUSED_PARAMETER")
-        profileId: Long,
-        source: Long,
-        url: String,
-        artist: String?,
-        author: String?,
-        description: String?,
-        genre: List<String>?,
-        title: String,
-        displayName: String?,
-        status: Long,
-        thumbnailUrl: String?,
-        favorite: Boolean,
-        lastUpdate: Long?,
-        nextUpdate: Long?,
-        initialized: Boolean,
-        viewerFlags: Long,
-        chapterFlags: Long,
-        coverLastModified: Long,
-        dateAdded: Long,
-        updateStrategy: UpdateStrategy,
-        calculateInterval: Long,
-        lastModifiedAt: Long,
-        favoriteModifiedAt: Long?,
-        version: Long,
-        isSyncing: Long,
-        notes: String,
-        totalCount: Long,
-    ): MangaWithChapterCount = MangaWithChapterCount(
-        manga = mapManga(
-            id,
-            profileId,
-            source,
-            url,
-            artist,
-            author,
-            description,
-            genre,
-            title,
-            displayName,
-            status,
-            thumbnailUrl,
-            favorite,
-            lastUpdate,
-            nextUpdate,
-            initialized,
-            viewerFlags,
-            chapterFlags,
-            coverLastModified,
-            dateAdded,
-            updateStrategy,
-            calculateInterval,
-            lastModifiedAt,
-            favoriteModifiedAt,
-            version,
-            isSyncing,
-            notes,
-        ),
-        chapterCount = totalCount,
     )
 }

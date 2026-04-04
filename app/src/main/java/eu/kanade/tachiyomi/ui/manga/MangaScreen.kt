@@ -157,6 +157,9 @@ class MangaScreen(
                     screenModel.showTrackDialog()
                 }
             },
+            onDuplicatesClicked = screenModel::showDuplicateDialog.takeIf {
+                successState.isFromSource && successState.duplicateCandidates.isNotEmpty()
+            },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, screenModel.source!!) } },
             onFilterButtonClicked = screenModel::showSettingsDialog,
             onRefresh = screenModel::fetchAllFromSource,

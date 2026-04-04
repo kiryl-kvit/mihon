@@ -203,6 +203,7 @@ fun MangaActionRow(
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
+    onDuplicatesClicked: (() -> Unit)?,
     onEditIntervalClicked: (() -> Unit)?,
     onEditCategory: (() -> Unit)?,
     modifier: Modifier = Modifier,
@@ -262,6 +263,14 @@ fun MangaActionRow(
                 color = defaultActionButtonColor,
                 onClick = onWebViewClicked,
                 onLongClick = onWebViewLongClicked,
+            )
+        }
+        if (onDuplicatesClicked != null) {
+            MangaActionButton(
+                title = stringResource(MR.strings.action_duplicates),
+                icon = Icons.Filled.Warning,
+                color = MaterialTheme.colorScheme.error,
+                onClick = onDuplicatesClicked,
             )
         }
     }
