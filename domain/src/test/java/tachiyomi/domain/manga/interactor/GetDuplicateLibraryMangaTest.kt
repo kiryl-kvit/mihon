@@ -375,14 +375,13 @@ class GetDuplicateLibraryMangaTest {
 
         val initialResult = getDuplicateLibraryManga(current).single()
 
-        initialResult.scoreMax shouldBe
-            GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET - GlobalDuplicatePreferences.DEFAULT_COVER_WEIGHT
+        initialResult.scoreMax shouldBe GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET - 14
 
         titleWeightPreference.set(0)
 
         val updatedResult = getDuplicateLibraryManga(current).single()
 
-        updatedResult.scoreMax shouldBe initialResult.scoreMax - GlobalDuplicatePreferences.DEFAULT_TITLE_WEIGHT
+        updatedResult.scoreMax shouldBe initialResult.scoreMax - 17
         (updatedResult.score < initialResult.score) shouldBe true
     }
 
