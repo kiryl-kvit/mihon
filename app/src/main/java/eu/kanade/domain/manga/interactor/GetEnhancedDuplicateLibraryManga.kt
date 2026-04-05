@@ -24,6 +24,8 @@ class GetEnhancedDuplicateLibraryManga(
 ) {
 
     suspend operator fun invoke(manga: Manga): List<DuplicateMangaCandidate> {
+        if (!manga.initialized) return emptyList()
+
         val duplicates = getDuplicateLibraryManga(manga)
         return enhanceDuplicateLibraryManga(application, manga, duplicates)
     }
@@ -35,13 +37,17 @@ class GetEnhancedDuplicateLibraryManga(
         return manga
             .distinctUntilChanged()
             .flatMapLatest { currentManga ->
-                combine(
-                    getDuplicateLibraryManga.subscribe(flowOf(currentManga), scope),
-                    enhancementConfigFlow(),
-                ) { candidates, _ -> candidates }
-                    .mapLatest { candidates ->
-                        enhanceDuplicateLibraryManga(application, currentManga, candidates)
-                    }
+                if (!currentManga.initialized) {
+                    flowOf(emptyList())
+                } else {
+                    combine(
+                        getDuplicateLibraryManga.subscribe(flowOf(currentManga), scope),
+                        enhancementConfigFlow(),
+                    ) { candidates, _ -> candidates }
+                        .mapLatest { candidates ->
+                            enhanceDuplicateLibraryManga(application, currentManga, candidates)
+                        }
+                }
             }
             .distinctUntilChanged()
             .stateIn(

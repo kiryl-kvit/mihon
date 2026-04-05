@@ -66,6 +66,16 @@ class GetEnhancedDuplicateLibraryMangaTest {
     }
 
     @Test
+    fun `invoke skips duplicate detection until manga metadata is initialized`() = runTest {
+        val manga = manga(1, "Frieren", initialized = false)
+
+        interactor(manga) shouldBe emptyList()
+
+        coVerify(exactly = 0) { getDuplicateLibraryManga(any()) }
+        coVerify(exactly = 0) { enhanceDuplicateLibraryManga(application, any(), any()) }
+    }
+
+    @Test
     fun `subscribe re-enhances when cover weight changes`() = runTest {
         val manga = manga(1, "Frieren")
         val baseCandidates = listOf(candidate(2, 40, coverHashChecked = false))
@@ -100,11 +110,48 @@ class GetEnhancedDuplicateLibraryMangaTest {
         }
     }
 
-    private fun manga(id: Long, title: String): Manga {
+    @Test
+    fun `subscribe waits for metadata initialization before emitting duplicates`() = runTest {
+        val uninitializedManga = manga(1, "Frieren", initialized = false)
+        val initializedManga = uninitializedManga.copy(initialized = true)
+        val baseCandidates = listOf(candidate(2, 40, coverHashChecked = false))
+        val enhancedCandidates = listOf(candidate(2, 54, coverHashChecked = true))
+        val mangaFlow = MutableStateFlow(uninitializedManga)
+        val duplicateFlow = MutableStateFlow(baseCandidates)
+
+        every {
+            getDuplicateLibraryManga.subscribe(any(), any())
+        } returns duplicateFlow.asStateFlow()
+        coEvery {
+            enhanceDuplicateLibraryManga(application, initializedManga, baseCandidates)
+        } returns enhancedCandidates
+
+        val subscriptionScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        try {
+            val results = interactor.subscribe(mangaFlow, subscriptionScope)
+            val emissions = mutableListOf<List<DuplicateMangaCandidate>>()
+            val job = subscriptionScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                results.take(2).toList(emissions)
+            }
+
+            testScheduler.advanceUntilIdle()
+            mangaFlow.value = initializedManga
+            testScheduler.advanceUntilIdle()
+            job.join()
+
+            emissions shouldBe listOf(emptyList(), enhancedCandidates)
+            coVerify(exactly = 1) { enhanceDuplicateLibraryManga(application, initializedManga, baseCandidates) }
+        } finally {
+            subscriptionScope.cancel()
+        }
+    }
+
+    private fun manga(id: Long, title: String, initialized: Boolean = true): Manga {
         return Manga.create().copy(
             id = id,
             source = id,
             title = title,
+            initialized = initialized,
         )
     }
 
