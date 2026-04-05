@@ -151,31 +151,36 @@ class LibraryScreenModel(
         }
 
         screenModelScope.launchIO {
-            combine(
-                state
+            observeGroupedLibraryPages(
+                libraryData = state
                     .dropWhile { !it.libraryData.isInitialized }
                     .map { it.libraryData }
                     .distinctUntilChanged(),
-                libraryPreferences.groupType.changes(),
-            ) { data, groupType ->
-                groupType to data.favorites
-                    .applyGrouping(data.categories, data.showSystemCategory, groupType)
-                    .applySort(
+                groupType = libraryPreferences.groupType.changes(),
+                sortingMode = libraryPreferences.sortingMode.changes(),
+                randomSortSeed = libraryPreferences.randomSortSeed.changes(),
+                applyGrouping = { data, groupType ->
+                    data.favorites.applyGrouping(data.categories, data.showSystemCategory, groupType)
+                },
+                applySort = { pages, data, groupType, sortingMode, randomSortSeed ->
+                    pages.applySort(
                         favoritesById = data.favoritesById,
                         trackMap = data.tracksMap,
                         loggedInTrackerIds = data.loggedInTrackerIds,
                         groupType = groupType,
+                        globalSort = sortingMode,
+                        randomSortSeed = randomSortSeed,
                     )
-            }
-                .collectLatest { (groupType, groupedFavorites) ->
-                    mutableState.update { state ->
-                        state.copy(
-                            isLoading = false,
-                            groupedFavorites = groupedFavorites,
-                            groupType = groupType,
-                        )
-                    }
+                },
+            ).collectLatest { (groupType, groupedFavorites) ->
+                mutableState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        groupedFavorites = groupedFavorites,
+                        groupType = groupType,
+                    )
                 }
+            }
         }
 
         combine(
@@ -422,6 +427,8 @@ class LibraryScreenModel(
         trackMap: Map<Long, List<Track>>,
         loggedInTrackerIds: Set<Long>,
         groupType: LibraryGroupType,
+        globalSort: LibrarySort,
+        randomSortSeed: Int,
     ): List<LibraryPage> {
         val sortAlphabetically: (LibraryItem, LibraryItem) -> Int = { manga1, manga2 ->
             val title1 = manga1.libraryManga.manga.presentationTitle().lowercase()
@@ -486,13 +493,13 @@ class LibraryScreenModel(
 
         return map { page ->
             val sort = if (groupType == LibraryGroupType.Category) {
-                page.category.effectiveLibrarySort(libraryPreferences.sortingMode.get())
+                page.category.effectiveLibrarySort(globalSort)
             } else {
-                libraryPreferences.sortingMode.get()
+                globalSort
             }
             if (sort.type == LibrarySort.Type.Random) {
                 return@map page.copy(
-                    itemIds = page.itemIds.shuffled(Random(libraryPreferences.randomSortSeed.get())),
+                    itemIds = page.itemIds.shuffled(Random(randomSortSeed)),
                 )
             }
 
@@ -1150,5 +1157,30 @@ class LibraryScreenModel(
             }
             return LibraryToolbarTitle(title, count)
         }
+    }
+}
+
+internal fun observeGroupedLibraryPages(
+    libraryData: Flow<LibraryScreenModel.LibraryData>,
+    groupType: Flow<LibraryGroupType>,
+    sortingMode: Flow<LibrarySort>,
+    randomSortSeed: Flow<Int>,
+    applyGrouping: (LibraryScreenModel.LibraryData, LibraryGroupType) -> List<LibraryPage>,
+    applySort: (
+        pages: List<LibraryPage>,
+        data: LibraryScreenModel.LibraryData,
+        groupType: LibraryGroupType,
+        sortingMode: LibrarySort,
+        randomSortSeed: Int,
+    ) -> List<LibraryPage>,
+): Flow<Pair<LibraryGroupType, List<LibraryPage>>> {
+    return combine(
+        libraryData,
+        groupType,
+        sortingMode,
+        randomSortSeed,
+    ) { data, groupType, sortingMode, randomSortSeed ->
+        val pages = applyGrouping(data, groupType)
+        groupType to applySort(pages, data, groupType, sortingMode, randomSortSeed)
     }
 }
