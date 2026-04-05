@@ -12,7 +12,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -40,6 +43,7 @@ fun BrowseMangaPreviewSheet(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    var hasRequestedPreview by rememberSaveable(mangaId) { mutableStateOf(false) }
     val screenModel = object : Screen {
         override val key: ScreenKey = "browse-preview-screen-$mangaId"
 
@@ -59,8 +63,10 @@ fun BrowseMangaPreviewSheet(
     val state by screenModel.state.collectAsStateWithLifecycle()
     val previewState by screenModel.previewState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(state) {
-        if (state is MangaScreenModel.State.Success) {
+    LaunchedEffect(state, hasRequestedPreview, previewState.chapterId) {
+        val currentState = state as? MangaScreenModel.State.Success ?: return@LaunchedEffect
+        if (!hasRequestedPreview && !currentState.isRefreshingData && previewState.chapterId == null) {
+            hasRequestedPreview = true
             screenModel.setPreviewExpanded(true)
         }
     }

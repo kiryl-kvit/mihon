@@ -52,6 +52,7 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -460,6 +461,9 @@ class MangaScreenModel(
                     )
                 }
             }.onFailure { error ->
+                if (error is CancellationException) {
+                    return@onFailure
+                }
                 clearPreviewResources(resetState = false, cancelLoadJob = false)
                 updatePreviewState {
                     it.copy(
