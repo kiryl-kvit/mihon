@@ -7,6 +7,7 @@
 - Settings → Custom settings → Home screen tabs
 - Settings → Custom settings → Duplicate detection
 - Settings → Custom settings → User profiles
+- Settings → Custom settings → Browse and Feeds long press
 - Library → Settings → Group
 - Browse → Feeds
 - Manga merge
