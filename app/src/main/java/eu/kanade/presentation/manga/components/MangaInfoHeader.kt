@@ -60,6 +60,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -428,12 +429,6 @@ fun SharedMangaPreviewSection(
     onPageLoad: (Int) -> Unit,
     onPageClick: (Long, Int) -> Unit,
 ) {
-    val subtitlePageCount = if (state.chapterId != null && !state.isLoading && state.error == null) {
-        state.pages.size
-    } else {
-        state.pageCount
-    }
-
     Column(
         modifier = Modifier
             .padding(horizontal = 16.dp)
@@ -445,26 +440,16 @@ fun SharedMangaPreviewSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .minimumInteractiveComponentSize()
                 .clickable { onExpandedChange(!state.isExpanded) },
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = stringResource(MR.strings.manga_preview_section_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text = pluralStringResource(
-                        MR.plurals.pref_pages,
-                        subtitlePageCount,
-                        subtitlePageCount,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.secondaryItemAlpha(),
-                )
-            }
+            Text(
+                text = stringResource(MR.strings.manga_preview_section_title),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
             val image = AnimatedImageVector.animatedVectorResource(R.drawable.anim_caret_down)
             Icon(
                 painter = rememberAnimatedVectorPainter(image, !state.isExpanded),
