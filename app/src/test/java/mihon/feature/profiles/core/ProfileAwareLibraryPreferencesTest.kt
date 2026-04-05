@@ -22,6 +22,7 @@ import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 
 class ProfileAwareLibraryPreferencesTest {
 
@@ -262,6 +263,136 @@ class ProfileAwareLibraryPreferencesTest {
         )
     }
 
+    @Test
+    fun `duplicate detection settings stay isolated per profile`() {
+        val fixture = createFixture()
+
+        with(fixture.duplicatePreferences) {
+            extendedDuplicateDetectionEnabled.set(true)
+            minimumMatchScore.set(41)
+            coverWeight.set(20)
+            titleWeight.set(30)
+        }
+
+        fixture.activeProfileId.value = 2L
+
+        with(fixture.duplicatePreferences) {
+            extendedDuplicateDetectionEnabled.get() shouldBe false
+            minimumMatchScore.get() shouldBe DuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE
+            coverWeight.get() shouldBe DuplicatePreferences.DEFAULT_COVER_WEIGHT
+            titleWeight.get() shouldBe DuplicatePreferences.DEFAULT_TITLE_WEIGHT
+
+            extendedDuplicateDetectionEnabled.set(true)
+            minimumMatchScore.set(18)
+            coverWeight.set(7)
+            titleWeight.set(12)
+        }
+
+        fixture.activeProfileId.value = 1L
+
+        with(fixture.duplicatePreferences) {
+            extendedDuplicateDetectionEnabled.get() shouldBe true
+            minimumMatchScore.get() shouldBe 41
+            coverWeight.get() shouldBe 20
+            titleWeight.get() shouldBe 30
+        }
+
+        fixture.activeProfileId.value = 2L
+
+        with(fixture.duplicatePreferences) {
+            extendedDuplicateDetectionEnabled.get() shouldBe true
+            minimumMatchScore.get() shouldBe 18
+            coverWeight.get() shouldBe 7
+            titleWeight.get() shouldBe 12
+        }
+    }
+
+    @Test
+    fun `duplicate detection settings are included in profile-owned preferences`() {
+        val key = createFixture().duplicatePreferences.extendedDuplicateDetectionEnabled.key()
+
+        key shouldBe ProfileAwarePreferenceStore.Namespace.namespacedKey(
+            "extended_duplicate_detection_enabled",
+            1L,
+        )
+    }
+
+    @Test
+    fun `duplicate detection preference flow follows active profile`() = runTest {
+        val fixture = createFixture()
+        fixture.duplicatePreferences.minimumMatchScore.set(37)
+
+        val values = mutableListOf<Int>()
+        val job = launch {
+            fixture.duplicatePreferences.minimumMatchScore.changes().take(4).toList(values)
+        }
+
+        advanceUntilIdle()
+        values.last() shouldBe 37
+
+        fixture.activeProfileId.value = 2L
+        advanceUntilIdle()
+        values.last() shouldBe DuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE
+
+        fixture.duplicatePreferences.minimumMatchScore.set(22)
+        advanceUntilIdle()
+        values.last() shouldBe 22
+
+        job.cancel()
+    }
+
+    @Test
+    fun `legacy duplicate detection settings copy to every profile before cleanup`() {
+        val sharedPreferences = FakeSharedPreferences().apply {
+            edit()
+                .putBoolean("extended_duplicate_detection_enabled", true)
+                .putInt("extended_duplicate_detection_minimum_match_score", 33)
+                .putInt("extended_duplicate_detection_cover_weight", 12)
+                .commit()
+        }
+
+        val migration = ProfilePreferenceMigration(sharedPreferences)
+        val profileIds = listOf(1L, 2L, 5L)
+
+        migration.copyLegacyPreferenceKeysToProfiles(
+            profileIds = profileIds,
+            profileKeys = DuplicatePreferences.profileKeys,
+        )
+
+        profileIds.forEach { profileId ->
+            sharedPreferences.getBoolean(
+                ProfileAwarePreferenceStore.Namespace.namespacedKey(
+                    "extended_duplicate_detection_enabled",
+                    profileId,
+                ),
+                false,
+            ) shouldBe true
+            sharedPreferences.getInt(
+                ProfileAwarePreferenceStore.Namespace.namespacedKey(
+                    "extended_duplicate_detection_minimum_match_score",
+                    profileId,
+                ),
+                0,
+            ) shouldBe 33
+            sharedPreferences.getInt(
+                ProfileAwarePreferenceStore.Namespace.namespacedKey(
+                    "extended_duplicate_detection_cover_weight",
+                    profileId,
+                ),
+                0,
+            ) shouldBe 12
+        }
+
+        migration.cleanupLegacyPreferenceKeys(
+            profileId = 1L,
+            profileKeys = DuplicatePreferences.profileKeys,
+        )
+
+        sharedPreferences.contains("extended_duplicate_detection_enabled") shouldBe false
+        sharedPreferences.contains("extended_duplicate_detection_minimum_match_score") shouldBe false
+        sharedPreferences.contains("extended_duplicate_detection_cover_weight") shouldBe false
+    }
+
     private fun createFixture(): Fixture {
         val activeProfileId = MutableStateFlow(1L)
         val backing = AndroidPreferenceStore(
@@ -277,6 +408,7 @@ class ProfileAwareLibraryPreferencesTest {
         return Fixture(
             activeProfileId = activeProfileId,
             libraryPreferences = LibraryPreferences(preferenceStore),
+            duplicatePreferences = DuplicatePreferences(preferenceStore),
             customPreferences = CustomPreferences(preferenceStore),
         )
     }
@@ -284,6 +416,7 @@ class ProfileAwareLibraryPreferencesTest {
     private data class Fixture(
         val activeProfileId: MutableStateFlow<Long>,
         val libraryPreferences: LibraryPreferences,
+        val duplicatePreferences: DuplicatePreferences,
         val customPreferences: CustomPreferences,
     )
 

@@ -26,17 +26,17 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 
 class GetEnhancedDuplicateLibraryMangaTest {
 
     private val application = mockk<Application>()
     private val getDuplicateLibraryManga = mockk<GetDuplicateLibraryManga>()
     private val enhanceDuplicateLibraryManga = mockk<EnhanceDuplicateLibraryManga>()
-    private val duplicatePreferences = mockk<GlobalDuplicatePreferences>()
+    private val duplicatePreferences = mockk<DuplicatePreferences>()
     private val extendedEnabledPreference = MutablePreference(true)
-    private val minimumMatchScorePreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE)
-    private val coverWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_COVER_WEIGHT)
+    private val minimumMatchScorePreference = MutablePreference(DuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE)
+    private val coverWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_COVER_WEIGHT)
 
     private val interactor = GetEnhancedDuplicateLibraryManga(
         application = application,

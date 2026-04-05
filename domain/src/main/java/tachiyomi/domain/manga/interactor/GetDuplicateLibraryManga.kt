@@ -19,7 +19,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaMerge
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.manga.repository.MergedMangaRepository
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
 import java.util.Locale
@@ -32,7 +32,7 @@ class GetDuplicateLibraryManga(
     private val mangaRepository: MangaRepository,
     private val mergedMangaRepository: MergedMangaRepository,
     private val trackRepository: TrackRepository,
-    private val duplicatePreferences: GlobalDuplicatePreferences,
+    private val duplicatePreferences: DuplicatePreferences,
 ) {
 
     private val normalizedLevenshtein = NormalizedLevenshtein()
@@ -309,7 +309,7 @@ class GetDuplicateLibraryManga(
 
         if (reasons.isEmpty()) return null
 
-        score = score.coerceIn(0, GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET)
+        score = score.coerceIn(0, DuplicatePreferences.TOTAL_SCORE_BUDGET)
         if (score < config.minimumMatchScore && DuplicateMangaMatchReason.TRACKER !in reasons) return null
 
         val hasCreatorMatch = authorMatched || artistMatched
@@ -573,15 +573,15 @@ class GetDuplicateLibraryManga(
         return (weight * overlapScale).roundToInt().coerceAtLeast(1)
     }
 
-    private fun GlobalDuplicatePreferences.toConfig(): DuplicateConfig {
+    private fun DuplicatePreferences.toConfig(): DuplicateConfig {
         return DuplicateConfig(
             extendedEnabled = extendedDuplicateDetectionEnabled.get(),
-            minimumMatchScore = minimumMatchScore.get().coerceIn(0, GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET),
+            minimumMatchScore = minimumMatchScore.get().coerceIn(0, DuplicatePreferences.TOTAL_SCORE_BUDGET),
             weights = getWeightBudget().toExtendedWeights(),
         )
     }
 
-    private fun GlobalDuplicatePreferences.DuplicateWeightBudget.toExtendedWeights(): ExtendedWeights {
+    private fun DuplicatePreferences.DuplicateWeightBudget.toExtendedWeights(): ExtendedWeights {
         return ExtendedWeights(
             description = description,
             author = author,

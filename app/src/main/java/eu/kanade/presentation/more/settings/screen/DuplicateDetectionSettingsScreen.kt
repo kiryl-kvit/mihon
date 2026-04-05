@@ -6,7 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import eu.kanade.presentation.more.settings.Preference
 import kotlinx.collections.immutable.persistentListOf
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -22,7 +22,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
 
     @Composable
     override fun getPreferences(): List<Preference> {
-        val duplicatePreferences = remember { Injekt.get<GlobalDuplicatePreferences>() }
+        val duplicatePreferences = remember { Injekt.get<DuplicatePreferences>() }
 
         val extendedEnabled by duplicatePreferences.extendedDuplicateDetectionEnabled.collectAsState()
         val minimumMatchScore by duplicatePreferences.minimumMatchScore.collectAsState()
@@ -45,7 +45,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
             chapterCountWeight,
             titleWeight,
         ) {
-            GlobalDuplicatePreferences.DuplicateWeightBudget(
+            DuplicatePreferences.DuplicateWeightBudget(
                 description = descriptionWeight,
                 author = authorWeight,
                 artist = artistWeight,
@@ -77,13 +77,14 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                         valueString = minimumMatchScore.toString(),
                         subtitle = stringResource(MR.strings.pref_duplicate_detection_minimum_score_summary),
                         enabled = extendedEnabled,
-                        valueRange = 0..GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET,
+                        valueRange = 0..DuplicatePreferences.TOTAL_SCORE_BUDGET,
                         onValueChanged = { duplicatePreferences.minimumMatchScore.set(it) },
                     ),
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(MR.strings.pref_duplicate_detection_reset_settings),
                         subtitle = stringResource(MR.strings.pref_duplicate_detection_reset_settings_summary),
                         enabled = extendedEnabled,
+                        isProfileSpecific = true,
                         onClick = duplicatePreferences::resetDetectionSettings,
                     ),
                 ),
@@ -98,11 +99,12 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 title = stringResource(
                                     MR.strings.pref_duplicate_detection_unused_budget,
                                     budget.remainingBudget,
-                                    GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET,
+                                    DuplicatePreferences.TOTAL_SCORE_BUDGET,
                                 ),
                                 showIcon = false,
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.descriptionWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_description),
                                 value = budget.description,
                                 subtitle = stringResource(
@@ -115,6 +117,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.descriptionWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.authorWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_author),
                                 value = budget.author,
                                 subtitle = stringResource(
@@ -127,6 +130,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.authorWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.artistWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_artist),
                                 value = budget.artist,
                                 subtitle = stringResource(
@@ -139,6 +143,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.artistWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.coverWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_cover),
                                 value = budget.cover,
                                 subtitle = stringResource(
@@ -151,6 +156,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.coverWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.genreWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_genre),
                                 value = budget.genre,
                                 subtitle = stringResource(
@@ -163,6 +169,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.genreWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.statusWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_status),
                                 value = budget.status,
                                 subtitle = stringResource(
@@ -175,6 +182,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.statusWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.chapterCountWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_chapter_count),
                                 value = budget.chapterCount,
                                 subtitle = stringResource(
@@ -187,6 +195,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 onValueChanged = { duplicatePreferences.chapterCountWeight.set(it) },
                             ),
                             Preference.PreferenceItem.SliderPreference(
+                                preference = duplicatePreferences.titleWeight,
                                 title = stringResource(MR.strings.pref_duplicate_detection_weight_title),
                                 value = budget.title,
                                 subtitle = stringResource(
@@ -209,6 +218,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                                 title = stringResource(MR.strings.pref_duplicate_detection_match_preview),
                                 subtitle = stringResource(MR.strings.pref_duplicate_detection_match_preview_summary),
                                 enabled = false,
+                                isProfileSpecific = true,
                             ),
                         ),
                     ),

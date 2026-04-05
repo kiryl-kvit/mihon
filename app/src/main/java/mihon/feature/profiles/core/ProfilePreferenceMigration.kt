@@ -36,6 +36,37 @@ class ProfilePreferenceMigration(
         }
     }
 
+    fun copyLegacyPreferenceKeysToProfiles(
+        profileIds: Iterable<Long>,
+        profileKeys: Set<String>,
+        appStateKeys: Set<String> = emptySet(),
+        privateKeys: Set<String> = emptySet(),
+    ) {
+        sharedPreferences.edit(commit = true) {
+            profileIds.forEach { profileId ->
+                profileKeys.forEach { key ->
+                    migrateKey(key, ProfileAwarePreferenceStore.Namespace.namespacedKey(key, profileId), this)
+                }
+                appStateKeys.forEach { key ->
+                    val sourceKey = Preference.appStateKey(key)
+                    migrateKey(
+                        sourceKey,
+                        ProfileAwarePreferenceStore.Namespace.namespacedKey(sourceKey, profileId),
+                        this,
+                    )
+                }
+                privateKeys.forEach { key ->
+                    val sourceKey = Preference.privateKey(key)
+                    migrateKey(
+                        sourceKey,
+                        ProfileAwarePreferenceStore.Namespace.namespacedKey(sourceKey, profileId),
+                        this,
+                    )
+                }
+            }
+        }
+    }
+
     fun cleanupLegacyPreferenceKeys(
         profileId: Long,
         profileKeys: Set<String>,

@@ -23,6 +23,7 @@ import mihon.core.common.HomeScreenTabs
 import mihon.core.common.defaultHomeScreenTabs
 import mihon.core.common.toHomeScreenTabPreferenceValue
 import tachiyomi.core.common.preference.Preference
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -188,7 +189,7 @@ class ProfileManager(
         }
     }
 
-    private fun correctProfileOwnershipMismatches(currentVersion: Int) {
+    private suspend fun correctProfileOwnershipMismatches(currentVersion: Int) {
         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(application)
         if (currentVersion < 2) {
             migrateProfileOwnedKeyToNamespaced(
@@ -215,6 +216,9 @@ class ProfileManager(
         if (currentVersion < 6) {
             migrateLegacyProfileShortcutToHomeTabs(sharedPreferences)
         }
+        if (currentVersion < 8) {
+            migrateLegacyDuplicateDetectionPreferences(sharedPreferences)
+        }
 
         migrateKeyBackToGlobal(
             sharedPreferences = sharedPreferences,
@@ -235,6 +239,21 @@ class ProfileManager(
         sharedPreferences.edit(commit = true) {
             remove(Preference.appStateKey("profiles_switch_shortcut_enabled"))
         }
+    }
+
+    private suspend fun migrateLegacyDuplicateDetectionPreferences(
+        sharedPreferences: android.content.SharedPreferences,
+    ) {
+        if (DuplicatePreferences.profileKeys.none(sharedPreferences::contains)) return
+
+        val profileIds = profileDatabase.getProfiles(includeArchived = true)
+            .map(Profile::id)
+            .ifEmpty { listOf(ProfileConstants.DEFAULT_PROFILE_ID) }
+
+        ProfilePreferenceMigration(sharedPreferences).copyLegacyPreferenceKeysToProfiles(
+            profileIds = profileIds,
+            profileKeys = DuplicatePreferences.profileKeys,
+        )
     }
 
     private fun migrateLegacyProfileShortcutToHomeTabs(
@@ -390,6 +409,6 @@ class ProfileManager(
     }
 
     companion object {
-        private const val LEGACY_PROFILE_MIGRATION_VERSION = 7
+        private const val LEGACY_PROFILE_MIGRATION_VERSION = 8
     }
 }

@@ -17,12 +17,12 @@ import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.DuplicateMangaMatchReason
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.repository.MangaRepository
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import kotlin.math.roundToInt
 
 class EnhanceDuplicateLibraryManga(
     private val mangaRepository: MangaRepository,
-    private val duplicatePreferences: GlobalDuplicatePreferences,
+    private val duplicatePreferences: DuplicatePreferences,
 ) {
 
     data class EnhancementRequest(

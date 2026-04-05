@@ -239,6 +239,7 @@ object CustomSettingsScreen : SearchableSettings {
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(MR.strings.pref_duplicate_detection),
                         subtitle = stringResource(MR.strings.pref_duplicate_detection_summary),
+                        isProfileSpecific = true,
                         onClick = {
                             navigator.push(DuplicateDetectionSettingsScreen)
                         },

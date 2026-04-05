@@ -26,7 +26,7 @@ import tachiyomi.domain.backup.service.BackupPreferences
 import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.library.service.GlobalLibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.domain.storage.service.StoragePreferences
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import uy.kohesive.injekt.api.InjektModule
@@ -68,7 +68,7 @@ class PreferenceModule(val app: Application) : InjektModule {
             LibraryPreferences(get<ProfileStore>().profileStore())
         }
         addSingletonFactory { GlobalLibraryPreferences(get<ProfileStore>().basePreferenceStore()) }
-        addSingletonFactory { GlobalDuplicatePreferences(get<ProfileStore>().basePreferenceStore()) }
+        addSingletonFactory { DuplicatePreferences(get<ProfileStore>().profileStore()) }
         addSingletonFactory {
             UpdatesPreferences(get<ProfileStore>().profileStore())
         }

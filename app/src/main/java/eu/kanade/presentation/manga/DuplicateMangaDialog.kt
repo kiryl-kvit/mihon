@@ -64,7 +64,7 @@ import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.DuplicateMangaMatchReason
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
@@ -182,7 +182,7 @@ private fun DuplicateMangaListItem(
 ) {
     val source = getSource()
     val manga = duplicate.manga
-    val duplicatePreferences = remember { Injekt.get<GlobalDuplicatePreferences>() }
+    val duplicatePreferences = remember { Injekt.get<DuplicatePreferences>() }
     val extendedEnabled by duplicatePreferences.extendedDuplicateDetectionEnabled.collectAsState()
 
     OutlinedCard(

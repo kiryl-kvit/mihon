@@ -28,7 +28,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaMerge
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.manga.repository.MergedMangaRepository
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
 
@@ -37,18 +37,18 @@ class GetDuplicateLibraryMangaTest {
     private val mangaRepository = mockk<MangaRepository>()
     private val mergedMangaRepository = mockk<MergedMangaRepository>()
     private val trackRepository = mockk<TrackRepository>()
-    private val duplicatePreferences = mockk<GlobalDuplicatePreferences>()
+    private val duplicatePreferences = mockk<DuplicatePreferences>()
     private val extendedEnabledPreference = MutablePreference(true)
-    private val minimumMatchScorePreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE)
-    private val descriptionWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_DESCRIPTION_WEIGHT)
-    private val authorWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_AUTHOR_WEIGHT)
-    private val artistWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_ARTIST_WEIGHT)
-    private val coverWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_COVER_WEIGHT)
-    private val genreWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_GENRE_WEIGHT)
-    private val statusWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_STATUS_WEIGHT)
+    private val minimumMatchScorePreference = MutablePreference(DuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE)
+    private val descriptionWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_DESCRIPTION_WEIGHT)
+    private val authorWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_AUTHOR_WEIGHT)
+    private val artistWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_ARTIST_WEIGHT)
+    private val coverWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_COVER_WEIGHT)
+    private val genreWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_GENRE_WEIGHT)
+    private val statusWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_STATUS_WEIGHT)
     private val chapterCountWeightPreference =
-        MutablePreference(GlobalDuplicatePreferences.DEFAULT_CHAPTER_COUNT_WEIGHT)
-    private val titleWeightPreference = MutablePreference(GlobalDuplicatePreferences.DEFAULT_TITLE_WEIGHT)
+        MutablePreference(DuplicatePreferences.DEFAULT_CHAPTER_COUNT_WEIGHT)
+    private val titleWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_TITLE_WEIGHT)
     private val libraryFlow = MutableStateFlow<List<LibraryManga>>(emptyList())
     private val mergeFlow = MutableStateFlow<List<MangaMerge>>(emptyList())
     private val trackFlow = MutableStateFlow<List<Track>>(emptyList())
@@ -72,7 +72,7 @@ class GetDuplicateLibraryMangaTest {
         every { duplicatePreferences.chapterCountWeight } returns chapterCountWeightPreference
         every { duplicatePreferences.titleWeight } returns titleWeightPreference
         every { duplicatePreferences.getWeightBudget() } answers {
-            GlobalDuplicatePreferences.DuplicateWeightBudget(
+            DuplicatePreferences.DuplicateWeightBudget(
                 description = descriptionWeightPreference.get(),
                 author = authorWeightPreference.get(),
                 artist = artistWeightPreference.get(),
@@ -460,7 +460,7 @@ class GetDuplicateLibraryMangaTest {
 
         val initialResult = getDuplicateLibraryManga(current).single()
 
-        initialResult.scoreMax shouldBe GlobalDuplicatePreferences.TOTAL_SCORE_BUDGET - 14
+        initialResult.scoreMax shouldBe DuplicatePreferences.TOTAL_SCORE_BUDGET - 14
 
         titleWeightPreference.set(0)
 

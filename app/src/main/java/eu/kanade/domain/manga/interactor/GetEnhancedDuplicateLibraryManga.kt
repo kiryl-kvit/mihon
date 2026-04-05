@@ -14,13 +14,13 @@ import kotlinx.coroutines.flow.stateIn
 import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.Manga
-import tachiyomi.domain.manga.service.GlobalDuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 
 class GetEnhancedDuplicateLibraryManga(
     private val application: Application,
     private val getDuplicateLibraryManga: GetDuplicateLibraryManga,
     private val enhanceDuplicateLibraryManga: EnhanceDuplicateLibraryManga,
-    private val duplicatePreferences: GlobalDuplicatePreferences,
+    private val duplicatePreferences: DuplicatePreferences,
 ) {
 
     suspend operator fun invoke(manga: Manga): List<DuplicateMangaCandidate> {

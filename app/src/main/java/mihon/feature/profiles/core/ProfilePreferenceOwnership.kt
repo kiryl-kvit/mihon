@@ -10,6 +10,7 @@ import mihon.core.common.CustomPreferences
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.domain.updates.service.UpdatesPreferences
 
 object ProfilePreferenceOwnership {
@@ -30,6 +31,7 @@ object ProfilePreferenceOwnership {
         SourcePreferences(recorder, json)
         SecurityPreferences(recorder)
         LibraryPreferences(recorder)
+        DuplicatePreferences(recorder)
         UpdatesPreferences(recorder)
         ReaderPreferences(recorder)
         UiPreferences(recorder)

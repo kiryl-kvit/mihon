@@ -3,56 +3,56 @@ package tachiyomi.domain.manga.service
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 
-class GlobalDuplicatePreferences(
+class DuplicatePreferences(
     preferenceStore: PreferenceStore,
 ) {
     val extendedDuplicateDetectionEnabled: Preference<Boolean> = preferenceStore.getBoolean(
-        key = "extended_duplicate_detection_enabled",
+        key = EXTENDED_DUPLICATE_DETECTION_ENABLED_KEY,
         defaultValue = false,
     )
 
     val minimumMatchScore: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_minimum_match_score",
+        key = MINIMUM_MATCH_SCORE_KEY,
         defaultValue = DEFAULT_MINIMUM_MATCH_SCORE,
     )
 
     val descriptionWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_description_weight",
+        key = DESCRIPTION_WEIGHT_KEY,
         defaultValue = DEFAULT_DESCRIPTION_WEIGHT,
     )
 
     val authorWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_author_weight",
+        key = AUTHOR_WEIGHT_KEY,
         defaultValue = DEFAULT_AUTHOR_WEIGHT,
     )
 
     val artistWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_artist_weight",
+        key = ARTIST_WEIGHT_KEY,
         defaultValue = DEFAULT_ARTIST_WEIGHT,
     )
 
     val coverWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_cover_weight",
+        key = COVER_WEIGHT_KEY,
         defaultValue = DEFAULT_COVER_WEIGHT,
     )
 
     val genreWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_genre_weight",
+        key = GENRE_WEIGHT_KEY,
         defaultValue = DEFAULT_GENRE_WEIGHT,
     )
 
     val statusWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_status_weight",
+        key = STATUS_WEIGHT_KEY,
         defaultValue = DEFAULT_STATUS_WEIGHT,
     )
 
     val chapterCountWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_chapter_count_weight",
+        key = CHAPTER_COUNT_WEIGHT_KEY,
         defaultValue = DEFAULT_CHAPTER_COUNT_WEIGHT,
     )
 
     val titleWeight: Preference<Int> = preferenceStore.getInt(
-        key = "extended_duplicate_detection_title_weight",
+        key = TITLE_WEIGHT_KEY,
         defaultValue = DEFAULT_TITLE_WEIGHT,
     )
 
@@ -170,6 +170,30 @@ class GlobalDuplicatePreferences(
     }
 
     companion object {
+        private const val EXTENDED_DUPLICATE_DETECTION_ENABLED_KEY = "extended_duplicate_detection_enabled"
+        private const val MINIMUM_MATCH_SCORE_KEY = "extended_duplicate_detection_minimum_match_score"
+        private const val DESCRIPTION_WEIGHT_KEY = "extended_duplicate_detection_description_weight"
+        private const val AUTHOR_WEIGHT_KEY = "extended_duplicate_detection_author_weight"
+        private const val ARTIST_WEIGHT_KEY = "extended_duplicate_detection_artist_weight"
+        private const val COVER_WEIGHT_KEY = "extended_duplicate_detection_cover_weight"
+        private const val GENRE_WEIGHT_KEY = "extended_duplicate_detection_genre_weight"
+        private const val STATUS_WEIGHT_KEY = "extended_duplicate_detection_status_weight"
+        private const val CHAPTER_COUNT_WEIGHT_KEY = "extended_duplicate_detection_chapter_count_weight"
+        private const val TITLE_WEIGHT_KEY = "extended_duplicate_detection_title_weight"
+
+        val profileKeys = setOf(
+            EXTENDED_DUPLICATE_DETECTION_ENABLED_KEY,
+            MINIMUM_MATCH_SCORE_KEY,
+            DESCRIPTION_WEIGHT_KEY,
+            AUTHOR_WEIGHT_KEY,
+            ARTIST_WEIGHT_KEY,
+            COVER_WEIGHT_KEY,
+            GENRE_WEIGHT_KEY,
+            STATUS_WEIGHT_KEY,
+            CHAPTER_COUNT_WEIGHT_KEY,
+            TITLE_WEIGHT_KEY,
+        )
+
         const val TOTAL_SCORE_BUDGET = 100
 
         const val DEFAULT_DESCRIPTION_WEIGHT = 35
