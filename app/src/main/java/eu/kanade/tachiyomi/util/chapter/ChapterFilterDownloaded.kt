@@ -1,12 +1,12 @@
 package eu.kanade.tachiyomi.util.chapter
 
+import eu.kanade.domain.manga.model.downloadedFilter
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
-import eu.kanade.domain.manga.model.downloadedFilter
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.service.sortedForReading
-import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.source.local.isLocal
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get

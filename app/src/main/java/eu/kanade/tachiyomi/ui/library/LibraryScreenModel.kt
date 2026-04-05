@@ -666,7 +666,8 @@ class LibraryScreenModel(
                 val chapters = getNextChapters.await(manga.id)
                     .fastFilterNot { chapter ->
                         val chapterManga = getManga.await(chapter.mangaId) ?: return@fastFilterNot true
-                        downloadManager.getQueuedDownloadOrNull(chapter.id) != null || chapter.isDownloaded(chapterManga, downloadCache)
+                        downloadManager.getQueuedDownloadOrNull(chapter.id) != null ||
+                            chapter.isDownloaded(chapterManga, downloadCache)
                     }
                     .let { if (amount != null) it.take(amount) else it }
 
