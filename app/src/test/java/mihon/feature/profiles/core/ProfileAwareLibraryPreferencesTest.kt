@@ -23,6 +23,7 @@ import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.service.DuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicateTitleExclusions
 
 class ProfileAwareLibraryPreferencesTest {
 
@@ -272,6 +273,7 @@ class ProfileAwareLibraryPreferencesTest {
             minimumMatchScore.set(41)
             coverWeight.set(20)
             titleWeight.set(30)
+            titleExclusionPatterns.set(listOf("[*]", "(*)"))
         }
 
         fixture.activeProfileId.value = 2L
@@ -281,11 +283,13 @@ class ProfileAwareLibraryPreferencesTest {
             minimumMatchScore.get() shouldBe DuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE
             coverWeight.get() shouldBe DuplicatePreferences.DEFAULT_COVER_WEIGHT
             titleWeight.get() shouldBe DuplicatePreferences.DEFAULT_TITLE_WEIGHT
+            titleExclusionPatterns.get() shouldBe DuplicateTitleExclusions.defaultPatterns
 
             extendedDuplicateDetectionEnabled.set(true)
             minimumMatchScore.set(18)
             coverWeight.set(7)
             titleWeight.set(12)
+            titleExclusionPatterns.set(listOf("<*>", "edition *"))
         }
 
         fixture.activeProfileId.value = 1L
@@ -295,6 +299,7 @@ class ProfileAwareLibraryPreferencesTest {
             minimumMatchScore.get() shouldBe 41
             coverWeight.get() shouldBe 20
             titleWeight.get() shouldBe 30
+            titleExclusionPatterns.get() shouldBe listOf("[*]", "(*)")
         }
 
         fixture.activeProfileId.value = 2L
@@ -304,15 +309,16 @@ class ProfileAwareLibraryPreferencesTest {
             minimumMatchScore.get() shouldBe 18
             coverWeight.get() shouldBe 7
             titleWeight.get() shouldBe 12
+            titleExclusionPatterns.get() shouldBe listOf("<*>", "edition *")
         }
     }
 
     @Test
     fun `duplicate detection settings are included in profile-owned preferences`() {
-        val key = createFixture().duplicatePreferences.extendedDuplicateDetectionEnabled.key()
+        val key = createFixture().duplicatePreferences.titleExclusionPatterns.key()
 
         key shouldBe ProfileAwarePreferenceStore.Namespace.namespacedKey(
-            "extended_duplicate_detection_enabled",
+            "extended_duplicate_detection_title_exclusion_patterns",
             1L,
         )
     }
@@ -348,6 +354,10 @@ class ProfileAwareLibraryPreferencesTest {
                 .putBoolean("extended_duplicate_detection_enabled", true)
                 .putInt("extended_duplicate_detection_minimum_match_score", 33)
                 .putInt("extended_duplicate_detection_cover_weight", 12)
+                .putString(
+                    "extended_duplicate_detection_title_exclusion_patterns",
+                    "[\"[*]\",\"(*)\"]",
+                )
                 .commit()
         }
 
@@ -381,6 +391,13 @@ class ProfileAwareLibraryPreferencesTest {
                 ),
                 0,
             ) shouldBe 12
+            sharedPreferences.getString(
+                ProfileAwarePreferenceStore.Namespace.namespacedKey(
+                    "extended_duplicate_detection_title_exclusion_patterns",
+                    profileId,
+                ),
+                null,
+            ) shouldBe "[\"[*]\",\"(*)\"]"
         }
 
         migration.cleanupLegacyPreferenceKeys(
@@ -391,6 +408,7 @@ class ProfileAwareLibraryPreferencesTest {
         sharedPreferences.contains("extended_duplicate_detection_enabled") shouldBe false
         sharedPreferences.contains("extended_duplicate_detection_minimum_match_score") shouldBe false
         sharedPreferences.contains("extended_duplicate_detection_cover_weight") shouldBe false
+        sharedPreferences.contains("extended_duplicate_detection_title_exclusion_patterns") shouldBe false
     }
 
     private fun createFixture(): Fixture {

@@ -857,6 +857,20 @@
     <string name="pref_duplicate_detection_weight_title">Title weight</string>
     <string name="pref_duplicate_detection_reset_settings">Reset duplicate detection settings</string>
     <string name="pref_duplicate_detection_reset_settings_summary">Restore the default threshold and confidence budget.</string>
+    <string name="pref_duplicate_detection_title_exclusions">Title exclusions</string>
+    <string name="pref_duplicate_detection_title_exclusions_summary">Exclude title parts from extended duplicate matching using wildcard patterns.</string>
+    <string name="pref_duplicate_detection_title_exclusions_screen_summary">Applied in order to both titles before extended title matching.</string>
+    <string name="pref_duplicate_detection_title_exclusions_empty">No title exclusion patterns configured</string>
+    <string name="pref_duplicate_detection_title_exclusions_help">Use one pattern per rule. `*` matches any text. Examples: `[*]`, `(*)`, `(Official*)`. Rules are applied in order on both titles.</string>
+    <string name="pref_duplicate_detection_title_exclusions_add">Add title exclusion</string>
+    <string name="pref_duplicate_detection_title_exclusions_edit">Edit title exclusion</string>
+    <string name="pref_duplicate_detection_title_exclusions_delete">Delete title exclusion</string>
+    <string name="pref_duplicate_detection_title_exclusions_delete_confirmation">Remove the title exclusion pattern "%1$s"?</string>
+    <string name="pref_duplicate_detection_title_exclusions_pattern">Pattern</string>
+    <string name="pref_duplicate_detection_title_exclusions_pattern_help">`*` matches any text. Matching is case-insensitive.</string>
+    <string name="pref_duplicate_detection_title_exclusions_error_blank">Pattern is required</string>
+    <string name="pref_duplicate_detection_title_exclusions_error_exists">This pattern already exists</string>
+    <string name="pref_duplicate_detection_title_exclusions_error_catch_all">This pattern would erase the whole title. Use a narrower pattern.</string>
     <string name="pref_duplicate_detection_match_preview">Match preview</string>
     <string name="pref_duplicate_detection_match_preview_summary">Preview how current duplicate settings affect example matches. Coming in a future update.</string>
 

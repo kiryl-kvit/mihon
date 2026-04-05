@@ -1,11 +1,17 @@
 package tachiyomi.domain.manga.service
 
+import kotlinx.serialization.json.Json
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 
 class DuplicatePreferences(
     preferenceStore: PreferenceStore,
 ) {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+    }
+
     val extendedDuplicateDetectionEnabled: Preference<Boolean> = preferenceStore.getBoolean(
         key = EXTENDED_DUPLICATE_DETECTION_ENABLED_KEY,
         defaultValue = false,
@@ -54,6 +60,15 @@ class DuplicatePreferences(
     val titleWeight: Preference<Int> = preferenceStore.getInt(
         key = TITLE_WEIGHT_KEY,
         defaultValue = DEFAULT_TITLE_WEIGHT,
+    )
+
+    val titleExclusionPatterns: Preference<List<String>> = preferenceStore.getObjectFromString(
+        key = TITLE_EXCLUSION_PATTERNS_KEY,
+        defaultValue = DuplicateTitleExclusions.defaultPatterns,
+        serializer = { value -> json.encodeToString(value) },
+        deserializer = { value ->
+            DuplicateTitleExclusions.sanitizePatterns(json.decodeFromString<List<String>>(value))
+        },
     )
 
     fun getWeightBudget(): DuplicateWeightBudget {
@@ -180,6 +195,7 @@ class DuplicatePreferences(
         private const val STATUS_WEIGHT_KEY = "extended_duplicate_detection_status_weight"
         private const val CHAPTER_COUNT_WEIGHT_KEY = "extended_duplicate_detection_chapter_count_weight"
         private const val TITLE_WEIGHT_KEY = "extended_duplicate_detection_title_weight"
+        private const val TITLE_EXCLUSION_PATTERNS_KEY = "extended_duplicate_detection_title_exclusion_patterns"
 
         val profileKeys = setOf(
             EXTENDED_DUPLICATE_DETECTION_ENABLED_KEY,
@@ -192,6 +208,7 @@ class DuplicatePreferences(
             STATUS_WEIGHT_KEY,
             CHAPTER_COUNT_WEIGHT_KEY,
             TITLE_WEIGHT_KEY,
+            TITLE_EXCLUSION_PATTERNS_KEY,
         )
 
         const val TOTAL_SCORE_BUDGET = 100

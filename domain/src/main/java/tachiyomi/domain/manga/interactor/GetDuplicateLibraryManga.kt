@@ -20,6 +20,7 @@ import tachiyomi.domain.manga.model.MangaMerge
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.manga.repository.MergedMangaRepository
 import tachiyomi.domain.manga.service.DuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicateTitleExclusions
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
 import java.util.Locale
@@ -66,7 +67,8 @@ class GetDuplicateLibraryManga(
                 duplicatePreferences.chapterCountWeight.changes(),
                 duplicatePreferences.titleWeight.changes(),
             ) { _, _, _, _ -> Unit },
-        ) { _, _, _, _ ->
+            duplicatePreferences.titleExclusionPatterns.changes(),
+        ) { _, _, _, _, _ ->
             duplicatePreferences.toConfig()
         }
 
@@ -113,8 +115,12 @@ class GetDuplicateLibraryManga(
         tracks: List<Track>,
         config: DuplicateConfig,
     ): List<DuplicateMangaCandidate> {
-        val current = manga.toPreparedDuplicateManga()
-        if (current.normalizedTitle.isBlank()) return emptyList()
+        val current = manga.toPreparedDuplicateManga(config)
+        if (config.extendedEnabled) {
+            if (current.normalizedTitle.isBlank()) return emptyList()
+        } else if (current.rawLowercaseTitle.isBlank()) {
+            return emptyList()
+        }
 
         val collapsedLibrary = collapseLibraryManga(libraryManga, merges)
         val excludedIds = buildExcludedIds(manga.id, merges)
@@ -214,7 +220,7 @@ class GetDuplicateLibraryManga(
     ): DuplicateMangaCandidate? {
         val weights = config.weights
         val bestMatch = libraryItem.memberMangas.asSequence()
-            .map { it.toPreparedDuplicateManga(chapterCount = libraryItem.totalChapters) }
+            .map { it.toPreparedDuplicateManga(config, chapterCount = libraryItem.totalChapters) }
             .mapNotNull { candidate -> scoreExtendedDuplicate(current, candidate, trackerDuplicateIds, config) }
             .maxByOrNull { it.score }
             ?: return null
@@ -479,9 +485,10 @@ class GetDuplicateLibraryManga(
     }
 
     private fun Manga.toPreparedDuplicateManga(
+        config: DuplicateConfig,
         chapterCount: Long? = null,
     ): PreparedDuplicateManga {
-        val normalizedTitle = normalizeTitle(title)
+        val normalizedTitle = normalizeTitle(title, config.titleExclusionPatterns)
         val normalizedDescription = normalizeDescription(description)
         return PreparedDuplicateManga(
             manga = this,
@@ -507,17 +514,25 @@ class GetDuplicateLibraryManga(
         )
     }
 
-    private fun normalizeTitle(title: String): String {
-        val raw = title.lowercase(Locale.ROOT)
-        val debracketed = removeBracketedText(raw, opening = "([<{", closing = ")]}>")
-            .takeIf { it.length > SHORT_TITLE_LENGTH }
-            ?: removeBracketedText(raw, opening = ")]}>", closing = "([<{", reverse = true)
-
-        return debracketed
+    private fun normalizeTitle(
+        title: String,
+        titleExclusionPatterns: List<TitleExclusionPattern>,
+    ): String {
+        return applyTitleExclusions(title, titleExclusionPatterns)
+            .lowercase(Locale.ROOT)
             .replace(CHAPTER_REFERENCE_REGEX, " ")
             .replace(NON_TEXT_REGEX, " ")
             .replace(CONSECUTIVE_SPACES_REGEX, " ")
             .trim()
+    }
+
+    private fun applyTitleExclusions(
+        title: String,
+        titleExclusionPatterns: List<TitleExclusionPattern>,
+    ): String {
+        return titleExclusionPatterns.fold(title) { current, pattern ->
+            current.replace(pattern.regex, " ")
+        }
     }
 
     private fun normalizeValue(value: String?): String? {
@@ -539,30 +554,6 @@ class GetDuplicateLibraryManga(
             ?.takeIf { it.length >= MIN_DESCRIPTION_LENGTH }
     }
 
-    private fun removeBracketedText(
-        text: String,
-        opening: String,
-        closing: String,
-        reverse: Boolean = false,
-    ): String {
-        var depth = 0
-        return buildString {
-            for (char in if (reverse) text.reversed() else text) {
-                when (char) {
-                    in opening -> depth++
-                    in closing -> if (depth > 0) depth--
-                    else -> if (depth == 0) {
-                        if (reverse) {
-                            insert(0, char)
-                        } else {
-                            append(char)
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private fun scaledSimilarity(similarity: Double, weight: Int): Int {
         return (similarity * weight).roundToInt()
     }
@@ -578,6 +569,8 @@ class GetDuplicateLibraryManga(
             extendedEnabled = extendedDuplicateDetectionEnabled.get(),
             minimumMatchScore = minimumMatchScore.get().coerceIn(0, DuplicatePreferences.TOTAL_SCORE_BUDGET),
             weights = getWeightBudget().toExtendedWeights(),
+            titleExclusionPatterns = DuplicateTitleExclusions.compilePatterns(titleExclusionPatterns.get())
+                .map { TitleExclusionPattern(it.pattern, it.regex) },
         )
     }
 
@@ -629,6 +622,12 @@ class GetDuplicateLibraryManga(
         val extendedEnabled: Boolean,
         val minimumMatchScore: Int,
         val weights: ExtendedWeights,
+        val titleExclusionPatterns: List<TitleExclusionPattern>,
+    )
+
+    data class TitleExclusionPattern(
+        val pattern: String,
+        val regex: Regex,
     )
 
     data class ExtendedWeights(
@@ -650,7 +649,6 @@ class GetDuplicateLibraryManga(
         private const val LEGACY_TRACKER_MATCH_SCORE = 58
         private const val LEGACY_SCORE_MAX = 100
         private const val MIN_NAME_SIMILARITY = 0.9
-        private const val SHORT_TITLE_LENGTH = 4
         private const val CONTAINS_MIN_TITLE_LENGTH = 6
         private const val MIN_SHARED_TITLE_TOKENS = 2
         private const val MIN_TITLE_TOKEN_LENGTH = 2

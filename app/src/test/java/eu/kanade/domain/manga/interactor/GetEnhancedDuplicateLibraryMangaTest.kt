@@ -27,6 +27,7 @@ import tachiyomi.domain.manga.interactor.GetDuplicateLibraryManga
 import tachiyomi.domain.manga.model.DuplicateMangaCandidate
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.service.DuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicateTitleExclusions
 
 class GetEnhancedDuplicateLibraryMangaTest {
 
@@ -37,6 +38,7 @@ class GetEnhancedDuplicateLibraryMangaTest {
     private val extendedEnabledPreference = MutablePreference(true)
     private val minimumMatchScorePreference = MutablePreference(DuplicatePreferences.DEFAULT_MINIMUM_MATCH_SCORE)
     private val coverWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_COVER_WEIGHT)
+    private val titleExclusionPatternsPreference = MutablePreference(DuplicateTitleExclusions.defaultPatterns)
 
     private val interactor = GetEnhancedDuplicateLibraryManga(
         application = application,
@@ -49,6 +51,7 @@ class GetEnhancedDuplicateLibraryMangaTest {
         every { duplicatePreferences.extendedDuplicateDetectionEnabled } returns extendedEnabledPreference
         every { duplicatePreferences.minimumMatchScore } returns minimumMatchScorePreference
         every { duplicatePreferences.coverWeight } returns coverWeightPreference
+        every { duplicatePreferences.titleExclusionPatterns } returns titleExclusionPatternsPreference
     }
 
     @Test
@@ -105,6 +108,40 @@ class GetEnhancedDuplicateLibraryMangaTest {
 
             emissions shouldBe listOf(emptyList(), firstEnhancedCandidates, secondEnhancedCandidates)
             coVerify(exactly = 2) { enhanceDuplicateLibraryManga(application, manga, baseCandidates) }
+        } finally {
+            subscriptionScope.cancel()
+        }
+    }
+
+    @Test
+    fun `title exclusions do not trigger enhancement config by themselves`() = runTest {
+        val manga = manga(1, "Frieren")
+        val baseCandidates = listOf(candidate(2, 40, coverHashChecked = false))
+        val enhancedCandidates = listOf(candidate(2, 54, coverHashChecked = true))
+        val duplicateFlow = MutableStateFlow(baseCandidates)
+
+        every {
+            getDuplicateLibraryManga.subscribe(any(), any())
+        } returns duplicateFlow.asStateFlow()
+        coEvery {
+            enhanceDuplicateLibraryManga(application, manga, baseCandidates)
+        } returns enhancedCandidates
+
+        val subscriptionScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        try {
+            val results = interactor.subscribe(flowOf(manga), subscriptionScope)
+            val emissions = mutableListOf<List<DuplicateMangaCandidate>>()
+            val job = subscriptionScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                results.take(2).toList(emissions)
+            }
+
+            testScheduler.advanceUntilIdle()
+            titleExclusionPatternsPreference.set(listOf("[*]"))
+            testScheduler.advanceUntilIdle()
+            job.join()
+
+            emissions shouldBe listOf(emptyList(), enhancedCandidates)
+            coVerify(exactly = 1) { enhanceDuplicateLibraryManga(application, manga, baseCandidates) }
         } finally {
             subscriptionScope.cancel()
         }

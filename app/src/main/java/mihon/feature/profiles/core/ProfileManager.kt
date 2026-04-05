@@ -24,6 +24,7 @@ import mihon.core.common.defaultHomeScreenTabs
 import mihon.core.common.toHomeScreenTabPreferenceValue
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.domain.manga.service.DuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicateTitleExclusions
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
@@ -118,6 +119,7 @@ class ProfileManager(
                 hiddenSourceIds,
             )
             .set(hiddenSourceIds)
+        seedDuplicateTitleExclusions(profileId = id)
         return requireNotNull(profileDatabase.getProfileById(id))
     }
 
@@ -171,6 +173,11 @@ class ProfileManager(
         )
         migrateLegacyProfileUnlockSettings()
         migrateLegacySourcePreferences()
+        seedDuplicateTitleExclusionsForProfiles(
+            profileDatabase.getProfiles(includeArchived = true)
+                .map(Profile::id)
+                .ifEmpty { listOf(ProfileConstants.DEFAULT_PROFILE_ID) },
+        )
         migration.cleanupLegacyPreferenceKeys(
             profileId = ProfileConstants.DEFAULT_PROFILE_ID,
             profileKeys = ownership.profile,
@@ -254,6 +261,16 @@ class ProfileManager(
             profileIds = profileIds,
             profileKeys = DuplicatePreferences.profileKeys,
         )
+    }
+
+    private fun seedDuplicateTitleExclusionsForProfiles(profileIds: Iterable<Long>) {
+        profileIds.forEach(::seedDuplicateTitleExclusions)
+    }
+
+    private fun seedDuplicateTitleExclusions(profileId: Long) {
+        val preference = DuplicatePreferences(profileStore.profileStore(profileId)).titleExclusionPatterns
+        if (preference.isSet()) return
+        preference.set(DuplicateTitleExclusions.defaultPatterns)
     }
 
     private fun migrateLegacyProfileShortcutToHomeTabs(

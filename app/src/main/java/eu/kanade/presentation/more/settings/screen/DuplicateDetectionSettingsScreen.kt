@@ -4,10 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.duplicate.DuplicateTitleExclusionsScreen
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
 import uy.kohesive.injekt.Injekt
@@ -22,6 +26,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
 
     @Composable
     override fun getPreferences(): List<Preference> {
+        val navigator = LocalNavigator.currentOrThrow
         val duplicatePreferences = remember { Injekt.get<DuplicatePreferences>() }
 
         val extendedEnabled by duplicatePreferences.extendedDuplicateDetectionEnabled.collectAsState()
@@ -34,6 +39,7 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
         val statusWeight by duplicatePreferences.statusWeight.collectAsState()
         val chapterCountWeight by duplicatePreferences.chapterCountWeight.collectAsState()
         val titleWeight by duplicatePreferences.titleWeight.collectAsState()
+        val titleExclusionPatterns by duplicatePreferences.titleExclusionPatterns.collectAsState()
 
         val budget = remember(
             descriptionWeight,
@@ -86,6 +92,19 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                         enabled = extendedEnabled,
                         isProfileSpecific = true,
                         onClick = duplicatePreferences::resetDetectionSettings,
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_duplicate_detection_title_exclusions),
+                        subtitle = pluralStringResource(
+                            MR.plurals.pref_duplicate_detection_title_exclusions_count,
+                            titleExclusionPatterns.size,
+                            titleExclusionPatterns.size,
+                        ),
+                        enabled = extendedEnabled,
+                        isProfileSpecific = true,
+                        onClick = {
+                            navigator.push(DuplicateTitleExclusionsScreen())
+                        },
                     ),
                 ),
             ),

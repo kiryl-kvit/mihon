@@ -29,6 +29,7 @@ import tachiyomi.domain.manga.model.MangaMerge
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.manga.repository.MergedMangaRepository
 import tachiyomi.domain.manga.service.DuplicatePreferences
+import tachiyomi.domain.manga.service.DuplicateTitleExclusions
 import tachiyomi.domain.track.model.Track
 import tachiyomi.domain.track.repository.TrackRepository
 
@@ -49,6 +50,7 @@ class GetDuplicateLibraryMangaTest {
     private val chapterCountWeightPreference =
         MutablePreference(DuplicatePreferences.DEFAULT_CHAPTER_COUNT_WEIGHT)
     private val titleWeightPreference = MutablePreference(DuplicatePreferences.DEFAULT_TITLE_WEIGHT)
+    private val titleExclusionPatternsPreference = MutablePreference(DuplicateTitleExclusions.defaultPatterns)
     private val libraryFlow = MutableStateFlow<List<LibraryManga>>(emptyList())
     private val mergeFlow = MutableStateFlow<List<MangaMerge>>(emptyList())
     private val trackFlow = MutableStateFlow<List<Track>>(emptyList())
@@ -71,6 +73,7 @@ class GetDuplicateLibraryMangaTest {
         every { duplicatePreferences.statusWeight } returns statusWeightPreference
         every { duplicatePreferences.chapterCountWeight } returns chapterCountWeightPreference
         every { duplicatePreferences.titleWeight } returns titleWeightPreference
+        every { duplicatePreferences.titleExclusionPatterns } returns titleExclusionPatternsPreference
         every { duplicatePreferences.getWeightBudget() } answers {
             DuplicatePreferences.DuplicateWeightBudget(
                 description = descriptionWeightPreference.get(),
@@ -222,6 +225,95 @@ class GetDuplicateLibraryMangaTest {
         results shouldHaveSize 1
         results.single().manga.id shouldBe 10L
         results.single().chapterCount shouldBe 42L
+    }
+
+    @Test
+    fun `configured exclusions are applied on both titles in extended mode`() = runTest {
+        titleExclusionPatternsPreference.set(listOf("[*]"))
+
+        val current = manga(
+            id = 1,
+            title = "One Punch Man [English] [Scanlator]",
+            description = LONG_DESCRIPTION,
+        )
+        val duplicate = libraryManga(
+            manga = manga(
+                id = 2,
+                title = "One Punch Man [Spanish] [Another Group]",
+                description = LONG_DESCRIPTION,
+            ),
+            totalChapters = 140,
+        )
+
+        coEvery { mangaRepository.getLibraryManga() } returns listOf(duplicate)
+        coEvery { mergedMangaRepository.getAll() } returns emptyList()
+
+        val result = getDuplicateLibraryManga(current).single()
+
+        result.reasons shouldContain DuplicateMangaMatchReason.TITLE
+        result.manga.id shouldBe 2L
+    }
+
+    @Test
+    fun `configured exclusions can remove non bracketed suffixes`() = runTest {
+        titleExclusionPatternsPreference.set(listOf(" - Season *", " Vol. *"))
+
+        val current = manga(
+            id = 1,
+            title = "One Punch Man - Season 2 Vol. 1",
+            description = LONG_DESCRIPTION,
+        )
+        val duplicate = libraryManga(
+            manga = manga(
+                id = 2,
+                title = "One Punch Man",
+                description = LONG_DESCRIPTION,
+            ),
+            totalChapters = 140,
+        )
+
+        coEvery { mangaRepository.getLibraryManga() } returns listOf(duplicate)
+        coEvery { mergedMangaRepository.getAll() } returns emptyList()
+
+        getDuplicateLibraryManga(current).single().manga.id shouldBe 2L
+    }
+
+    @Test
+    fun `subscribe updates when title exclusions change`() = runTest {
+        descriptionWeightPreference.set(0)
+        authorWeightPreference.set(0)
+        artistWeightPreference.set(0)
+        coverWeightPreference.set(0)
+        genreWeightPreference.set(0)
+        statusWeightPreference.set(0)
+        chapterCountWeightPreference.set(0)
+        titleWeightPreference.set(40)
+        titleExclusionPatternsPreference.set(emptyList())
+
+        val current = manga(id = 1, title = "One Punch Man [English]")
+        val duplicate = libraryManga(
+            manga = manga(id = 2, title = "One Punch Man [Spanish]"),
+            totalChapters = 140,
+        )
+
+        libraryFlow.value = listOf(duplicate)
+        mergeFlow.value = emptyList()
+        trackFlow.value = emptyList()
+
+        val results = getDuplicateLibraryManga.subscribe(flowOf(current), backgroundScope)
+        val emissions = mutableListOf<List<tachiyomi.domain.manga.model.DuplicateMangaCandidate>>()
+        val job = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            results.take(2).toList(emissions)
+        }
+
+        titleExclusionPatternsPreference.set(listOf("[*]"))
+
+        testScheduler.advanceUntilIdle()
+        job.join()
+
+        emissions shouldHaveSize 2
+        emissions.first() shouldBe emptyList()
+        emissions.last().single().manga.id shouldBe 2L
     }
 
     @Test

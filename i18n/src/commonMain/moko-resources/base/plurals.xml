@@ -101,6 +101,11 @@
         <item quantity="other">%d repos</item>
     </plurals>
 
+    <plurals name="pref_duplicate_detection_title_exclusions_count">
+        <item quantity="one">%d exclusion rule</item>
+        <item quantity="other">%d exclusion rules</item>
+    </plurals>
+
     <!--Migration-->
     <plurals name="migrationListScreen.migrateDialog.migrateTitle">
         <item quantity="one">Migrate %1$d entry?</item>
