@@ -276,6 +276,7 @@ data class BrowseSourceScreen(
                 BrowseMangaPreviewSheet(
                     mangaId = dialog.mangaId,
                     previewSize = screenModel.mangaPreviewSizeUi(),
+                    onLibraryAction = screenModel::onMangaLibraryAction,
                     onDismissRequest = onDismissRequest,
                 )
             }

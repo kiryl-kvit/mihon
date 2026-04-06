@@ -284,6 +284,21 @@ class BrowseSourceScreenModel(
         }
     }
 
+    fun onMangaLibraryAction(manga: Manga) {
+        screenModelScope.launchIO {
+            handleMangaLibraryAction(manga)
+        }
+    }
+
+    private suspend fun handleMangaLibraryAction(manga: Manga) {
+        val duplicates = getDuplicateLibraryManga(manga)
+        when {
+            manga.favorite -> setDialog(Dialog.RemoveManga(manga))
+            duplicates.isNotEmpty() -> setDialog(Dialog.AddDuplicateManga(manga, duplicates))
+            else -> addFavorite(manga)
+        }
+    }
+
     /**
      * Get user categories.
      *
@@ -303,12 +318,7 @@ class BrowseSourceScreenModel(
     suspend fun onMangaLongClick(manga: Manga): Boolean {
         return when (browseLongPressAction) {
             CustomPreferences.BrowseLongPressAction.LIBRARY_ACTION -> {
-                val duplicates = getDuplicateLibraryManga(manga)
-                when {
-                    manga.favorite -> setDialog(Dialog.RemoveManga(manga))
-                    duplicates.isNotEmpty() -> setDialog(Dialog.AddDuplicateManga(manga, duplicates))
-                    else -> addFavorite(manga)
-                }
+                handleMangaLibraryAction(manga)
                 true
             }
             CustomPreferences.BrowseLongPressAction.MANGA_PREVIEW -> {
