@@ -341,6 +341,35 @@ class GetDuplicateLibraryMangaTest {
     }
 
     @Test
+    fun `ignores title overlap from common words alone`() = runTest {
+        val current = manga(
+            id = 1,
+            title = "The Two Lovebirds Are Hiding Their Fangs: The Story of a Couple with a Crazy Gap",
+        )
+        val unrelated = listOf(
+            libraryManga(
+                manga = manga(
+                    id = 2,
+                    title = "The Bastard of Swordborne",
+                ),
+                totalChapters = 75,
+            ),
+            libraryManga(
+                manga = manga(
+                    id = 3,
+                    title = "The Patron of Villains",
+                ),
+                totalChapters = 24,
+            ),
+        )
+
+        coEvery { mangaRepository.getLibraryManga() } returns unrelated
+        coEvery { mergedMangaRepository.getAll() } returns emptyList()
+
+        getDuplicateLibraryManga(current) shouldBe emptyList()
+    }
+
+    @Test
     fun `matches on strong description despite different title`() = runTest {
         descriptionWeightPreference.set(34)
         authorWeightPreference.set(11)

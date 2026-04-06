@@ -391,8 +391,9 @@ class GetDuplicateLibraryManga(
         val levenshtein = normalizedLevenshtein.similarity(current.normalizedTitle, candidate.normalizedTitle)
 
         val sharedTokens = current.titleTokens.intersect(candidate.titleTokens)
+        val meaningfulSharedTokens = sharedTokens.filterNot(::isCommonTitleToken).toSet()
         val subsetCoverage = if (sharedTokens.size >= MIN_SHARED_TITLE_TOKENS) {
-            sharedTokens.size.toDouble() / min(current.titleTokens.size, candidate.titleTokens.size)
+            meaningfulSharedTokens.size.toDouble() / min(current.titleTokens.size, candidate.titleTokens.size)
         } else {
             0.0
         }
@@ -554,6 +555,10 @@ class GetDuplicateLibraryManga(
             ?.takeIf { it.length >= MIN_DESCRIPTION_LENGTH }
     }
 
+    private fun isCommonTitleToken(token: String): Boolean {
+        return token in COMMON_TITLE_TOKENS
+    }
+
     private fun scaledSimilarity(similarity: Double, weight: Int): Int {
         return (similarity * weight).roundToInt()
     }
@@ -663,6 +668,22 @@ class GetDuplicateLibraryManga(
         private const val SUPPORTING_DESCRIPTION_THRESHOLD = 0.35
         private const val SINGLE_TOKEN_CONTAINS_SIMILARITY = 0.78
         private const val MAX_GENRE_MATCH_COUNT = 4
+
+        private val COMMON_TITLE_TOKENS = setOf(
+            "a",
+            "an",
+            "and",
+            "at",
+            "for",
+            "from",
+            "in",
+            "of",
+            "on",
+            "or",
+            "the",
+            "to",
+            "with",
+        )
 
         private val NON_TEXT_REGEX = Regex("[^\\p{L}0-9 ]")
         private val CONSECUTIVE_SPACES_REGEX = Regex(" +")
