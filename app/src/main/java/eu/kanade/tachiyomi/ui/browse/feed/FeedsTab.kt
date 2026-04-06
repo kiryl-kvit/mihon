@@ -322,6 +322,7 @@ private fun FeedsTabContent(
                     BrowseMangaPreviewSheet(
                         mangaId = dialog.mangaId,
                         previewSize = browseModel.mangaPreviewSizeUi(),
+                        onLibraryAction = browseModel::onMangaLibraryAction,
                         onDismissRequest = browseModel::dismissDialog,
                     )
                 }

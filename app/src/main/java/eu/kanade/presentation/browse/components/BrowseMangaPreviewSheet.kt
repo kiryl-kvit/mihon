@@ -13,9 +13,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -44,6 +51,7 @@ import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import kotlinx.coroutines.launch
 import tachiyomi.domain.chapter.model.Chapter
+import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -54,6 +62,7 @@ import tachiyomi.presentation.core.i18n.stringResource
 fun BrowseMangaPreviewSheet(
     mangaId: Long,
     previewSize: MangaPreviewSizeUi,
+    onLibraryAction: (Manga) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -105,6 +114,7 @@ fun BrowseMangaPreviewSheet(
                     previewSize = previewSize,
                     snackbarHostState = screenModel.snackbarHostState,
                     onDismissRequest = onDismissRequest,
+                    onLibraryAction = onLibraryAction,
                     onRetry = screenModel::retryPreview,
                     onPageLoad = screenModel::loadPreviewPage,
                     onPageClick = { chapterId, pageIndex ->
@@ -129,6 +139,7 @@ private fun BrowseMangaPreviewDialogContent(
     previewSize: MangaPreviewSizeUi,
     snackbarHostState: SnackbarHostState,
     onDismissRequest: () -> Unit,
+    onLibraryAction: (Manga) -> Unit,
     onRetry: () -> Unit,
     onPageLoad: (Int) -> Unit,
     onPageClick: (Long, Int) -> Unit,
@@ -156,10 +167,9 @@ private fun BrowseMangaPreviewDialogContent(
             )
         },
         bottomBar = {
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding(),
+            BrowseMangaPreviewBottomBar(
+                favorite = state.manga.favorite,
+                onClick = { onLibraryAction(state.manga) },
             )
         },
     ) { contentPadding ->
@@ -195,6 +205,42 @@ private fun BrowseMangaPreviewDialogContent(
                     }
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun BrowseMangaPreviewBottomBar(
+    favorite: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+    ) {
+        HorizontalDivider()
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+        ) {
+            Button(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    imageVector = if (favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = null,
+                )
+                Spacer(modifier = Modifier.width(MaterialTheme.padding.small))
+                Text(
+                    text = stringResource(
+                        if (favorite) MR.strings.in_library else MR.strings.add_to_library,
+                    ),
+                )
+            }
         }
     }
 }
