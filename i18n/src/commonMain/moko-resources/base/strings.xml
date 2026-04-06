@@ -833,7 +833,6 @@
     <string name="pref_duplicate_detection_summary">Configure the extended duplicate matching used by the Duplicate action and add warnings.</string>
     <string name="pref_duplicate_detection_behavior">Behavior</string>
     <string name="pref_duplicate_detection_confidence_budget">Confidence budget</string>
-    <string name="pref_duplicate_detection_preview">Preview</string>
     <string name="pref_duplicate_detection_actions">Actions</string>
     <string name="pref_enable_extended_duplicate_detection">Enable extended duplicate detection</string>
     <string name="pref_enable_extended_duplicate_detection_summary">Uses richer multi-signal matching. When disabled, duplicate detection falls back to legacy title-based logic.</string>
@@ -873,8 +872,6 @@
     <string name="pref_duplicate_detection_title_exclusions_error_blank">Pattern is required</string>
     <string name="pref_duplicate_detection_title_exclusions_error_exists">This pattern already exists</string>
     <string name="pref_duplicate_detection_title_exclusions_error_catch_all">This pattern would erase the whole title. Use a narrower pattern.</string>
-    <string name="pref_duplicate_detection_match_preview">Match preview</string>
-    <string name="pref_duplicate_detection_match_preview_summary">Preview how current duplicate settings affect example matches. Coming in a future update.</string>
 
     <!-- Manga chapters -->
     <string name="display_mode_chapter">Chapter %1$s</string>

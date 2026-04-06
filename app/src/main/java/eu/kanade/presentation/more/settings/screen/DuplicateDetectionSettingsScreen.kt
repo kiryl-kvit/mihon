@@ -229,19 +229,6 @@ object DuplicateDetectionSettingsScreen : SearchableSettings {
                         ),
                     ),
                 )
-                add(
-                    Preference.PreferenceGroup(
-                        title = stringResource(MR.strings.pref_duplicate_detection_preview),
-                        preferenceItems = persistentListOf(
-                            Preference.PreferenceItem.TextPreference(
-                                title = stringResource(MR.strings.pref_duplicate_detection_match_preview),
-                                subtitle = stringResource(MR.strings.pref_duplicate_detection_match_preview_summary),
-                                enabled = false,
-                                isProfileSpecific = true,
-                            ),
-                        ),
-                    ),
-                )
             }
         }
     }
