@@ -398,26 +398,23 @@ enum class MangaPreviewSizeUi {
     EXTRA_LARGE,
 }
 
+private val MangaPreviewGridSpacing = 12.dp
+
 internal fun mangaPreviewGridColumnCount(
     size: MangaPreviewSizeUi,
     availableWidth: Dp,
 ): Int {
-    return when (size) {
-        MangaPreviewSizeUi.EXTRA_LARGE -> when {
-            availableWidth < 560.dp -> 1
-            availableWidth < 840.dp -> 2
-            else -> 3
-        }
-        else -> {
-            val minTileWidth = when (size) {
-                MangaPreviewSizeUi.SMALL -> 88.dp
-                MangaPreviewSizeUi.MEDIUM -> 112.dp
-                MangaPreviewSizeUi.LARGE -> 140.dp
-                MangaPreviewSizeUi.EXTRA_LARGE -> error("Handled above")
-            }
-            (availableWidth / minTileWidth).toInt().coerceAtLeast(1)
-        }
+    val preferredTileWidth = when (size) {
+        MangaPreviewSizeUi.SMALL -> 88.dp
+        MangaPreviewSizeUi.MEDIUM -> 112.dp
+        MangaPreviewSizeUi.LARGE -> 140.dp
+        // Matches the previous 560/840 dp focused-mode breakpoints with spacing-aware math.
+        MangaPreviewSizeUi.EXTRA_LARGE -> 272.dp
     }
+
+    return ((availableWidth + MangaPreviewGridSpacing) / (preferredTileWidth + MangaPreviewGridSpacing))
+        .toInt()
+        .coerceAtLeast(1)
 }
 
 @Composable
@@ -543,7 +540,7 @@ fun MangaPreviewGrid(
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             rows.forEach { row ->
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(MangaPreviewGridSpacing),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     row.forEach { previewPage ->
