@@ -126,6 +126,65 @@ class FeedsScreenModelTest {
 
         job.cancel()
     }
+
+    @Test
+    fun `profile switch clears selected feed until matching profile data arrives`() = runTest {
+        val activeProfileIdFlow = MutableStateFlow(1L)
+        val sourcesLoaded = MutableStateFlow(true)
+        val sourcesByProfile = mapOf(
+            1L to MutableSharedFlow<List<Source>>(replay = 1),
+            2L to MutableSharedFlow<List<Source>>(replay = 1),
+        )
+        val browseStateByProfile = mapOf(
+            1L to MutableSharedFlow<BrowseFeedService.State>(replay = 1),
+            2L to MutableSharedFlow<BrowseFeedService.State>(replay = 1),
+        )
+        val states = mutableListOf<FeedsScreenModel.State>()
+
+        val job = launch {
+            observeProfileAwareFeedState(
+                activeProfileIdFlow = activeProfileIdFlow,
+                enabledSources = { sourcesByProfile.getValue(it) },
+                browseState = { browseStateByProfile.getValue(it) },
+                sourcesLoaded = sourcesLoaded,
+            ).toList(states)
+        }
+
+        sourcesByProfile.getValue(1L).emit(
+            listOf(Source(id = 1L, lang = "en", name = "Source 1", supportsLatest = true, isStub = false)),
+        )
+        browseStateByProfile.getValue(1L).emit(
+            BrowseFeedService.State(
+                presets = emptyList(),
+                feeds = listOf(SourceFeed(id = "feed-1", sourceId = 1L, presetId = BUILTIN_POPULAR_PRESET_ID)),
+                selectedFeedId = "feed-1",
+            ),
+        )
+        advanceUntilIdle()
+
+        states.last().selectedFeedId shouldBe "feed-1"
+
+        activeProfileIdFlow.value = 2L
+        advanceUntilIdle()
+
+        states.last().selectedFeedId shouldBe "feed-1"
+
+        sourcesByProfile.getValue(2L).emit(
+            listOf(Source(id = 2L, lang = "en", name = "Source 2", supportsLatest = true, isStub = false)),
+        )
+        browseStateByProfile.getValue(2L).emit(
+            BrowseFeedService.State(
+                presets = emptyList(),
+                feeds = listOf(SourceFeed(id = "feed-2", sourceId = 2L, presetId = BUILTIN_POPULAR_PRESET_ID)),
+                selectedFeedId = "feed-2",
+            ),
+        )
+        advanceUntilIdle()
+
+        states.last().selectedFeedId shouldBe "feed-2"
+
+        job.cancel()
+    }
 }
 
 private fun <T> List<T>.toImmutableListForTest() = toImmutableList()

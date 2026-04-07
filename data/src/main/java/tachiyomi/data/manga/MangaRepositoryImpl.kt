@@ -1,6 +1,7 @@
 package tachiyomi.data.manga
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
@@ -28,7 +29,9 @@ class MangaRepositoryImpl(
 
     override suspend fun getMangaByIdAsFlow(id: Long): Flow<Manga> {
         return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
-            handler.subscribeToOne { mangasQueries.getMangaById(id, profileId, MangaMapper::mapManga) }
+            handler.subscribeToOneOrNull {
+                mangasQueries.getMangaById(id, profileId, MangaMapper::mapManga)
+            }.filterNotNull()
         }
     }
 

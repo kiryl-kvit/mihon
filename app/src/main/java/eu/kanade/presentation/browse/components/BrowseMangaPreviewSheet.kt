@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -50,6 +51,7 @@ import eu.kanade.presentation.manga.components.MangaPreviewSizeUi
 import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import kotlinx.coroutines.launch
+import mihon.feature.profiles.core.ProfileManager
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
@@ -57,6 +59,8 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun BrowseMangaPreviewSheet(
@@ -68,6 +72,9 @@ fun BrowseMangaPreviewSheet(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
+    val profileManager = remember { Injekt.get<ProfileManager>() }
+    val activeProfile by profileManager.activeProfile.collectAsStateWithLifecycle()
+    var previousProfileId by remember(mangaId) { mutableStateOf(activeProfile?.id) }
     var hasRequestedPreview by rememberSaveable(mangaId) { mutableStateOf(false) }
     val screenModel = object : Screen {
         override val key: ScreenKey = "browse-preview-screen-$mangaId"
@@ -87,6 +94,17 @@ fun BrowseMangaPreviewSheet(
 
     val state by screenModel.state.collectAsStateWithLifecycle()
     val previewState by screenModel.previewState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(activeProfile?.id) {
+        val currentProfileId = activeProfile?.id
+        val lastProfileId = previousProfileId
+        previousProfileId = currentProfileId
+
+        if (currentProfileId != null && lastProfileId != null && currentProfileId != lastProfileId) {
+            screenModel.setPreviewExpanded(false)
+            onDismissRequest()
+        }
+    }
 
     LaunchedEffect(state, hasRequestedPreview, previewState.chapterId) {
         if (!hasRequestedPreview && state is MangaScreenModel.State.Success && previewState.chapterId == null) {
