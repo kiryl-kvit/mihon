@@ -84,6 +84,7 @@ import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.collections.immutable.persistentListOf
 import mihon.feature.migration.dialog.MigrateMangaDialog
+import mihon.feature.profiles.core.ProfileManager
 import mihon.presentation.core.util.collectAsLazyPagingItems
 import sh.calvin.reorderable.ReorderableCollectionItemScope
 import sh.calvin.reorderable.ReorderableItem
@@ -100,10 +101,14 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.LocalSource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 @Composable
 fun Screen.feedsTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
+    val profileManager = remember { Injekt.get<ProfileManager>() }
+    val activeProfile by profileManager.activeProfile.collectAsState()
     val screenModel = rememberScreenModel { FeedsScreenModel() }
     val state by screenModel.state.collectAsState()
     val singleEnabledFeed = state.enabledFeeds.singleOrNull()
@@ -135,6 +140,7 @@ fun Screen.feedsTab(): TabContent {
         ),
         content = { contentPadding, snackbarHostState ->
             FeedsTabContent(
+                activeProfileId = activeProfile?.id,
                 state = state,
                 screenModel = screenModel,
                 navigator = navigator,
@@ -172,6 +178,7 @@ private fun SingleFeedTabLabel(
 
 @Composable
 private fun FeedsTabContent(
+    activeProfileId: Long?,
     state: FeedsScreenModel.State,
     screenModel: FeedsScreenModel,
     navigator: Navigator,
@@ -197,6 +204,7 @@ private fun FeedsTabContent(
         )
     } else if (activeFeed != null && activeSource != null && activePreset != null) {
         val browseModel = rememberActiveFeedScreenModel(
+            activeProfileId = activeProfileId,
             activeFeedId = activeFeed.id,
             sourceId = activeSource.id,
             listingQuery = activePreset.toListing().requestQuery,
@@ -212,6 +220,11 @@ private fun FeedsTabContent(
         }
         val hasPreviousFeed = activeIndex > 0
         val hasNextFeed = activeIndex in 0 until state.enabledFeeds.lastIndex
+
+        LaunchedEffect(activeProfileId) {
+            screenModel.closeDialog()
+            browseModel.dismissDialog()
+        }
 
         LaunchedEffect(activeFeed.id, activePreset.id) {
             val savedListing = activePreset.toListing()
@@ -260,6 +273,7 @@ private fun FeedsTabContent(
                 )
                 FeedBrowseContent(
                     stateHolder = browseContentStateHolder,
+                    activeProfileId = activeProfileId,
                     activeFeedId = activeFeed.id,
                 ) {
                     PullRefresh(
@@ -401,10 +415,11 @@ private fun FeedsTabContent(
 @Composable
 private fun FeedBrowseContent(
     stateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
+    activeProfileId: Long?,
     activeFeedId: String,
     content: @Composable () -> Unit,
 ) {
-    stateHolder.SaveableStateProvider(key = "feed-content-$activeFeedId") {
+    stateHolder.SaveableStateProvider(key = "feed-content-${activeProfileId ?: "none"}-$activeFeedId") {
         Box(modifier = Modifier.fillMaxWidth()) {
             content()
         }
@@ -538,19 +553,21 @@ private fun FeedChip(
 
 @Composable
 private fun rememberActiveFeedScreenModel(
+    activeProfileId: Long?,
     activeFeedId: String,
     sourceId: Long,
     listingQuery: String?,
     initialFilterSnapshot: List<eu.kanade.domain.source.model.FilterStateNode>,
 ): BrowseSourceScreenModel {
+    val profileKey = activeProfileId?.toString() ?: "none"
     return object : Screen {
-        override val key: ScreenKey = "feed-screen-model-$activeFeedId"
+        override val key: ScreenKey = "feed-screen-model-$profileKey-$activeFeedId"
 
         @Composable
         override fun Content() {
             error("Not used")
         }
-    }.rememberScreenModel(tag = activeFeedId) {
+    }.rememberScreenModel(tag = "$profileKey:$activeFeedId") {
         BrowseSourceScreenModel(
             sourceId = sourceId,
             listingQuery = listingQuery,

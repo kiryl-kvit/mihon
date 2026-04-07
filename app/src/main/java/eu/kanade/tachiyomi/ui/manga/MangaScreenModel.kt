@@ -1524,7 +1524,7 @@ class MangaScreenModel(
         val state = successState ?: return
         if (!state.isMerged) return
         screenModelScope.launchIO {
-            val members = state.memberIds.mapNotNull { memberId -> mangaRepository.getMangaById(memberId) }
+            val members = state.memberIds.mapNotNull { memberId -> getMangaOrNull(memberId) }
                 .toImmutableList()
             updateSuccessState {
                 it.copy(
@@ -1555,7 +1555,7 @@ class MangaScreenModel(
         screenModelScope.launchIO {
             val targetId = getVisibleMangaId(state.manga.id)
             val members = state.memberIds.mapNotNull { memberId ->
-                mangaRepository.getMangaById(memberId).let { manga ->
+                getMangaOrNull(memberId)?.let { manga ->
                     MergeMember(
                         id = manga.id,
                         manga = manga,
@@ -1702,7 +1702,7 @@ class MangaScreenModel(
 
     private suspend fun getMergePresentation(manga: Manga): MergePresentation {
         val memberIds = getMergedMemberIds().toImmutableList()
-        val members = memberIds.mapNotNull { memberId -> mangaRepository.getMangaById(memberId) }
+        val members = memberIds.mapNotNull { memberId -> getMangaOrNull(memberId) }
         return MergePresentation(
             sourceName = getSourceName(manga, memberIds),
             memberIds = memberIds,
@@ -1713,16 +1713,14 @@ class MangaScreenModel(
 
     private suspend fun updateMergedMemberManga(block: suspend (Manga) -> Unit) {
         getMergedMemberIds().forEach { memberId ->
-            mangaRepository.getMangaById(memberId).let { memberManga ->
+            getMangaOrNull(memberId)?.let { memberManga ->
                 block(memberManga)
             }
         }
     }
 
     private suspend fun getMergeMembers(): List<Manga> {
-        return getMergedMemberIds().mapNotNull { memberId ->
-            runCatching { mangaRepository.getMangaById(memberId) }.getOrNull()
-        }
+        return getMergedMemberIds().mapNotNull { memberId -> getMangaOrNull(memberId) }
     }
 
     private suspend fun getMergeMembersNeedingRefresh(): List<Manga> {
@@ -1738,7 +1736,8 @@ class MangaScreenModel(
     private suspend fun getMembersToRefreshFromSource(manualFetch: Boolean): List<Manga> {
         val mergedMembers = getMergeMembers()
         if (mergedMembers.size <= 1) {
-            return listOf(successState?.manga ?: mangaRepository.getMangaById(mangaId))
+            val fallbackManga = successState?.manga ?: getMangaOrNull(mangaId)
+            return listOfNotNull(fallbackManga)
         }
 
         return if (manualFetch) {
@@ -1746,6 +1745,10 @@ class MangaScreenModel(
         } else {
             getMergeMembersNeedingRefresh()
         }
+    }
+
+    private suspend fun getMangaOrNull(id: Long): Manga? {
+        return runCatching { mangaRepository.getMangaById(id) }.getOrNull()
     }
 
     private fun getSourceName(manga: Manga, memberIds: List<Long>): String {
