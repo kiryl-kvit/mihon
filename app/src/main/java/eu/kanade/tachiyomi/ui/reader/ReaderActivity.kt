@@ -32,7 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -144,6 +146,8 @@ class ReaderActivity : BaseActivity() {
     private val windowInsetsController by lazy { WindowInsetsControllerCompat(window, window.decorView) }
 
     private var loadingIndicator: ReaderProgressIndicator? = null
+    private var isAutoScrollRunning by mutableStateOf(false)
+    private var autoScrollSpeed by mutableStateOf(ReaderPreferences.AUTO_SCROLL_LEVEL_DEFAULT)
 
     var isScrollingThroughPages = false
         private set
@@ -200,11 +204,21 @@ class ReaderActivity : BaseActivity() {
 
         config = ReaderConfig()
         setMenuVisibility(viewModel.state.value.menuVisible)
+        autoScrollSpeed = readerPreferences.autoScrollSpeed.get()
 
         // Finish when incognito mode is disabled
         preferences.incognitoMode.changes()
             .drop(1)
             .onEach { if (!it) finish() }
+            .launchIn(lifecycleScope)
+
+        readerPreferences.autoScrollEnabled.changes()
+            .drop(1)
+            .onEach { enabled ->
+                if (!enabled) {
+                    stopAutoScroll(showToast = false)
+                }
+            }
             .launchIn(lifecycleScope)
 
         viewModel.state
@@ -346,6 +360,7 @@ class ReaderActivity : BaseActivity() {
      * Called when the activity is destroyed. Cleans up the viewer, configuration and any view.
      */
     override fun onDestroy() {
+        stopAutoScroll(showToast = false)
         super.onDestroy()
         viewModel.state.value.viewer?.destroy()
         config = null
@@ -354,6 +369,7 @@ class ReaderActivity : BaseActivity() {
     }
 
     override fun onPause() {
+        stopAutoScroll(showToast = false)
         lifecycleScope.launchNonCancellable {
             viewModel.updateHistory()
         }
@@ -420,7 +436,7 @@ class ReaderActivity : BaseActivity() {
      * Dispatches a key event. If the viewer doesn't handle it, call the default implementation.
      */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val handled = viewModel.state.value.viewer?.handleKeyEvent(event) ?: false
+        val handled = handleAutoScrollKeyEvent(event) || (viewModel.state.value.viewer?.handleKeyEvent(event) ?: false)
         return handled || super.dispatchKeyEvent(event)
     }
 
@@ -465,8 +481,10 @@ class ReaderActivity : BaseActivity() {
 
         val cropBorderPaged by readerPreferences.cropBorders.collectAsState()
         val cropBorderWebtoon by readerPreferences.cropBordersWebtoon.collectAsState()
+        val autoScrollFeatureEnabled by readerPreferences.autoScrollEnabled.collectAsState()
         val isPagerType = ReadingMode.isPagerType(viewModel.getMangaReadingMode())
         val cropEnabled = if (isPagerType) cropBorderPaged else cropBorderWebtoon
+        val showAutoScrollToggle = autoScrollFeatureEnabled && state.viewer?.supportsAutoScroll() == true
 
         ReaderAppBars(
             visible = state.menuVisible,
@@ -507,6 +525,9 @@ class ReaderActivity : BaseActivity() {
                 menuToggleToast?.cancel()
                 menuToggleToast = toast(if (enabled) MR.strings.on else MR.strings.off)
             },
+            showAutoScrollToggle = showAutoScrollToggle,
+            autoScrollActive = isAutoScrollRunning,
+            onClickAutoScroll = ::toggleAutoScroll,
             onClickSettings = viewModel::openSettingsDialog,
         )
     }
@@ -529,6 +550,8 @@ class ReaderActivity : BaseActivity() {
     private fun updateViewer() {
         val prevViewer = viewModel.state.value.viewer
         val newViewer = ReadingMode.toViewer(viewModel.getMangaReadingMode(), this)
+
+        stopAutoScroll(showToast = false)
 
         if (window.sharedElementEnterTransition is MaterialContainerTransform) {
             // Wait until transition is complete to avoid crash on API 26
@@ -709,6 +732,83 @@ class ReaderActivity : BaseActivity() {
      */
     fun toggleMenu() {
         setMenuVisibility(!viewModel.state.value.menuVisible)
+    }
+
+    private fun supportsAutoScroll(): Boolean {
+        return readerPreferences.autoScrollEnabled.get() && viewModel.state.value.viewer?.supportsAutoScroll() == true
+    }
+
+    private fun toggleAutoScroll() {
+        if (isAutoScrollRunning) {
+            stopAutoScroll()
+        } else {
+            startAutoScroll()
+        }
+    }
+
+    private fun startAutoScroll(showToast: Boolean = true) {
+        if (!supportsAutoScroll() || isAutoScrollRunning) {
+            return
+        }
+
+        viewModel.state.value.viewer?.startAutoScroll(autoScrollSpeed)
+        isAutoScrollRunning = true
+        hideMenu()
+
+        if (showToast) {
+            menuToggleToast?.cancel()
+            menuToggleToast = toast(MR.strings.reader_auto_scroll_enabled)
+        }
+    }
+
+    private fun stopAutoScroll(showToast: Boolean = true) {
+        if (!isAutoScrollRunning) {
+            return
+        }
+
+        viewModel.state.value.viewer?.stopAutoScroll()
+        isAutoScrollRunning = false
+
+        if (showToast) {
+            menuToggleToast?.cancel()
+            menuToggleToast = toast(MR.strings.reader_auto_scroll_disabled)
+        }
+    }
+
+    private fun changeAutoScrollSpeed(delta: Int) {
+        if (!isAutoScrollRunning) {
+            return
+        }
+
+        val newSpeed = (autoScrollSpeed + delta).coerceIn(ReaderPreferences.AUTO_SCROLL_SPEED_RANGE)
+        if (newSpeed == autoScrollSpeed) {
+            return
+        }
+
+        autoScrollSpeed = newSpeed
+        viewModel.state.value.viewer?.updateAutoScrollSpeed(newSpeed)
+    }
+
+    private fun handleAutoScrollKeyEvent(event: KeyEvent): Boolean {
+        if (!isAutoScrollRunning || !supportsAutoScroll()) {
+            return false
+        }
+
+        return when (event.keyCode) {
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    changeAutoScrollSpeed(delta = 1)
+                }
+                true
+            }
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                if (event.action == KeyEvent.ACTION_UP) {
+                    changeAutoScrollSpeed(delta = -1)
+                }
+                true
+            }
+            else -> false
+        }
     }
 
     /**

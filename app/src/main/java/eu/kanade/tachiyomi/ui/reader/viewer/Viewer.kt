@@ -32,6 +32,26 @@ interface Viewer {
     fun moveToPage(page: ReaderPage)
 
     /**
+     * Whether this viewer supports automatic scrolling.
+     */
+    fun supportsAutoScroll(): Boolean = false
+
+    /**
+     * Starts automatic scrolling with the given [speed].
+     */
+    fun startAutoScroll(speed: Int) {}
+
+    /**
+     * Updates the automatic scrolling [speed].
+     */
+    fun updateAutoScrollSpeed(speed: Int) {}
+
+    /**
+     * Stops automatic scrolling.
+     */
+    fun stopAutoScroll() {}
+
+    /**
      * Called from the containing activity when a key [event] is received. It should return true
      * if the event was handled, false otherwise.
      */

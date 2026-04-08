@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.reader.viewer.webtoon
 
 import android.graphics.PointF
+import android.view.Choreographer
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -77,6 +78,12 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
             .readerHideThreshold
             .get()
             .threshold
+
+    private var autoScrollVelocityPxPerSecond = autoScrollLevelToVelocity(ReaderPreferences.AUTO_SCROLL_LEVEL_DEFAULT)
+    private var autoScrollRemainderPx = 0.0
+    private var lastAutoScrollFrameNanos = 0L
+    private var autoScrollRunning = false
+    private val autoScrollFrameCallback = Choreographer.FrameCallback(::onAutoScrollFrame)
 
     init {
         recycler.setItemViewCacheSize(RECYCLER_VIEW_CACHE_SIZE)
@@ -197,8 +204,69 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
      * Destroys this viewer. Called when leaving the reader or swapping viewers.
      */
     override fun destroy() {
+        stopAutoScroll()
         super.destroy()
         scope.cancel()
+    }
+
+    override fun supportsAutoScroll(): Boolean = true
+
+    override fun startAutoScroll(speed: Int) {
+        updateAutoScrollSpeed(speed)
+        if (autoScrollRunning) {
+            return
+        }
+
+        autoScrollRunning = true
+        autoScrollRemainderPx = 0.0
+        lastAutoScrollFrameNanos = 0L
+        Choreographer.getInstance().postFrameCallback(autoScrollFrameCallback)
+    }
+
+    override fun updateAutoScrollSpeed(speed: Int) {
+        autoScrollVelocityPxPerSecond =
+            autoScrollLevelToVelocity(speed.coerceIn(ReaderPreferences.AUTO_SCROLL_SPEED_RANGE))
+    }
+
+    override fun stopAutoScroll() {
+        autoScrollRunning = false
+        autoScrollRemainderPx = 0.0
+        lastAutoScrollFrameNanos = 0L
+        Choreographer.getInstance().removeFrameCallback(autoScrollFrameCallback)
+    }
+
+    private fun onAutoScrollFrame(frameTimeNanos: Long) {
+        if (!autoScrollRunning) {
+            return
+        }
+
+        if (lastAutoScrollFrameNanos != 0L && recycler.isVisible && !activity.viewModel.state.value.menuVisible) {
+            val frameDeltaSeconds = (frameTimeNanos - lastAutoScrollFrameNanos) / NANOS_PER_SECOND
+            val scrollDeltaPx = (autoScrollVelocityPxPerSecond * frameDeltaSeconds) + autoScrollRemainderPx
+            val wholePixels = scrollDeltaPx.toInt()
+            autoScrollRemainderPx = scrollDeltaPx - wholePixels
+
+            if (wholePixels != 0) {
+                recycler.scrollBy(0, wholePixels)
+            }
+        }
+
+        lastAutoScrollFrameNanos = frameTimeNanos
+        Choreographer.getInstance().postFrameCallback(autoScrollFrameCallback)
+    }
+
+    private fun autoScrollLevelToVelocity(level: Int): Double {
+        val viewportHeight = recycler.originalHeight.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
+        val screensPerSecond = when (level) {
+            0 -> 0.12
+            1 -> 0.18
+            2 -> 0.24
+            3 -> 0.32
+            4 -> 0.42
+            5 -> 0.54
+            else -> 0.70
+        }
+        return viewportHeight * screensPerSecond
     }
 
     /**
@@ -363,3 +431,4 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
 
 // Double the cache size to reduce rebinds/recycles incurred by the extra layout space on scroll direction changes
 private const val RECYCLER_VIEW_CACHE_SIZE = 4
+private const val NANOS_PER_SECOND = 1_000_000_000.0

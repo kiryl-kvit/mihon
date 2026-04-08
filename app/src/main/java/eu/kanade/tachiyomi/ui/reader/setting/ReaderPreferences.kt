@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.BlendMode
 import dev.icerock.moko.resources.StringResource
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
+import tachiyomi.core.common.preference.coerceIn
 import tachiyomi.core.common.preference.getEnum
 import tachiyomi.i18n.MR
 
@@ -86,6 +87,13 @@ class ReaderPreferences(
     val skipDupe: Preference<Boolean> = preferenceStore.getBoolean("skip_dupe", false)
 
     val webtoonDisableZoomOut: Preference<Boolean> = preferenceStore.getBoolean("webtoon_disable_zoom_out", false)
+
+    val autoScrollEnabled: Preference<Boolean> = preferenceStore.getBoolean("reader_auto_scroll", false)
+
+    val autoScrollSpeed: Preference<Int> = preferenceStore.getInt(
+        "reader_auto_scroll_speed",
+        AUTO_SCROLL_LEVEL_DEFAULT,
+    ).coerceIn(AUTO_SCROLL_SPEED_RANGE)
 
     // endregion
 
@@ -198,10 +206,26 @@ class ReaderPreferences(
     }
 
     companion object {
+        const val AUTO_SCROLL_LEVEL_MIN = 0
+        const val AUTO_SCROLL_LEVEL_MAX = 6
+        const val AUTO_SCROLL_LEVEL_DEFAULT = 3
+
         const val WEBTOON_PADDING_MIN = 0
         const val WEBTOON_PADDING_MAX = 25
 
         const val MILLI_CONVERSION = 100
+
+        val AUTO_SCROLL_SPEED_RANGE = AUTO_SCROLL_LEVEL_MIN..AUTO_SCROLL_LEVEL_MAX
+
+        val AutoScrollLevelLabels = listOf(
+            MR.strings.auto_scroll_speed_slowest,
+            MR.strings.auto_scroll_speed_slower,
+            MR.strings.auto_scroll_speed_slow,
+            MR.strings.double_tap_anim_speed_normal,
+            MR.strings.double_tap_anim_speed_fast,
+            MR.strings.auto_scroll_speed_faster,
+            MR.strings.auto_scroll_speed_fastest,
+        )
 
         val TapZones = listOf(
             MR.strings.label_default,

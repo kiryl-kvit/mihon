@@ -63,6 +63,9 @@ fun ReaderAppBars(
     onClickOrientation: () -> Unit,
     cropEnabled: Boolean,
     onClickCropBorder: () -> Unit,
+    showAutoScrollToggle: Boolean,
+    autoScrollActive: Boolean,
+    onClickAutoScroll: () -> Unit,
     onClickSettings: () -> Unit,
 ) {
     val isRtl = viewer is R2LPagerViewer
@@ -125,6 +128,9 @@ fun ReaderAppBars(
                     onClickOrientation = onClickOrientation,
                     cropEnabled = cropEnabled,
                     onClickCropBorder = onClickCropBorder,
+                    showAutoScrollToggle = showAutoScrollToggle,
+                    autoScrollActive = autoScrollActive,
+                    onClickAutoScroll = onClickAutoScroll,
                     onClickSettings = onClickSettings,
                 )
             }

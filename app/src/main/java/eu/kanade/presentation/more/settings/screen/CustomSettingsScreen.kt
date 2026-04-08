@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
@@ -70,9 +71,12 @@ object CustomSettingsScreen : SearchableSettings {
         val customPreferences = remember { Injekt.get<CustomPreferences>() }
         val globalCustomPreferences = remember { Injekt.get<GlobalCustomPreferences>() }
         val profilesPreferences = remember { Injekt.get<ProfilesPreferences>() }
+        val readerPreferences = remember { Injekt.get<ReaderPreferences>() }
         val browseLongPressAction by customPreferences.browseLongPressAction.collectAsState()
         val previewEnabled by customPreferences.enableMangaPreview.collectAsState()
         val previewPageCount by customPreferences.mangaPreviewPageCount.collectAsState()
+        val autoScrollEnabled by readerPreferences.autoScrollEnabled.collectAsState()
+        val autoScrollSpeed by readerPreferences.autoScrollSpeed.collectAsState()
         val startupTab by customPreferences.homeScreenStartupTab.collectAsState()
         val homeScreenTabs by customPreferences.homeScreenTabs.collectAsState()
         val storedHomeTabOrder by customPreferences.homeScreenTabOrder.collectAsState()
@@ -261,6 +265,25 @@ object CustomSettingsScreen : SearchableSettings {
                         onClick = {
                             navigator.push(DuplicateDetectionSettingsScreen)
                         },
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_auto_scroll),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = readerPreferences.autoScrollEnabled,
+                        title = stringResource(MR.strings.pref_enable_auto_scroll),
+                        subtitle = stringResource(MR.strings.pref_auto_scroll_summary),
+                    ),
+                    Preference.PreferenceItem.SliderPreference(
+                        value = autoScrollSpeed,
+                        preference = readerPreferences.autoScrollSpeed,
+                        valueRange = ReaderPreferences.AUTO_SCROLL_SPEED_RANGE,
+                        title = stringResource(MR.strings.pref_auto_scroll_speed),
+                        valueString = stringResource(ReaderPreferences.AutoScrollLevelLabels[autoScrollSpeed]),
+                        enabled = autoScrollEnabled,
+                        onValueChanged = { readerPreferences.autoScrollSpeed.set(it) },
                     ),
                 ),
             ),
