@@ -79,7 +79,7 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
             .get()
             .threshold
 
-    private var autoScrollVelocityPxPerSecond = autoScrollLevelToVelocity(ReaderPreferences.AUTO_SCROLL_LEVEL_DEFAULT)
+    private var autoScrollLevel = ReaderPreferences.AUTO_SCROLL_LEVEL_DEFAULT
     private var autoScrollRemainderPx = 0.0
     private var lastAutoScrollFrameNanos = 0L
     private var autoScrollRunning = false
@@ -224,8 +224,7 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
     }
 
     override fun updateAutoScrollSpeed(speed: Int) {
-        autoScrollVelocityPxPerSecond =
-            autoScrollLevelToVelocity(speed.coerceIn(ReaderPreferences.AUTO_SCROLL_SPEED_RANGE))
+        autoScrollLevel = speed.coerceIn(ReaderPreferences.AUTO_SCROLL_SPEED_RANGE)
     }
 
     override fun stopAutoScroll() {
@@ -241,6 +240,7 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
         }
 
         if (lastAutoScrollFrameNanos != 0L && recycler.isVisible && !activity.viewModel.state.value.menuVisible) {
+            val autoScrollVelocityPxPerSecond = autoScrollLevelToVelocity(autoScrollLevel)
             val frameDeltaSeconds = (frameTimeNanos - lastAutoScrollFrameNanos) / NANOS_PER_SECOND
             val scrollDeltaPx = (autoScrollVelocityPxPerSecond * frameDeltaSeconds) + autoScrollRemainderPx
             val wholePixels = scrollDeltaPx.toInt()
@@ -256,7 +256,7 @@ class WebtoonViewer(val activity: ReaderActivity, val isContinuous: Boolean = tr
     }
 
     private fun autoScrollLevelToVelocity(level: Int): Double {
-        val viewportHeight = recycler.originalHeight.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
+        val viewportHeight = frame.height.takeIf { it > 0 } ?: activity.resources.displayMetrics.heightPixels
         val screensPerSecond = when (level) {
             0 -> 0.12
             1 -> 0.18
