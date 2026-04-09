@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -203,181 +204,185 @@ private fun FeedsTabContent(
             modifier = Modifier.padding(contentPadding),
         )
     } else if (activeFeed != null && activeSource != null && activePreset != null) {
-        val browseModel = rememberActiveFeedScreenModel(
-            activeProfileId = activeProfileId,
-            activeFeedId = activeFeed.id,
-            sourceId = activeSource.id,
-            listingQuery = activePreset.toListing().requestQuery,
-            initialFilterSnapshot = activePreset.filters,
-        )
-        val browseModelState by browseModel.state.collectAsState()
-        val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
-        val isRefreshing = mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
-        val source = browseModel.source as CatalogueSource
         val browseContentStateHolder = rememberSaveableStateHolder()
-        val activeIndex = remember(state.enabledFeeds, activeFeed.id) {
-            state.enabledFeeds.indexOfFirst { it.id == activeFeed.id }
-        }
-        val hasPreviousFeed = activeIndex > 0
-        val hasNextFeed = activeIndex in 0 until state.enabledFeeds.lastIndex
+        key(activeProfileId, activeFeed.id) {
+            val browseModel = rememberActiveFeedScreenModel(
+                activeProfileId = activeProfileId,
+                activeFeedId = activeFeed.id,
+                sourceId = activeSource.id,
+                listingQuery = activePreset.toListing().requestQuery,
+                initialFilterSnapshot = activePreset.filters,
+            )
+            val browseModelState by browseModel.state.collectAsState()
+            val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
+            val isRefreshing = mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
+            val source = browseModel.source as CatalogueSource
+            val activeIndex = remember(state.enabledFeeds, activeFeed.id) {
+                state.enabledFeeds.indexOfFirst { it.id == activeFeed.id }
+            }
+            val hasPreviousFeed = activeIndex > 0
+            val hasNextFeed = activeIndex in 0 until state.enabledFeeds.lastIndex
 
-        LaunchedEffect(activeProfileId) {
-            screenModel.closeDialog()
-            browseModel.dismissDialog()
-        }
-
-        LaunchedEffect(activeFeed.id, activePreset.id) {
-            val savedListing = activePreset.toListing()
-            val currentFilters = browseModelState.filters.snapshot()
-            val shouldApplyPreset = when (activePreset.listingMode) {
-                FeedListingMode.Popular -> browseModelState.listing != BrowseSourceScreenModel.Listing.Popular
-                FeedListingMode.Latest -> browseModelState.listing != BrowseSourceScreenModel.Listing.Latest
-                FeedListingMode.Search -> {
-                    val listing = browseModelState.listing as? BrowseSourceScreenModel.Listing.Search
-                    listing?.query != activePreset.query || currentFilters != savedListing.filters
-                }
+            LaunchedEffect(activeProfileId) {
+                screenModel.closeDialog()
+                browseModel.dismissDialog()
             }
 
-            if (!shouldApplyPreset) return@LaunchedEffect
+            LaunchedEffect(activeFeed.id, activePreset.id) {
+                val savedListing = activePreset.toListing()
+                val currentFilters = browseModelState.filters.snapshot()
+                val shouldApplyPreset = when (activePreset.listingMode) {
+                    FeedListingMode.Popular -> browseModelState.listing != BrowseSourceScreenModel.Listing.Popular
+                    FeedListingMode.Latest -> browseModelState.listing != BrowseSourceScreenModel.Listing.Latest
+                    FeedListingMode.Search -> {
+                        val listing = browseModelState.listing as? BrowseSourceScreenModel.Listing.Search
+                        listing?.query != activePreset.query || currentFilters != savedListing.filters
+                    }
+                }
 
-            val filters = source.getFilterList().applySnapshot(activePreset.filters)
-            when (activePreset.listingMode) {
-                FeedListingMode.Popular -> {
-                    browseModel.resetFilters()
-                    browseModel.setListing(BrowseSourceScreenModel.Listing.Popular)
-                }
-                FeedListingMode.Latest -> {
-                    browseModel.resetFilters()
-                    browseModel.setListing(BrowseSourceScreenModel.Listing.Latest)
-                }
-                FeedListingMode.Search -> {
-                    browseModel.setFilters(filters)
-                    browseModel.search(
-                        query = activePreset.query,
-                        filters = filters,
-                    )
-                }
-            }
-        }
+                if (!shouldApplyPreset) return@LaunchedEffect
 
-        Column(
-            modifier = Modifier.pointerInput(Unit) {},
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                val feedContentPadding = PaddingValues(
-                    bottom = contentPadding.calculateBottomPadding(),
-                )
-                FeedBrowseContent(
-                    stateHolder = browseContentStateHolder,
-                    activeProfileId = activeProfileId,
-                    activeFeedId = activeFeed.id,
-                ) {
-                    PullRefresh(
-                        refreshing = isRefreshing,
-                        enabled = true,
-                        onRefresh = mangaList::refresh,
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        BrowseSourceContent(
-                            source = browseModel.source,
-                            mangaList = mangaList,
-                            columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                            displayMode = browseModel.displayMode,
-                            snackbarHostState = snackbarHostState,
-                            contentPadding = feedContentPadding,
-                            onWebViewClick = {
-                                val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
-                                navigator.push(
-                                    WebViewScreen(
-                                        url = httpSource.baseUrl,
-                                        initialTitle = httpSource.name,
-                                        sourceId = httpSource.id,
-                                    ),
-                                )
-                            },
-                            onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                            onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                            onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
-                            onMangaLongClick = { manga ->
-                                scope.launchIO {
-                                    if (browseModel.onMangaLongClick(manga)) {
-                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    }
-                                }
-                            },
+                val filters = source.getFilterList().applySnapshot(activePreset.filters)
+                when (activePreset.listingMode) {
+                    FeedListingMode.Popular -> {
+                        browseModel.resetFilters()
+                        browseModel.setListing(BrowseSourceScreenModel.Listing.Popular)
+                    }
+                    FeedListingMode.Latest -> {
+                        browseModel.resetFilters()
+                        browseModel.setListing(BrowseSourceScreenModel.Listing.Latest)
+                    }
+                    FeedListingMode.Search -> {
+                        browseModel.setFilters(filters)
+                        browseModel.search(
+                            query = activePreset.query,
+                            filters = filters,
                         )
                     }
                 }
             }
 
-            if (state.enabledFeeds.size > 1) {
-                FeedNavigationBar(
-                    feeds = state.enabledFeeds,
-                    selectedFeedId = activeFeed.id,
-                    screenModel = screenModel,
-                    canGoPrevious = hasPreviousFeed,
-                    canGoNext = hasNextFeed,
-                    onPreviousClick = {
-                        state.enabledFeeds.getOrNull(activeIndex - 1)?.let { screenModel.selectFeed(it.id) }
-                    },
-                    onNextClick = {
-                        state.enabledFeeds.getOrNull(activeIndex + 1)?.let { screenModel.selectFeed(it.id) }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            Column(
+                modifier = Modifier.pointerInput(Unit) {},
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                ) {
+                    val feedContentPadding = PaddingValues(
+                        bottom = contentPadding.calculateBottomPadding(),
+                    )
+                    FeedBrowseContent(
+                        stateHolder = browseContentStateHolder,
+                        activeProfileId = activeProfileId,
+                        activeFeedId = activeFeed.id,
+                    ) {
+                        PullRefresh(
+                            refreshing = isRefreshing,
+                            enabled = true,
+                            onRefresh = mangaList::refresh,
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            BrowseSourceContent(
+                                source = browseModel.source,
+                                mangaList = mangaList,
+                                columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                                displayMode = browseModel.displayMode,
+                                snackbarHostState = snackbarHostState,
+                                contentPadding = feedContentPadding,
+                                onWebViewClick = {
+                                    val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
+                                    navigator.push(
+                                        WebViewScreen(
+                                            url = httpSource.baseUrl,
+                                            initialTitle = httpSource.name,
+                                            sourceId = httpSource.id,
+                                        ),
+                                    )
+                                },
+                                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                                onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
+                                onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
+                                onMangaLongClick = { manga ->
+                                    scope.launchIO {
+                                        if (browseModel.onMangaLongClick(manga)) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
 
-            when (val dialog = browseModelState.dialog) {
-                is BrowseSourceScreenModel.Dialog.MangaPreview -> {
-                    BrowseMangaPreviewSheet(
-                        mangaId = dialog.mangaId,
-                        previewSize = browseModel.mangaPreviewSizeUi(),
-                        onLibraryAction = browseModel::onMangaLibraryAction,
-                        onDismissRequest = browseModel::dismissDialog,
+                if (state.enabledFeeds.size > 1) {
+                    FeedNavigationBar(
+                        feeds = state.enabledFeeds,
+                        selectedFeedId = activeFeed.id,
+                        screenModel = screenModel,
+                        canGoPrevious = hasPreviousFeed,
+                        canGoNext = hasNextFeed,
+                        onPreviousClick = {
+                            state.enabledFeeds.getOrNull(activeIndex - 1)?.let { screenModel.selectFeed(it.id) }
+                        },
+                        onNextClick = {
+                            state.enabledFeeds.getOrNull(activeIndex + 1)?.let { screenModel.selectFeed(it.id) }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                is BrowseSourceScreenModel.Dialog.AddDuplicateManga -> {
-                    DuplicateMangaDialog(
-                        duplicates = dialog.duplicates,
-                        onDismissRequest = browseModel::dismissDialog,
-                        onConfirm = { browseModel.addFavorite(dialog.manga) },
-                        onOpenManga = { navigator.push(MangaScreen(it.id)) },
-                        onMigrate = { browseModel.setDialog(BrowseSourceScreenModel.Dialog.Migrate(dialog.manga, it)) },
-                    )
-                }
-                is BrowseSourceScreenModel.Dialog.Migrate -> {
-                    with(BrowseSourceScreen(activeSource.id, activePreset.toListing().requestQuery)) {
-                        MigrateMangaDialog(
-                            current = dialog.current,
-                            target = dialog.target,
-                            onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
+
+                when (val dialog = browseModelState.dialog) {
+                    is BrowseSourceScreenModel.Dialog.MangaPreview -> {
+                        BrowseMangaPreviewSheet(
+                            mangaId = dialog.mangaId,
+                            previewSize = browseModel.mangaPreviewSizeUi(),
+                            onLibraryAction = browseModel::onMangaLibraryAction,
                             onDismissRequest = browseModel::dismissDialog,
                         )
                     }
+                    is BrowseSourceScreenModel.Dialog.AddDuplicateManga -> {
+                        DuplicateMangaDialog(
+                            duplicates = dialog.duplicates,
+                            onDismissRequest = browseModel::dismissDialog,
+                            onConfirm = { browseModel.addFavorite(dialog.manga) },
+                            onOpenManga = { navigator.push(MangaScreen(it.id)) },
+                            onMigrate = {
+                                browseModel.setDialog(BrowseSourceScreenModel.Dialog.Migrate(dialog.manga, it))
+                            },
+                        )
+                    }
+                    is BrowseSourceScreenModel.Dialog.Migrate -> {
+                        with(BrowseSourceScreen(activeSource.id, activePreset.toListing().requestQuery)) {
+                            MigrateMangaDialog(
+                                current = dialog.current,
+                                target = dialog.target,
+                                onClickTitle = { navigator.push(MangaScreen(dialog.current.id)) },
+                                onDismissRequest = browseModel::dismissDialog,
+                            )
+                        }
+                    }
+                    is BrowseSourceScreenModel.Dialog.RemoveManga -> {
+                        RemoveMangaDialog(
+                            onDismissRequest = browseModel::dismissDialog,
+                            onConfirm = { browseModel.changeMangaFavorite(dialog.manga) },
+                            mangaToRemove = dialog.manga,
+                        )
+                    }
+                    is BrowseSourceScreenModel.Dialog.ChangeMangaCategory -> {
+                        ChangeCategoryDialog(
+                            initialSelection = dialog.initialSelection,
+                            onDismissRequest = browseModel::dismissDialog,
+                            onEditCategories = { navigator.push(CategoryScreen()) },
+                            onConfirm = { include, _ ->
+                                browseModel.changeMangaFavorite(dialog.manga)
+                                browseModel.moveMangaToCategories(dialog.manga, include)
+                            },
+                        )
+                    }
+                    else -> Unit
                 }
-                is BrowseSourceScreenModel.Dialog.RemoveManga -> {
-                    RemoveMangaDialog(
-                        onDismissRequest = browseModel::dismissDialog,
-                        onConfirm = { browseModel.changeMangaFavorite(dialog.manga) },
-                        mangaToRemove = dialog.manga,
-                    )
-                }
-                is BrowseSourceScreenModel.Dialog.ChangeMangaCategory -> {
-                    ChangeCategoryDialog(
-                        initialSelection = dialog.initialSelection,
-                        onDismissRequest = browseModel::dismissDialog,
-                        onEditCategories = { navigator.push(CategoryScreen()) },
-                        onConfirm = { include, _ ->
-                            browseModel.changeMangaFavorite(dialog.manga)
-                            browseModel.moveMangaToCategories(dialog.manga, include)
-                        },
-                    )
-                }
-                else -> Unit
             }
         }
     }
