@@ -1,6 +1,8 @@
 package eu.kanade.presentation.more.settings.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +56,8 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.LabeledCheckbox
+import tachiyomi.presentation.core.components.RadioItem
+import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
@@ -80,6 +85,8 @@ object CustomSettingsScreen : SearchableSettings {
         val startupTab by customPreferences.homeScreenStartupTab.collectAsState()
         val homeScreenTabs by customPreferences.homeScreenTabs.collectAsState()
         val storedHomeTabOrder by customPreferences.homeScreenTabOrder.collectAsState()
+        val homeScreenTabsTitle = stringResource(MR.strings.pref_home_screen_tabs)
+        val startupScreenTitle = stringResource(MR.strings.pref_startup_screen)
         val navigator = LocalNavigator.currentOrThrow
         var showProfilesInfo by rememberSaveable { mutableStateOf(false) }
         var showHomeTabsDialog by rememberSaveable { mutableStateOf(false) }
@@ -87,11 +94,20 @@ object CustomSettingsScreen : SearchableSettings {
         val enabledHomeTabs = remember(homeScreenTabs, storedHomeTabOrder) {
             sanitizeHomeScreenTabs(homeScreenTabs.toHomeScreenTabs(), storedHomeTabOrder)
         }
-        val startupTabEntries = remember(enabledHomeTabs, homeTabEntries) {
-            enabledHomeTabs
-                .filterNot { it == HomeScreenTabs.Profiles }
-                .associateWith { homeTabEntries.getValue(it) }
-                .toImmutableMap()
+        val resolvedStartupTab = remember(startupTab, enabledHomeTabs, storedHomeTabOrder) {
+            resolveHomeScreenTab(
+                requestedTab = startupTab,
+                enabledTabs = enabledHomeTabs.filterNot { it == HomeScreenTabs.Profiles },
+                tabOrder = storedHomeTabOrder,
+            )
+        }
+        val homeTabsSubtitle = remember(enabledHomeTabs, resolvedStartupTab, startupScreenTitle) {
+            buildHomeTabsSubtitle(
+                enabledTabs = enabledHomeTabs,
+                startupTab = resolvedStartupTab,
+                homeTabEntries = homeTabEntries,
+                startupScreenTitle = startupScreenTitle,
+            )
         }
 
         LaunchedEffect(previewEnabled, browseLongPressAction) {
@@ -120,6 +136,9 @@ object CustomSettingsScreen : SearchableSettings {
             val orderedTabs = remember(storedHomeTabOrder) {
                 sanitizeHomeScreenTabOrder(storedHomeTabOrder).toMutableStateList()
             }
+            var selectedStartupTab by remember(resolvedStartupTab) {
+                mutableStateOf(resolvedStartupTab)
+            }
             val listState = rememberLazyListState()
             val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
                 val fromIndex = orderedTabs.indexOfFirst { it.name == from.key }
@@ -127,36 +146,78 @@ object CustomSettingsScreen : SearchableSettings {
                 if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
                 orderedTabs.add(toIndex, orderedTabs.removeAt(fromIndex))
             }
+            val dialogEnabledTabs = sanitizeHomeScreenTabs(selectedTabs.toSet(), orderedTabs)
+                .filterNot { it == HomeScreenTabs.Profiles }
+
+            LaunchedEffect(dialogEnabledTabs, orderedTabs.toList()) {
+                val resolvedDialogStartupTab = resolveHomeScreenTab(
+                    requestedTab = selectedStartupTab,
+                    enabledTabs = dialogEnabledTabs,
+                    tabOrder = orderedTabs,
+                )
+                if (resolvedDialogStartupTab != selectedStartupTab) {
+                    selectedStartupTab = resolvedDialogStartupTab
+                }
+            }
+
             AlertDialog(
                 onDismissRequest = { showHomeTabsDialog = false },
-                title = { Text(text = stringResource(MR.strings.pref_home_screen_tabs)) },
+                title = { Text(text = homeScreenTabsTitle) },
                 text = {
-                    LazyColumn(
-                        modifier = Modifier.heightIn(max = 360.dp),
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.medium),
                     ) {
-                        items(
-                            items = orderedTabs,
-                            key = { it.name },
-                        ) { tab ->
-                            val isSelected = tab in selectedTabs
-                            val isLocked = tab == HomeScreenTabs.More
-                            ReorderableItem(reorderableState, tab.name, enabled = orderedTabs.size > 1) {
-                                HomeTabItem(
+                        Box {
+                            ScrollbarLazyColumn(
+                                modifier = Modifier.heightIn(max = 280.dp),
+                                state = listState,
+                                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                            ) {
+                                items(
+                                    items = orderedTabs,
+                                    key = { it.name },
+                                ) { tab ->
+                                    val isSelected = tab in selectedTabs
+                                    val isLocked = tab == HomeScreenTabs.More
+                                    ReorderableItem(reorderableState, tab.name, enabled = orderedTabs.size > 1) {
+                                        HomeTabItem(
+                                            label = homeTabEntries.getValue(tab),
+                                            checked = isSelected,
+                                            visibilityLocked = isLocked,
+                                            dragEnabled = orderedTabs.size > 1,
+                                            onCheckedChange = { checked ->
+                                                if (checked) {
+                                                    if (tab !in selectedTabs) {
+                                                        selectedTabs.add(tab)
+                                                    }
+                                                } else {
+                                                    selectedTabs.remove(tab)
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                            if (listState.canScrollBackward) {
+                                HorizontalDivider(modifier = Modifier.align(Alignment.TopCenter))
+                            }
+                            if (listState.canScrollForward) {
+                                HorizontalDivider(modifier = Modifier.align(Alignment.BottomCenter))
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = startupScreenTitle,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp),
+                            )
+                            dialogEnabledTabs.forEach { tab ->
+                                RadioItem(
                                     label = homeTabEntries.getValue(tab),
-                                    checked = isSelected,
-                                    visibilityLocked = isLocked,
-                                    dragEnabled = orderedTabs.size > 1,
-                                    onCheckedChange = { checked ->
-                                        if (checked) {
-                                            if (tab !in selectedTabs) {
-                                                selectedTabs.add(tab)
-                                            }
-                                        } else {
-                                            selectedTabs.remove(tab)
-                                        }
-                                    },
+                                    selected = selectedStartupTab == tab,
+                                    onClick = { selectedStartupTab = tab },
                                 )
                             }
                         }
@@ -170,7 +231,7 @@ object CustomSettingsScreen : SearchableSettings {
                             customPreferences.homeScreenTabOrder.set(updatedTabOrder)
                             customPreferences.homeScreenTabs.set(newTabs.toHomeScreenTabPreferenceValue())
                             val resolvedStartupTab = resolveHomeScreenTab(
-                                requestedTab = startupTab,
+                                requestedTab = selectedStartupTab,
                                 enabledTabs = newTabs.filterNot { it == HomeScreenTabs.Profiles },
                                 tabOrder = updatedTabOrder,
                             )
@@ -220,24 +281,10 @@ object CustomSettingsScreen : SearchableSettings {
                 title = stringResource(MR.strings.pref_category_general),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.TextPreference(
-                        title = stringResource(MR.strings.pref_home_screen_tabs),
-                        subtitle = enabledHomeTabs.joinToString { homeTabEntries.getValue(it) },
+                        title = homeScreenTabsTitle,
+                        subtitle = homeTabsSubtitle,
+                        isProfileSpecific = true,
                         onClick = { showHomeTabsDialog = true },
-                    ),
-                    Preference.PreferenceItem.ListPreference(
-                        preference = customPreferences.homeScreenStartupTab,
-                        entries = startupTabEntries,
-                        title = stringResource(MR.strings.pref_startup_screen),
-                        onValueChanged = {
-                            customPreferences.homeScreenStartupTab.set(
-                                resolveHomeScreenTab(
-                                    requestedTab = it,
-                                    enabledTabs = enabledHomeTabs.filterNot { it == HomeScreenTabs.Profiles },
-                                    tabOrder = storedHomeTabOrder,
-                                ),
-                            )
-                            false
-                        },
                     ),
                     Preference.PreferenceItem.SwitchPreference(
                         preference = customPreferences.enableFeeds,
@@ -359,6 +406,21 @@ object CustomSettingsScreen : SearchableSettings {
                     .then(if (dragEnabled) Modifier.draggableHandle() else Modifier)
                     .padding(MaterialTheme.padding.small),
             )
+        }
+    }
+
+    private fun buildHomeTabsSubtitle(
+        enabledTabs: Collection<HomeScreenTabs>,
+        startupTab: HomeScreenTabs,
+        homeTabEntries: ImmutableMap<HomeScreenTabs, String>,
+        startupScreenTitle: String,
+    ): String {
+        return buildString {
+            append(enabledTabs.joinToString { homeTabEntries.getValue(it) })
+            append('\n')
+            append(startupScreenTitle)
+            append(": ")
+            append(homeTabEntries.getValue(startupTab))
         }
     }
 }
