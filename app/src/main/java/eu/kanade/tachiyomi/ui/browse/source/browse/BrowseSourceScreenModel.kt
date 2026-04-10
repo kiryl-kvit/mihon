@@ -364,7 +364,11 @@ class BrowseSourceScreenModel(
 
     fun showSavePresetDialog() {
         if (!feedsEnabled) return
-        setDialog(Dialog.SavePreset)
+        setDialog(
+            Dialog.SavePreset(
+                chronological = state.value.listing != Listing.Popular,
+            ),
+        )
     }
 
     fun feedPresets(): List<SourceFeedPreset> {
@@ -429,7 +433,7 @@ class BrowseSourceScreenModel(
         }
     }
 
-    fun savePreset(name: String) {
+    fun savePreset(name: String, chronological: Boolean) {
         if (!feedsEnabled) return
         if (source !is CatalogueSource) return
 
@@ -444,6 +448,7 @@ class BrowseSourceScreenModel(
                 sourceId = sourceId,
                 name = trimmed,
                 listingMode = presetState.listingMode,
+                chronological = chronological,
                 query = presetState.query,
                 filters = presetState.filters,
             ),
@@ -480,7 +485,7 @@ class BrowseSourceScreenModel(
 
     sealed interface Dialog {
         data object Filter : Dialog
-        data object SavePreset : Dialog
+        data class SavePreset(val chronological: Boolean) : Dialog
         data class MangaPreview(val mangaId: Long) : Dialog
         data class RemoveManga(val manga: Manga) : Dialog
         data class AddDuplicateManga(val manga: Manga, val duplicates: List<DuplicateMangaCandidate>) : Dialog

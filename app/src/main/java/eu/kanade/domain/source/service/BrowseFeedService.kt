@@ -1,7 +1,9 @@
 package eu.kanade.domain.source.service
 
 import eu.kanade.domain.source.model.SourceFeed
+import eu.kanade.domain.source.model.SourceFeedAnchor
 import eu.kanade.domain.source.model.SourceFeedPreset
+import eu.kanade.domain.source.model.SourceFeedTimeline
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 
@@ -53,8 +55,12 @@ class BrowseFeedService(
             preferences.savedFeedPresets.get().filterNot { it.id == presetId },
         )
 
+        val removedFeedIds = preferences.savedFeeds.get()
+            .filter { it.presetId == presetId }
+            .map(SourceFeed::id)
         val remainingFeeds = preferences.savedFeeds.get().filterNot { it.presetId == presetId }
         preferences.savedFeeds.set(remainingFeeds)
+        removedFeedIds.forEach(::clearTimeline)
 
         val selectedFeedId = preferences.selectedFeedId.get()
         if (selectedFeedId.isNotBlank() && remainingFeeds.none { it.id == selectedFeedId }) {
@@ -88,6 +94,7 @@ class BrowseFeedService(
         preferences.savedFeeds.set(
             preferences.savedFeeds.get().filterNot { it.id == feedId },
         )
+        clearTimeline(feedId)
         if (preferences.selectedFeedId.get() == feedId) {
             preferences.selectedFeedId.set("")
         }
@@ -106,6 +113,35 @@ class BrowseFeedService(
 
     fun selectFeed(feedId: String) {
         preferences.selectedFeedId.set(feedId)
+    }
+
+    fun timeline(feedId: String): Flow<SourceFeedTimeline> {
+        return preferences.feedTimeline(feedId).changes()
+    }
+
+    fun timelineSnapshot(feedId: String): SourceFeedTimeline {
+        return preferences.feedTimeline(feedId).get()
+    }
+
+    fun saveTimeline(feedId: String, timeline: SourceFeedTimeline) {
+        preferences.feedTimeline(feedId).set(timeline)
+    }
+
+    fun clearTimeline(feedId: String) {
+        preferences.feedTimeline(feedId).delete()
+        preferences.feedAnchor(feedId).delete()
+    }
+
+    fun anchor(feedId: String): Flow<SourceFeedAnchor> {
+        return preferences.feedAnchor(feedId).changes()
+    }
+
+    fun anchorSnapshot(feedId: String): SourceFeedAnchor {
+        return preferences.feedAnchor(feedId).get()
+    }
+
+    fun saveAnchor(feedId: String, anchor: SourceFeedAnchor) {
+        preferences.feedAnchor(feedId).set(anchor)
     }
 
     data class State(

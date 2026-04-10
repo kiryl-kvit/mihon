@@ -2,7 +2,9 @@ package eu.kanade.domain.source.service
 
 import eu.kanade.domain.source.interactor.SetMigrateSorting
 import eu.kanade.domain.source.model.SourceFeed
+import eu.kanade.domain.source.model.SourceFeedAnchor
 import eu.kanade.domain.source.model.SourceFeedPreset
+import eu.kanade.domain.source.model.SourceFeedTimeline
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -102,4 +104,22 @@ class SourcePreferences(
         Preference.appStateKey("selected_source_feed_id"),
         "",
     )
+
+    fun feedTimeline(feedId: String): Preference<SourceFeedTimeline> {
+        return preferenceStore.getObjectFromString(
+            key = Preference.appStateKey("source_feed_timeline_$feedId"),
+            defaultValue = SourceFeedTimeline(),
+            serializer = { json.encodeToString(it) },
+            deserializer = { json.decodeFromString<SourceFeedTimeline>(it) },
+        )
+    }
+
+    fun feedAnchor(feedId: String): Preference<SourceFeedAnchor> {
+        return preferenceStore.getObjectFromString(
+            key = Preference.appStateKey("source_feed_anchor_$feedId"),
+            defaultValue = SourceFeedAnchor(),
+            serializer = { json.encodeToString(it) },
+            deserializer = { json.decodeFromString<SourceFeedAnchor>(it) },
+        )
+    }
 }

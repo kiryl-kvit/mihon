@@ -128,7 +128,7 @@ data class BrowseSourceScreen(
 
         LaunchedEffect(feedsEnabled, state.dialog) {
             if (!feedsEnabled) {
-                if (state.dialog == BrowseSourceScreenModel.Dialog.SavePreset) {
+                if (state.dialog is BrowseSourceScreenModel.Dialog.SavePreset) {
                     screenModel.setDialog(null)
                 }
                 presetPendingDeletion = null
@@ -264,9 +264,10 @@ data class BrowseSourceScreen(
                     onUpdate = screenModel::setFilters,
                 )
             }
-            BrowseSourceScreenModel.Dialog.SavePreset -> if (feedsEnabled) {
+            is BrowseSourceScreenModel.Dialog.SavePreset -> if (feedsEnabled) {
                 BrowseFeedNameDialog(
                     title = MR.strings.browse_feed_save_preset,
+                    initialChronological = dialog.chronological,
                     duplicateName = screenModel::hasPresetName,
                     onDismissRequest = onDismissRequest,
                     onConfirm = screenModel::savePreset,

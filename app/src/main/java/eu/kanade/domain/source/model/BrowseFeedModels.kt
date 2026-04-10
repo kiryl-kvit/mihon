@@ -15,6 +15,7 @@ data class SourceFeedPreset(
     val sourceId: Long,
     val name: String,
     val listingMode: FeedListingMode,
+    val chronological: Boolean = true,
     val query: String? = null,
     val filters: List<FilterStateNode> = emptyList(),
 )
@@ -33,6 +34,7 @@ fun popularFeedPreset(sourceId: Long, name: String): SourceFeedPreset {
         sourceId = sourceId,
         name = name,
         listingMode = FeedListingMode.Popular,
+        chronological = false,
     )
 }
 
@@ -42,8 +44,21 @@ fun latestFeedPreset(sourceId: Long, name: String): SourceFeedPreset {
         sourceId = sourceId,
         name = name,
         listingMode = FeedListingMode.Latest,
+        chronological = true,
     )
 }
+
+@Serializable
+data class SourceFeedTimeline(
+    val mangaIds: List<Long> = emptyList(),
+    val nextPageKey: Long? = null,
+)
+
+@Serializable
+data class SourceFeedAnchor(
+    val mangaId: Long? = null,
+    val scrollOffset: Int = 0,
+)
 
 @Serializable
 enum class FeedListingMode {
