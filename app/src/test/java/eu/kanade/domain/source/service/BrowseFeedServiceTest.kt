@@ -2,6 +2,8 @@ package eu.kanade.domain.source.service
 
 import eu.kanade.domain.source.model.BUILTIN_POPULAR_PRESET_ID
 import eu.kanade.domain.source.model.SourceFeed
+import eu.kanade.domain.source.model.SourceFeedAnchor
+import eu.kanade.domain.source.model.SourceFeedTimeline
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +53,34 @@ class BrowseFeedServiceTest {
         service.reorderFeed(fromIndex = 0, toIndex = 5)
 
         preferences.savedFeeds.get() shouldBe original
+    }
+
+    @Test
+    fun `removeFeed clears persisted timeline and anchor`() {
+        val feed = SourceFeed(id = "feed-1", sourceId = 1L, presetId = BUILTIN_POPULAR_PRESET_ID)
+        preferences.savedFeeds.set(listOf(feed))
+        service.saveTimeline(feed.id, SourceFeedTimeline(mangaIds = listOf(1L, 2L), nextPageKey = 3L))
+        service.saveAnchor(feed.id, SourceFeedAnchor(mangaId = 2L, scrollOffset = 48))
+
+        service.removeFeed(feed.id)
+
+        service.timelineSnapshot(feed.id) shouldBe SourceFeedTimeline()
+        service.anchorSnapshot(feed.id) shouldBe SourceFeedAnchor()
+    }
+
+    @Test
+    fun `savePreset persists explicit chronological flag`() {
+        service.savePreset(
+            eu.kanade.domain.source.model.SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Popular style",
+                listingMode = eu.kanade.domain.source.model.FeedListingMode.Search,
+                chronological = false,
+            ),
+        )
+
+        preferences.savedFeedPresets.get().single().chronological shouldBe false
     }
 }
 

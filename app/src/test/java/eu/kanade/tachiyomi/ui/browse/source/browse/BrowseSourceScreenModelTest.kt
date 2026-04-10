@@ -2,6 +2,8 @@ package eu.kanade.tachiyomi.ui.browse.source.browse
 
 import eu.kanade.domain.source.model.FeedListingMode
 import eu.kanade.domain.source.model.SourceFeedPreset
+import eu.kanade.domain.source.model.latestFeedPreset
+import eu.kanade.domain.source.model.popularFeedPreset
 import eu.kanade.domain.source.model.snapshot
 import eu.kanade.domain.source.model.toListing
 import eu.kanade.tachiyomi.source.model.Filter
@@ -53,6 +55,24 @@ class BrowseSourceScreenModelTest {
         )
 
         preset.toListing().requestQuery shouldBe null
+    }
+
+    @Test
+    fun `custom presets default to chronological`() {
+        val preset = SourceFeedPreset(
+            id = "preset",
+            sourceId = 1L,
+            name = "Filtered",
+            listingMode = FeedListingMode.Search,
+        )
+
+        preset.chronological shouldBe true
+    }
+
+    @Test
+    fun `builtin feed presets keep explicit chronological semantics`() {
+        popularFeedPreset(1L, "Popular").chronological shouldBe false
+        latestFeedPreset(1L, "Latest").chronological shouldBe true
     }
 
     @Test

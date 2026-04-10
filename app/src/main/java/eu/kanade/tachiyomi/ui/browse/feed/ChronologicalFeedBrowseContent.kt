@@ -1,0 +1,457 @@
+package eu.kanade.tachiyomi.ui.browse.feed
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import eu.kanade.presentation.browse.components.BrowseSourceLoadingItem
+import eu.kanade.presentation.browse.components.InLibraryBadge
+import eu.kanade.presentation.library.components.CommonMangaItemDefaults
+import eu.kanade.presentation.library.components.MangaComfortableGridItem
+import eu.kanade.presentation.library.components.MangaCompactGridItem
+import eu.kanade.presentation.library.components.MangaListItem
+import eu.kanade.presentation.util.formattedMessage
+import eu.kanade.tachiyomi.source.Source
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaCover
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.EmptyScreen
+import tachiyomi.presentation.core.screens.EmptyScreenAction
+import tachiyomi.presentation.core.screens.LoadingScreen
+import tachiyomi.presentation.core.util.plus
+import tachiyomi.source.local.LocalSource
+
+@Composable
+fun ChronologicalFeedBrowseContent(
+    source: Source?,
+    screenModel: ChronologicalFeedScreenModel,
+    columns: GridCells,
+    displayMode: LibraryDisplayMode,
+    snackbarHostState: SnackbarHostState,
+    contentPadding: PaddingValues,
+    onWebViewClick: () -> Unit,
+    onHelpClick: () -> Unit,
+    onLocalSourceHelpClick: () -> Unit,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    val context = LocalContext.current
+    val state by screenModel.state.collectAsState()
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    var restoredDisplayMode by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val getErrorMessage: (Throwable) -> String = { throwable ->
+        with(context) { throwable.formattedMessage }
+    }
+
+    LaunchedEffect(state.error) {
+        val error = state.error ?: return@LaunchedEffect
+        if (state.mangaIds.isEmpty()) return@LaunchedEffect
+
+        val result = snackbarHostState.showSnackbar(
+            message = getErrorMessage(error),
+            actionLabel = context.stringResource(MR.strings.action_retry),
+            duration = SnackbarDuration.Indefinite,
+        )
+        when (result) {
+            SnackbarResult.Dismissed -> snackbarHostState.currentSnackbarData?.dismiss()
+            SnackbarResult.ActionPerformed -> screenModel.refresh()
+        }
+    }
+
+    LaunchedEffect(displayMode, state.savedAnchor, state.mangaIds) {
+        if (state.mangaIds.isEmpty()) return@LaunchedEffect
+
+        val modeKey = displayMode.serialize()
+        if (restoredDisplayMode == modeKey) return@LaunchedEffect
+
+        val anchorIndex = state.savedAnchor.mangaId
+            ?.let(state.mangaIds::indexOf)
+            ?.takeIf { it >= 0 }
+            ?: 0
+
+        when (displayMode) {
+            LibraryDisplayMode.List -> {
+                listState.scrollToItem(anchorIndex, state.savedAnchor.scrollOffset)
+            }
+            else -> {
+                gridState.scrollToItem(anchorIndex, state.savedAnchor.scrollOffset)
+            }
+        }
+
+        restoredDisplayMode = modeKey
+    }
+
+    LaunchedEffect(displayMode, state.mangaIds) {
+        if (displayMode != LibraryDisplayMode.List) return@LaunchedEffect
+
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
+            .collectLatest { (index, offset) ->
+                screenModel.saveAnchor(
+                    mangaId = state.mangaIds.getOrNull(index),
+                    scrollOffset = offset,
+                )
+            }
+    }
+
+    LaunchedEffect(displayMode, state.mangaIds) {
+        if (displayMode == LibraryDisplayMode.List) return@LaunchedEffect
+
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
+            .collectLatest { (index, offset) ->
+                screenModel.saveAnchor(
+                    mangaId = state.mangaIds.getOrNull(index),
+                    scrollOffset = offset,
+                )
+            }
+    }
+
+    LaunchedEffect(displayMode, state.mangaIds, state.isAppending, state.nextPageKey) {
+        if (displayMode != LibraryDisplayMode.List) return@LaunchedEffect
+
+        snapshotFlow {
+            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleIndex to listState.layoutInfo.totalItemsCount
+        }
+            .map { (lastVisibleIndex, totalItemsCount) ->
+                totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - LOAD_MORE_THRESHOLD
+            }
+            .distinctUntilChanged()
+            .collectLatest { shouldLoadMore ->
+                if (shouldLoadMore) {
+                    screenModel.loadMore()
+                }
+            }
+    }
+
+    LaunchedEffect(displayMode, state.mangaIds, state.isAppending, state.nextPageKey) {
+        if (displayMode == LibraryDisplayMode.List) return@LaunchedEffect
+
+        snapshotFlow {
+            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleIndex to gridState.layoutInfo.totalItemsCount
+        }
+            .map { (lastVisibleIndex, totalItemsCount) ->
+                totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - LOAD_MORE_THRESHOLD
+            }
+            .distinctUntilChanged()
+            .collectLatest { shouldLoadMore ->
+                if (shouldLoadMore) {
+                    screenModel.loadMore()
+                }
+            }
+    }
+
+    if (!state.hasLoaded && state.isRefreshing && state.mangaIds.isEmpty()) {
+        LoadingScreen(Modifier.padding(contentPadding))
+        return
+    }
+
+    if (state.mangaIds.isEmpty()) {
+        EmptyScreen(
+            modifier = Modifier.padding(contentPadding),
+            message = state.error?.let(getErrorMessage) ?: stringResource(MR.strings.no_results_found),
+            actions = if (source is LocalSource) {
+                persistentListOf(
+                    EmptyScreenAction(
+                        stringRes = MR.strings.local_source_help_guide,
+                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                        onClick = onLocalSourceHelpClick,
+                    ),
+                )
+            } else {
+                persistentListOf(
+                    EmptyScreenAction(
+                        stringRes = MR.strings.action_retry,
+                        icon = Icons.Outlined.Refresh,
+                        onClick = screenModel::refresh,
+                    ),
+                    EmptyScreenAction(
+                        stringRes = MR.strings.action_open_in_web_view,
+                        icon = Icons.Outlined.Public,
+                        onClick = onWebViewClick,
+                    ),
+                    EmptyScreenAction(
+                        stringRes = MR.strings.label_help,
+                        icon = Icons.AutoMirrored.Outlined.HelpOutline,
+                        onClick = onHelpClick,
+                    ),
+                )
+            },
+        )
+        return
+    }
+
+    when (displayMode) {
+        LibraryDisplayMode.ComfortableGrid -> {
+            ChronologicalFeedComfortableGrid(
+                screenModel = screenModel,
+                mangaIds = state.mangaIds,
+                columns = columns,
+                contentPadding = contentPadding,
+                gridState = gridState,
+                isAppending = state.isAppending,
+                onMangaClick = onMangaClick,
+                onMangaLongClick = onMangaLongClick,
+            )
+        }
+        LibraryDisplayMode.List -> {
+            ChronologicalFeedList(
+                screenModel = screenModel,
+                mangaIds = state.mangaIds,
+                contentPadding = contentPadding,
+                listState = listState,
+                isAppending = state.isAppending,
+                onMangaClick = onMangaClick,
+                onMangaLongClick = onMangaLongClick,
+            )
+        }
+        LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+            ChronologicalFeedCompactGrid(
+                screenModel = screenModel,
+                mangaIds = state.mangaIds,
+                columns = columns,
+                contentPadding = contentPadding,
+                gridState = gridState,
+                isAppending = state.isAppending,
+                onMangaClick = onMangaClick,
+                onMangaLongClick = onMangaLongClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChronologicalFeedList(
+    screenModel: ChronologicalFeedScreenModel,
+    mangaIds: List<Long>,
+    contentPadding: PaddingValues,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    isAppending: Boolean,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    LazyColumn(
+        state = listState,
+        contentPadding = contentPadding + PaddingValues(vertical = 8.dp),
+    ) {
+        items(
+            count = mangaIds.size,
+            key = { index -> mangaIds[index] },
+        ) { index ->
+            ChronologicalFeedMangaListItem(
+                mangaId = mangaIds[index],
+                screenModel = screenModel,
+                onMangaClick = onMangaClick,
+                onMangaLongClick = onMangaLongClick,
+            )
+        }
+
+        if (isAppending) {
+            item {
+                BrowseSourceLoadingItem()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChronologicalFeedCompactGrid(
+    screenModel: ChronologicalFeedScreenModel,
+    mangaIds: List<Long>,
+    columns: GridCells,
+    contentPadding: PaddingValues,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    isAppending: Boolean,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = columns,
+        state = gridState,
+        contentPadding = contentPadding + PaddingValues(8.dp),
+        verticalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridVerticalSpacer),
+        horizontalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridHorizontalSpacer),
+    ) {
+        items(
+            count = mangaIds.size,
+            key = { index -> mangaIds[index] },
+        ) { index ->
+            ChronologicalFeedMangaCompactGridItem(
+                mangaId = mangaIds[index],
+                screenModel = screenModel,
+                onMangaClick = onMangaClick,
+                onMangaLongClick = onMangaLongClick,
+            )
+        }
+
+        if (isAppending) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BrowseSourceLoadingItem()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChronologicalFeedComfortableGrid(
+    screenModel: ChronologicalFeedScreenModel,
+    mangaIds: List<Long>,
+    columns: GridCells,
+    contentPadding: PaddingValues,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    isAppending: Boolean,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    LazyVerticalGrid(
+        columns = columns,
+        state = gridState,
+        contentPadding = contentPadding + PaddingValues(8.dp),
+        verticalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridVerticalSpacer),
+        horizontalArrangement = Arrangement.spacedBy(CommonMangaItemDefaults.GridHorizontalSpacer),
+    ) {
+        items(
+            count = mangaIds.size,
+            key = { index -> mangaIds[index] },
+        ) { index ->
+            ChronologicalFeedMangaComfortableGridItem(
+                mangaId = mangaIds[index],
+                screenModel = screenModel,
+                onMangaClick = onMangaClick,
+                onMangaLongClick = onMangaLongClick,
+            )
+        }
+
+        if (isAppending) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BrowseSourceLoadingItem()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChronologicalFeedMangaListItem(
+    mangaId: Long,
+    screenModel: ChronologicalFeedScreenModel,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    val manga = rememberChronologicalManga(mangaId, screenModel) ?: return
+
+    MangaListItem(
+        title = manga.title,
+        coverData = manga.toCoverData(),
+        coverAlpha = manga.browseCoverAlpha(),
+        badge = { InLibraryBadge(enabled = manga.favorite) },
+        onLongClick = { onMangaLongClick(manga) },
+        onClick = { onMangaClick(manga) },
+    )
+}
+
+@Composable
+private fun ChronologicalFeedMangaCompactGridItem(
+    mangaId: Long,
+    screenModel: ChronologicalFeedScreenModel,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    val manga = rememberChronologicalManga(mangaId, screenModel) ?: return
+
+    MangaCompactGridItem(
+        title = manga.title,
+        coverData = manga.toCoverData(),
+        coverAlpha = manga.browseCoverAlpha(),
+        coverBadgeStart = { InLibraryBadge(enabled = manga.favorite) },
+        onLongClick = { onMangaLongClick(manga) },
+        onClick = { onMangaClick(manga) },
+    )
+}
+
+@Composable
+private fun ChronologicalFeedMangaComfortableGridItem(
+    mangaId: Long,
+    screenModel: ChronologicalFeedScreenModel,
+    onMangaClick: (Manga) -> Unit,
+    onMangaLongClick: (Manga) -> Unit,
+) {
+    val manga = rememberChronologicalManga(mangaId, screenModel) ?: return
+
+    MangaComfortableGridItem(
+        title = manga.title,
+        coverData = manga.toCoverData(),
+        coverAlpha = manga.browseCoverAlpha(),
+        coverBadgeStart = { InLibraryBadge(enabled = manga.favorite) },
+        onLongClick = { onMangaLongClick(manga) },
+        onClick = { onMangaClick(manga) },
+    )
+}
+
+@Composable
+private fun rememberChronologicalManga(
+    mangaId: Long,
+    screenModel: ChronologicalFeedScreenModel,
+): Manga? {
+    var manga by remember(mangaId) { mutableStateOf<Manga?>(null) }
+
+    LaunchedEffect(mangaId, screenModel) {
+        screenModel.subscribeManga(mangaId).collectLatest {
+            manga = it
+        }
+    }
+
+    return manga
+}
+
+private fun Manga.toCoverData(): MangaCover {
+    return MangaCover(
+        mangaId = id,
+        sourceId = source,
+        isMangaFavorite = favorite,
+        url = thumbnailUrl,
+        lastModified = coverLastModified,
+    )
+}
+
+private fun Manga.browseCoverAlpha(): Float {
+    return if (favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f
+}
+
+private const val LOAD_MORE_THRESHOLD = 8

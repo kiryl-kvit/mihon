@@ -217,6 +217,18 @@ private fun FeedsTabContent(
             val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
             val isRefreshing = mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
             val source = browseModel.source as CatalogueSource
+            val chronologicalFeedModel = if (activePreset.chronological) {
+                rememberChronologicalFeedScreenModel(
+                    activeProfileId = activeProfileId,
+                    activeFeedId = activeFeed.id,
+                    sourceId = activeSource.id,
+                    listingQuery = activePreset.toListing().requestQuery,
+                    initialFilterSnapshot = activePreset.filters,
+                )
+            } else {
+                null
+            }
+            val chronologicalFeedState = chronologicalFeedModel?.state?.collectAsState()?.value
             val activeIndex = remember(state.enabledFeeds, activeFeed.id) {
                 state.enabledFeeds.indexOfFirst { it.id == activeFeed.id }
             }
@@ -278,40 +290,79 @@ private fun FeedsTabContent(
                         activeProfileId = activeProfileId,
                         activeFeedId = activeFeed.id,
                     ) {
+                        val onRefresh = {
+                            if (chronologicalFeedModel != null) {
+                                chronologicalFeedModel.refresh()
+                            } else {
+                                mangaList.refresh()
+                            }
+                        }
                         PullRefresh(
-                            refreshing = isRefreshing,
+                            refreshing = chronologicalFeedState?.isRefreshing ?: isRefreshing,
                             enabled = true,
-                            onRefresh = mangaList::refresh,
+                            onRefresh = onRefresh,
                             modifier = Modifier.fillMaxSize(),
                         ) {
-                            BrowseSourceContent(
-                                source = browseModel.source,
-                                mangaList = mangaList,
-                                columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                                displayMode = browseModel.displayMode,
-                                snackbarHostState = snackbarHostState,
-                                contentPadding = feedContentPadding,
-                                onWebViewClick = {
-                                    val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
-                                    navigator.push(
-                                        WebViewScreen(
-                                            url = httpSource.baseUrl,
-                                            initialTitle = httpSource.name,
-                                            sourceId = httpSource.id,
-                                        ),
-                                    )
-                                },
-                                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                                onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                                onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
-                                onMangaLongClick = { manga ->
-                                    scope.launchIO {
-                                        if (browseModel.onMangaLongClick(manga)) {
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            if (chronologicalFeedModel != null) {
+                                ChronologicalFeedBrowseContent(
+                                    source = browseModel.source,
+                                    screenModel = chronologicalFeedModel,
+                                    columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                                    displayMode = browseModel.displayMode,
+                                    snackbarHostState = snackbarHostState,
+                                    contentPadding = feedContentPadding,
+                                    onWebViewClick = {
+                                        val httpSource =
+                                            browseModel.source as? HttpSource ?: return@ChronologicalFeedBrowseContent
+                                        navigator.push(
+                                            WebViewScreen(
+                                                url = httpSource.baseUrl,
+                                                initialTitle = httpSource.name,
+                                                sourceId = httpSource.id,
+                                            ),
+                                        )
+                                    },
+                                    onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                                    onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
+                                    onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
+                                    onMangaLongClick = { manga ->
+                                        scope.launchIO {
+                                            if (browseModel.onMangaLongClick(manga)) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            }
                                         }
-                                    }
-                                },
-                            )
+                                    },
+                                )
+                            } else {
+                                BrowseSourceContent(
+                                    source = browseModel.source,
+                                    mangaList = mangaList,
+                                    columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                                    displayMode = browseModel.displayMode,
+                                    snackbarHostState = snackbarHostState,
+                                    contentPadding = feedContentPadding,
+                                    onWebViewClick = {
+                                        val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
+                                        navigator.push(
+                                            WebViewScreen(
+                                                url = httpSource.baseUrl,
+                                                initialTitle = httpSource.name,
+                                                sourceId = httpSource.id,
+                                            ),
+                                        )
+                                    },
+                                    onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                                    onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
+                                    onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
+                                    onMangaLongClick = { manga ->
+                                        scope.launchIO {
+                                            if (browseModel.onMangaLongClick(manga)) {
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            }
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -574,6 +625,32 @@ private fun rememberActiveFeedScreenModel(
         }
     }.rememberScreenModel(tag = "$profileKey:$activeFeedId") {
         BrowseSourceScreenModel(
+            sourceId = sourceId,
+            listingQuery = listingQuery,
+            initialFilterSnapshot = initialFilterSnapshot,
+        )
+    }
+}
+
+@Composable
+private fun rememberChronologicalFeedScreenModel(
+    activeProfileId: Long?,
+    activeFeedId: String,
+    sourceId: Long,
+    listingQuery: String?,
+    initialFilterSnapshot: List<eu.kanade.domain.source.model.FilterStateNode>,
+): ChronologicalFeedScreenModel {
+    val profileKey = activeProfileId?.toString() ?: "none"
+    return object : Screen {
+        override val key: ScreenKey = "chronological-feed-screen-model-$profileKey-$activeFeedId"
+
+        @Composable
+        override fun Content() {
+            error("Not used")
+        }
+    }.rememberScreenModel(tag = "chronological:$profileKey:$activeFeedId") {
+        ChronologicalFeedScreenModel(
+            feedId = activeFeedId,
             sourceId = sourceId,
             listingQuery = listingQuery,
             initialFilterSnapshot = initialFilterSnapshot,

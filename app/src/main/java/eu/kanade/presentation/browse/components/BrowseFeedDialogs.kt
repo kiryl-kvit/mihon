@@ -1,9 +1,15 @@
 package eu.kanade.presentation.browse.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -11,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.icerock.moko.resources.StringResource
@@ -21,11 +28,13 @@ import tachiyomi.presentation.core.i18n.stringResource
 fun BrowseFeedNameDialog(
     title: StringResource,
     initialValue: String = "",
+    initialChronological: Boolean = true,
     duplicateName: (String) -> Boolean,
     onDismissRequest: () -> Unit,
-    onConfirm: (String) -> Unit,
+    onConfirm: (String, Boolean) -> Unit,
 ) {
     var value by remember(initialValue) { mutableStateOf(initialValue) }
+    var chronological by remember(initialChronological) { mutableStateOf(initialChronological) }
     val trimmedValue = value.trim()
     val isDuplicate = remember(trimmedValue) {
         trimmedValue.isNotEmpty() && duplicateName(trimmedValue)
@@ -35,30 +44,57 @@ fun BrowseFeedNameDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(text = stringResource(title)) },
         text = {
-            OutlinedTextField(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp),
-                value = value,
-                onValueChange = { value = it },
-                label = { Text(text = stringResource(MR.strings.name)) },
-                supportingText = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp),
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text(text = stringResource(MR.strings.name)) },
+                    supportingText = {
+                        Text(
+                            text = if (isDuplicate) {
+                                stringResource(MR.strings.browse_feed_preset_exists)
+                            } else {
+                                stringResource(MR.strings.information_required_plain)
+                            },
+                        )
+                    },
+                    isError = isDuplicate,
+                    singleLine = true,
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     Text(
-                        text = if (isDuplicate) {
-                            stringResource(MR.strings.browse_feed_preset_exists)
-                        } else {
-                            stringResource(MR.strings.information_required_plain)
-                        },
+                        text = stringResource(MR.strings.browse_feed_chronological),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
                     )
-                },
-                isError = isDuplicate,
-                singleLine = true,
-            )
+                    Switch(
+                        checked = chronological,
+                        onCheckedChange = { chronological = it },
+                    )
+                }
+
+                Text(
+                    text = stringResource(MR.strings.browse_feed_chronological_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = (-4).dp),
+                )
+            }
         },
         confirmButton = {
             TextButton(
                 enabled = trimmedValue.isNotEmpty() && !isDuplicate,
-                onClick = { onConfirm(trimmedValue) },
+                onClick = { onConfirm(trimmedValue, chronological) },
             ) {
                 Text(text = stringResource(MR.strings.action_save))
             }
