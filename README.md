@@ -2,7 +2,6 @@
 
 ## Changes made
 
-- Settings → Custom settings → Application startup screen
 - Settings → Custom settings → Enable extensions auto-update
 - Settings → Custom settings → Home screen tabs
 - Settings → Custom settings → Duplicate detection
