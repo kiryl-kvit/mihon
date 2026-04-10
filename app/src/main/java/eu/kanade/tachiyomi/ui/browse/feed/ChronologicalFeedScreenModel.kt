@@ -59,10 +59,10 @@ class ChronologicalFeedScreenModel(
         }
     }
 
-    fun refresh() {
+    fun refresh(manual: Boolean = false) {
         if (state.value.isRefreshing) return
         screenModelScope.launchIO {
-            refreshInternal()
+            refreshInternal(manual = manual)
         }
     }
 
@@ -85,11 +85,21 @@ class ChronologicalFeedScreenModel(
         )
     }
 
+    fun consumeNewItemsIndicator() {
+        mutableState.update {
+            if (it.newItemsAvailableCount == 0) {
+                it
+            } else {
+                it.copy(newItemsAvailableCount = 0)
+            }
+        }
+    }
+
     suspend fun subscribeManga(mangaId: Long): Flow<Manga> {
         return getManga.subscribe(mangaId)
     }
 
-    private suspend fun refreshInternal() {
+    private suspend fun refreshInternal(manual: Boolean) {
         val currentState = state.value
         val existingIds = currentState.mangaIds
         val existingIdSet = existingIds.toHashSet()
@@ -102,6 +112,8 @@ class ChronologicalFeedScreenModel(
         mutableState.update {
             it.copy(
                 isRefreshing = true,
+                isManualRefresh = manual,
+                newItemsAvailableCount = if (manual) 0 else it.newItemsAvailableCount,
                 error = null,
             )
         }
@@ -153,6 +165,8 @@ class ChronologicalFeedScreenModel(
                 mangaIds = mergedIds,
                 nextPageKey = nextPageKey,
                 isRefreshing = false,
+                isManualRefresh = false,
+                newItemsAvailableCount = if (manual && error == null) prependedIds.size else 0,
                 hasLoaded = true,
                 error = error,
             )
@@ -260,7 +274,9 @@ class ChronologicalFeedScreenModel(
         val nextPageKey: Long? = null,
         val savedAnchor: SourceFeedAnchor = SourceFeedAnchor(),
         val isRefreshing: Boolean = false,
+        val isManualRefresh: Boolean = false,
         val isAppending: Boolean = false,
+        val newItemsAvailableCount: Int = 0,
         val hasLoaded: Boolean = false,
         val error: Throwable? = null,
     )

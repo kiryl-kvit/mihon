@@ -292,7 +292,7 @@ private fun FeedsTabContent(
                     ) {
                         val onRefresh = {
                             if (chronologicalFeedModel != null) {
-                                chronologicalFeedModel.refresh()
+                                chronologicalFeedModel.refresh(manual = true)
                             } else {
                                 mangaList.refresh()
                             }

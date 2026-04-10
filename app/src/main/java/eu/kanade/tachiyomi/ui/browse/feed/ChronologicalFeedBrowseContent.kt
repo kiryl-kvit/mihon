@@ -1,7 +1,9 @@
 package eu.kanade.tachiyomi.ui.browse.feed
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -13,11 +15,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -47,6 +54,7 @@ import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
@@ -178,6 +186,28 @@ fun ChronologicalFeedBrowseContent(
             }
     }
 
+    LaunchedEffect(displayMode, state.newItemsAvailableCount) {
+        if (state.newItemsAvailableCount == 0) return@LaunchedEffect
+
+        if (displayMode == LibraryDisplayMode.List) {
+            snapshotFlow { listState.firstVisibleItemIndex }
+                .distinctUntilChanged()
+                .collectLatest { firstVisibleItemIndex ->
+                    if (firstVisibleItemIndex < state.newItemsAvailableCount) {
+                        screenModel.consumeNewItemsIndicator()
+                    }
+                }
+        } else {
+            snapshotFlow { gridState.firstVisibleItemIndex }
+                .distinctUntilChanged()
+                .collectLatest { firstVisibleItemIndex ->
+                    if (firstVisibleItemIndex < state.newItemsAvailableCount) {
+                        screenModel.consumeNewItemsIndicator()
+                    }
+                }
+        }
+    }
+
     if (!state.hasLoaded && state.isRefreshing && state.mangaIds.isEmpty()) {
         LoadingScreen(Modifier.padding(contentPadding))
         return
@@ -218,40 +248,81 @@ fun ChronologicalFeedBrowseContent(
         return
     }
 
-    when (displayMode) {
-        LibraryDisplayMode.ComfortableGrid -> {
-            ChronologicalFeedComfortableGrid(
-                screenModel = screenModel,
-                mangaIds = state.mangaIds,
-                columns = columns,
-                contentPadding = contentPadding,
-                gridState = gridState,
-                isAppending = state.isAppending,
-                onMangaClick = onMangaClick,
-                onMangaLongClick = onMangaLongClick,
+    Box {
+        when (displayMode) {
+            LibraryDisplayMode.ComfortableGrid -> {
+                ChronologicalFeedComfortableGrid(
+                    screenModel = screenModel,
+                    mangaIds = state.mangaIds,
+                    columns = columns,
+                    contentPadding = contentPadding,
+                    gridState = gridState,
+                    isAppending = state.isAppending,
+                    onMangaClick = onMangaClick,
+                    onMangaLongClick = onMangaLongClick,
+                )
+            }
+            LibraryDisplayMode.List -> {
+                ChronologicalFeedList(
+                    screenModel = screenModel,
+                    mangaIds = state.mangaIds,
+                    contentPadding = contentPadding,
+                    listState = listState,
+                    isAppending = state.isAppending,
+                    onMangaClick = onMangaClick,
+                    onMangaLongClick = onMangaLongClick,
+                )
+            }
+            LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                ChronologicalFeedCompactGrid(
+                    screenModel = screenModel,
+                    mangaIds = state.mangaIds,
+                    columns = columns,
+                    contentPadding = contentPadding,
+                    gridState = gridState,
+                    isAppending = state.isAppending,
+                    onMangaClick = onMangaClick,
+                    onMangaLongClick = onMangaLongClick,
+                )
+            }
+        }
+
+        if (state.newItemsAvailableCount > 0 && !state.isRefreshing) {
+            NewItemsChip(
+                count = state.newItemsAvailableCount,
+                modifier = Modifier
+                    .padding(top = 16.dp)
+                    .align(androidx.compose.ui.Alignment.TopCenter),
             )
         }
-        LibraryDisplayMode.List -> {
-            ChronologicalFeedList(
-                screenModel = screenModel,
-                mangaIds = state.mangaIds,
-                contentPadding = contentPadding,
-                listState = listState,
-                isAppending = state.isAppending,
-                onMangaClick = onMangaClick,
-                onMangaLongClick = onMangaLongClick,
+    }
+}
+
+@Composable
+private fun NewItemsChip(
+    count: Int,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        shape = MaterialTheme.shapes.extraLarge,
+        tonalElevation = 3.dp,
+        shadowElevation = 3.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.KeyboardArrowUp,
+                contentDescription = null,
             )
-        }
-        LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-            ChronologicalFeedCompactGrid(
-                screenModel = screenModel,
-                mangaIds = state.mangaIds,
-                columns = columns,
-                contentPadding = contentPadding,
-                gridState = gridState,
-                isAppending = state.isAppending,
-                onMangaClick = onMangaClick,
-                onMangaLongClick = onMangaLongClick,
+            Text(
+                style = MaterialTheme.typography.labelLarge,
+                text = pluralStringResource(MR.plurals.browse_feed_new_items, count, count),
             )
         }
     }
