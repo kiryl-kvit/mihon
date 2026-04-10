@@ -214,8 +214,6 @@ private fun FeedsTabContent(
                 initialFilterSnapshot = activePreset.filters,
             )
             val browseModelState by browseModel.state.collectAsState()
-            val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
-            val isRefreshing = mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
             val source = browseModel.source as CatalogueSource
             val chronologicalFeedModel = if (activePreset.chronological) {
                 rememberChronologicalFeedScreenModel(
@@ -290,20 +288,13 @@ private fun FeedsTabContent(
                         activeProfileId = activeProfileId,
                         activeFeedId = activeFeed.id,
                     ) {
-                        val onRefresh = {
-                            if (chronologicalFeedModel != null) {
-                                chronologicalFeedModel.refresh(manual = true)
-                            } else {
-                                mangaList.refresh()
-                            }
-                        }
-                        PullRefresh(
-                            refreshing = chronologicalFeedState?.isRefreshing ?: isRefreshing,
-                            enabled = true,
-                            onRefresh = onRefresh,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            if (chronologicalFeedModel != null) {
+                        if (chronologicalFeedModel != null) {
+                            PullRefresh(
+                                refreshing = chronologicalFeedState?.isRefreshing == true,
+                                enabled = true,
+                                onRefresh = { chronologicalFeedModel.refresh(manual = true) },
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
                                 ChronologicalFeedBrowseContent(
                                     source = browseModel.source,
                                     screenModel = chronologicalFeedModel,
@@ -333,7 +324,18 @@ private fun FeedsTabContent(
                                         }
                                     },
                                 )
-                            } else {
+                            }
+                        } else {
+                            val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
+                            val isRefreshing =
+                                mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
+
+                            PullRefresh(
+                                refreshing = isRefreshing,
+                                enabled = true,
+                                onRefresh = mangaList::refresh,
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
                                 BrowseSourceContent(
                                     source = browseModel.source,
                                     mangaList = mangaList,

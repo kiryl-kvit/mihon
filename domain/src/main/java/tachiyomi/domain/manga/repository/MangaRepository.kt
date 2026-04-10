@@ -17,6 +17,8 @@ interface MangaRepository {
 
     suspend fun getFavorites(): List<Manga>
 
+    suspend fun getNonFavoriteIds(mangaIds: List<Long>): List<Long>
+
     suspend fun getFavoritesByProfile(profileId: Long): List<Manga>
 
     suspend fun getAllMangaByProfile(profileId: Long): List<Manga>

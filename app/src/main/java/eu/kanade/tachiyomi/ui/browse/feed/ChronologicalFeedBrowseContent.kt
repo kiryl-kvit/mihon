@@ -47,6 +47,7 @@ import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.source.Source
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import tachiyomi.core.common.i18n.stringResource
@@ -85,6 +86,7 @@ fun ChronologicalFeedBrowseContent(
     val getErrorMessage: (Throwable) -> String = { throwable ->
         with(context) { throwable.formattedMessage }
     }
+    val savedAnchor = screenModel.savedAnchorSnapshot()
 
     LaunchedEffect(state.error) {
         val error = state.error ?: return@LaunchedEffect
@@ -101,23 +103,23 @@ fun ChronologicalFeedBrowseContent(
         }
     }
 
-    LaunchedEffect(displayMode, state.savedAnchor, state.mangaIds) {
+    LaunchedEffect(displayMode, state.mangaIds, savedAnchor) {
         if (state.mangaIds.isEmpty()) return@LaunchedEffect
 
         val modeKey = displayMode.serialize()
         if (restoredDisplayMode == modeKey) return@LaunchedEffect
 
-        val anchorIndex = state.savedAnchor.mangaId
+        val anchorIndex = savedAnchor.mangaId
             ?.let(state.mangaIds::indexOf)
             ?.takeIf { it >= 0 }
             ?: 0
 
         when (displayMode) {
             LibraryDisplayMode.List -> {
-                listState.scrollToItem(anchorIndex, state.savedAnchor.scrollOffset)
+                listState.scrollToItem(anchorIndex, savedAnchor.scrollOffset)
             }
             else -> {
-                gridState.scrollToItem(anchorIndex, state.savedAnchor.scrollOffset)
+                gridState.scrollToItem(anchorIndex, savedAnchor.scrollOffset)
             }
         }
 
@@ -129,6 +131,7 @@ fun ChronologicalFeedBrowseContent(
 
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
+            .debounce(ANCHOR_SAVE_DEBOUNCE_MILLIS)
             .collectLatest { (index, offset) ->
                 screenModel.saveAnchor(
                     mangaId = state.mangaIds.getOrNull(index),
@@ -142,6 +145,7 @@ fun ChronologicalFeedBrowseContent(
 
         snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
+            .debounce(ANCHOR_SAVE_DEBOUNCE_MILLIS)
             .collectLatest { (index, offset) ->
                 screenModel.saveAnchor(
                     mangaId = state.mangaIds.getOrNull(index),
@@ -526,3 +530,4 @@ private fun Manga.browseCoverAlpha(): Float {
 }
 
 private const val LOAD_MORE_THRESHOLD = 8
+private const val ANCHOR_SAVE_DEBOUNCE_MILLIS = 150L

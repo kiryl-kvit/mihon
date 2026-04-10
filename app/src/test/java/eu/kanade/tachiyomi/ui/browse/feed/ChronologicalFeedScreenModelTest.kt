@@ -13,6 +13,7 @@ import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -111,7 +112,13 @@ class ChronologicalFeedScreenModelTest {
             getRemoteManga = fakeGetRemoteManga {
                 RecordingPagingSource(
                     pages = mapOf(
-                        null to pageResult(listOf(3L, 4L), nextKey = null),
+                        null to mangaPageResult(
+                            data = listOf(
+                                manga(3L, favorite = true),
+                                manga(4L, favorite = false),
+                            ),
+                            nextKey = null,
+                        ),
                     ),
                 ).also(pagingSources::add)
             },
@@ -130,6 +137,8 @@ class ChronologicalFeedScreenModelTest {
         } finally {
             screenModel.onDispose()
         }
+
+        coVerify(exactly = 0) { getManga.await(any()) }
     }
 
     @Test
@@ -183,6 +192,54 @@ class ChronologicalFeedScreenModelTest {
                     nextPageKey = 3L,
                 )
                 pagingSources.single().loadKeys shouldBe listOf<Long?>(null, 2L)
+            }
+        } finally {
+            screenModel.onDispose()
+        }
+
+        coVerify(exactly = 0) { getManga.await(any()) }
+    }
+
+    @Test
+    fun `save anchor skips redundant writes`() = runTest {
+        val preferences = SourcePreferences(TestPreferenceStore(), testJson)
+        val browseFeedService = BrowseFeedService(preferences)
+        browseFeedService.saveTimeline(
+            feedId = FEED_ID,
+            timeline = SourceFeedTimeline(mangaIds = listOf(7L), nextPageKey = null),
+        )
+        browseFeedService.saveAnchor(
+            feedId = FEED_ID,
+            anchor = SourceFeedAnchor(mangaId = 7L, scrollOffset = 12),
+        )
+
+        val screenModel = ChronologicalFeedScreenModel(
+            feedId = FEED_ID,
+            sourceId = SOURCE_ID,
+            listingQuery = null,
+            initialFilterSnapshot = emptyList(),
+            browseFeedService = browseFeedService,
+            sourcePreferences = preferences,
+            sourceManager = fakeSourceManager(),
+            getRemoteManga = fakeGetRemoteManga { RecordingPagingSource(emptyMap()) },
+            getManga = fakeGetManga(),
+        )
+
+        val anchorPreference = preferences.feedAnchor(FEED_ID) as TestPreference<SourceFeedAnchor>
+
+        try {
+            eventually(2.seconds) {
+                screenModel.state.value.savedAnchor shouldBe SourceFeedAnchor(mangaId = 7L, scrollOffset = 12)
+            }
+
+            val writesBeforeDuplicate = anchorPreference.setCount
+            screenModel.saveAnchor(mangaId = 7L, scrollOffset = 12)
+            anchorPreference.setCount shouldBe writesBeforeDuplicate
+
+            screenModel.saveAnchor(mangaId = 8L, scrollOffset = 18)
+            eventually(2.seconds) {
+                anchorPreference.setCount shouldBe writesBeforeDuplicate + 1
+                browseFeedService.anchorSnapshot(FEED_ID) shouldBe SourceFeedAnchor(mangaId = 8L, scrollOffset = 18)
             }
         } finally {
             screenModel.onDispose()
@@ -260,6 +317,9 @@ private fun fakeGetManga(vararg manga: Manga): GetManga {
     val byId = manga.associateBy(Manga::id)
     val getManga = mockk<GetManga>()
     coEvery { getManga.await(any()) } answers { byId[firstArg<Long>()] }
+    coEvery { getManga.awaitNonFavoriteIds(any()) } answers {
+        firstArg<List<Long>>().filter { id -> byId[id]?.favorite == false }
+    }
     coEvery { getManga.subscribe(any()) } answers {
         MutableStateFlow(byId[firstArg<Long>()] ?: error("Missing manga")).asStateFlow()
     }
@@ -267,8 +327,12 @@ private fun fakeGetManga(vararg manga: Manga): GetManga {
 }
 
 private fun pageResult(ids: List<Long>, nextKey: Long?): PagingSource.LoadResult.Page<Long, Manga> {
+    return mangaPageResult(data = ids.map(::manga), nextKey = nextKey)
+}
+
+private fun mangaPageResult(data: List<Manga>, nextKey: Long?): PagingSource.LoadResult.Page<Long, Manga> {
     return PagingSource.LoadResult.Page(
-        data = ids.map(::manga),
+        data = data,
         prevKey = null,
         nextKey = nextKey,
     )
@@ -352,12 +416,15 @@ private class TestPreference<T>(
     private val initialDefault: T,
 ) : Preference<T> {
     private val state = MutableStateFlow<T?>(null)
+    var setCount: Int = 0
+        private set
 
     override fun key(): String = preferenceKey
 
     override fun get(): T = state.value ?: initialDefault
 
     override fun set(value: T) {
+        setCount++
         state.value = value
     }
 

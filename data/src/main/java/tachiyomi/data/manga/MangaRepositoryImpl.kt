@@ -65,6 +65,14 @@ class MangaRepositoryImpl(
         }
     }
 
+    override suspend fun getNonFavoriteIds(mangaIds: List<Long>): List<Long> {
+        if (mangaIds.isEmpty()) return emptyList()
+
+        return handler.await {
+            mangasQueries.getNonFavoriteIds(profileProvider.activeProfileId, mangaIds).executeAsList()
+        }
+    }
+
     override suspend fun getFavoritesByProfile(profileId: Long): List<Manga> {
         return handler.awaitList {
             mangasQueries.getFavorites(profileId, MangaMapper::mapManga)

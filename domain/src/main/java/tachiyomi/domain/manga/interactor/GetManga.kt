@@ -23,6 +23,10 @@ class GetManga(
         return mangaRepository.getMangaByIdAsFlow(id)
     }
 
+    suspend fun awaitNonFavoriteIds(mangaIds: List<Long>): List<Long> {
+        return mangaRepository.getNonFavoriteIds(mangaIds)
+    }
+
     fun subscribe(url: String, sourceId: Long): Flow<Manga?> {
         return mangaRepository.getMangaByUrlAndSourceIdAsFlow(url, sourceId)
     }

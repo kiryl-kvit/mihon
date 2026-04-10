@@ -38,6 +38,8 @@ class ChronologicalFeedScreenModel(
 
     private val source = sourceManager.getOrStub(sourceId) as CatalogueSource
     private val hideInLibraryItems = sourcePreferences.hideInLibraryItems.get()
+    private var currentSavedAnchor = browseFeedService.anchorSnapshot(feedId)
+    private var persistedAnchor = currentSavedAnchor
 
     init {
         screenModelScope.launchIO {
@@ -49,12 +51,6 @@ class ChronologicalFeedScreenModel(
                         hasLoaded = it.hasLoaded || timeline.mangaIds.isNotEmpty(),
                     )
                 }
-            }
-        }
-
-        screenModelScope.launchIO {
-            browseFeedService.anchor(feedId).collectLatest { anchor ->
-                mutableState.update { it.copy(savedAnchor = anchor) }
             }
         }
 
@@ -86,13 +82,23 @@ class ChronologicalFeedScreenModel(
     }
 
     fun saveAnchor(mangaId: Long?, scrollOffset: Int) {
-        browseFeedService.saveAnchor(
-            feedId = feedId,
-            anchor = SourceFeedAnchor(
-                mangaId = mangaId,
-                scrollOffset = scrollOffset,
-            ),
+        val anchor = SourceFeedAnchor(
+            mangaId = mangaId,
+            scrollOffset = scrollOffset,
         )
+
+        if (currentSavedAnchor == anchor) return
+
+        currentSavedAnchor = anchor
+
+        if (persistedAnchor != anchor) {
+            persistedAnchor = anchor
+            browseFeedService.saveAnchor(feedId = feedId, anchor = anchor)
+        }
+    }
+
+    fun savedAnchorSnapshot(): SourceFeedAnchor {
+        return currentSavedAnchor
     }
 
     fun consumeNewItemsIndicator() {
@@ -275,12 +281,10 @@ class ChronologicalFeedScreenModel(
         return source.getFilterList().applySnapshot(initialFilterSnapshot)
     }
 
-    private suspend fun visibleIds(manga: List<Manga>): List<Long> {
+    private fun visibleIds(manga: List<Manga>): List<Long> {
         if (!hideInLibraryItems) return manga.map(Manga::id)
 
-        return manga.mapNotNull { entry ->
-            getManga.await(entry.id)?.takeUnless(Manga::favorite)?.id
-        }
+        return manga.filterNot { it.favorite }.map(Manga::id)
     }
 
     private suspend fun normalizeTimeline() {
@@ -288,9 +292,12 @@ class ChronologicalFeedScreenModel(
         if (timeline.mangaIds.isEmpty()) return
 
         val anchor = browseFeedService.anchorSnapshot(feedId)
-        val normalizedIds = timeline.mangaIds.mapNotNull { mangaId ->
-            getManga.await(mangaId)?.takeUnless(Manga::favorite)?.id
+        val nonFavoriteIdSet = buildSet {
+            timeline.mangaIds.chunked(MAX_NON_FAVORITE_LOOKUP_SIZE).forEach { chunk ->
+                addAll(getManga.awaitNonFavoriteIds(chunk))
+            }
         }
+        val normalizedIds = timeline.mangaIds.filter(nonFavoriteIdSet::contains)
 
         val normalizedAnchor = anchor.takeIf {
             anchor.mangaId == null || anchor.mangaId in normalizedIds
@@ -304,6 +311,8 @@ class ChronologicalFeedScreenModel(
         )
 
         if (normalizedAnchor != anchor) {
+            currentSavedAnchor = normalizedAnchor
+            persistedAnchor = normalizedAnchor
             browseFeedService.saveAnchor(feedId, normalizedAnchor)
         }
 
@@ -344,6 +353,7 @@ class ChronologicalFeedScreenModel(
         private const val PAGE_SIZE = 25
         private const val MAX_REFRESH_PAGES = 10
         private const val MAX_APPEND_PAGE_SCANS = 10
+        private const val MAX_NON_FAVORITE_LOOKUP_SIZE = 900
 
         private fun initialState(
             browseFeedService: BrowseFeedService,

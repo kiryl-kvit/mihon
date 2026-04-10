@@ -87,6 +87,13 @@ FROM mangas
 WHERE profile_id = :profileId
 AND favorite = 1;
 
+getNonFavoriteIds:
+SELECT _id
+FROM mangas
+WHERE profile_id = :profileId
+AND favorite = 0
+AND _id IN :mangaIds;
+
 getReadMangaNotInLibrary:
 SELECT *
 FROM mangas
