@@ -366,7 +366,24 @@ class BrowseSourceScreenModel(
         if (!feedsEnabled) return
         setDialog(
             Dialog.SavePreset(
+                name = "",
                 chronological = state.value.listing != Listing.Popular,
+            ),
+        )
+    }
+
+    fun showEditPresetDialog(presetId: String) {
+        if (!feedsEnabled) return
+
+        val preset = browseFeedService.stateSnapshot().presets.firstOrNull {
+            it.id == presetId && it.sourceId == sourceId
+        } ?: return
+
+        setDialog(
+            Dialog.SavePreset(
+                presetId = preset.id,
+                name = preset.name,
+                chronological = preset.chronological,
             ),
         )
     }
@@ -425,20 +442,37 @@ class BrowseSourceScreenModel(
         browseFeedService.removePreset(presetId)
     }
 
-    fun hasPresetName(name: String): Boolean {
+    fun hasPresetName(name: String, excludingPresetId: String? = null): Boolean {
         if (!feedsEnabled) return false
         val trimmed = name.trim()
         return browseFeedService.stateSnapshot().presets.any {
-            it.sourceId == sourceId && it.name.equals(trimmed, ignoreCase = true)
+            it.sourceId == sourceId && it.id != excludingPresetId && it.name.equals(trimmed, ignoreCase = true)
         }
     }
 
     fun savePreset(name: String, chronological: Boolean) {
         if (!feedsEnabled) return
-        if (source !is CatalogueSource) return
 
         val trimmed = name.trim()
         if (trimmed.isBlank()) return
+
+        val editedPresetId = (state.value.dialog as? Dialog.SavePreset)?.presetId
+        if (editedPresetId != null) {
+            val preset = browseFeedService.stateSnapshot().presets.firstOrNull {
+                it.id == editedPresetId && it.sourceId == sourceId
+            } ?: return
+
+            browseFeedService.savePreset(
+                preset.copy(
+                    name = trimmed,
+                    chronological = chronological,
+                ),
+            )
+            setDialog(null)
+            return
+        }
+
+        if (source !is CatalogueSource) return
 
         val presetState = state.value.toSavedPresetState(defaultFilters = source.getFilterList())
 
@@ -485,7 +519,11 @@ class BrowseSourceScreenModel(
 
     sealed interface Dialog {
         data object Filter : Dialog
-        data class SavePreset(val chronological: Boolean) : Dialog
+        data class SavePreset(
+            val presetId: String? = null,
+            val name: String = "",
+            val chronological: Boolean,
+        ) : Dialog
         data class MangaPreview(val mangaId: Long) : Dialog
         data class RemoveManga(val manga: Manga) : Dialog
         data class AddDuplicateManga(val manga: Manga, val duplicates: List<DuplicateMangaCandidate>) : Dialog

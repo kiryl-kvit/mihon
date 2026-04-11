@@ -257,6 +257,7 @@ data class BrowseSourceScreen(
                     presets = if (feedsEnabled) screenModel.feedPresets() else emptyList(),
                     onReset = screenModel::resetFilters,
                     onApplyPreset = screenModel::applyPreset,
+                    onEditPreset = screenModel::showEditPresetDialog,
                     onDeletePreset = { presetPendingDeletion = it },
                     canDeletePreset = screenModel::canDeletePreset,
                     onSave = if (feedsEnabled) screenModel::showSavePresetDialog else null,
@@ -266,9 +267,12 @@ data class BrowseSourceScreen(
             }
             is BrowseSourceScreenModel.Dialog.SavePreset -> if (feedsEnabled) {
                 BrowseFeedNameDialog(
-                    title = MR.strings.browse_feed_save_preset,
+                    title = if (dialog.presetId == null) MR.strings.browse_feed_save_preset else MR.strings.action_edit,
+                    initialValue = dialog.name,
                     initialChronological = dialog.chronological,
-                    duplicateName = screenModel::hasPresetName,
+                    duplicateName = { name ->
+                        screenModel.hasPresetName(name, excludingPresetId = dialog.presetId)
+                    },
                     onDismissRequest = onDismissRequest,
                     onConfirm = screenModel::savePreset,
                 )

@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -51,6 +52,7 @@ fun SourceFilterDialog(
     presets: List<SourceFeedPreset>,
     onReset: () -> Unit,
     onApplyPreset: (String) -> Unit,
+    onEditPreset: (String) -> Unit,
     onDeletePreset: (String) -> Unit,
     canDeletePreset: (String) -> Boolean,
     onSave: (() -> Unit)? = null,
@@ -97,16 +99,31 @@ fun SourceFilterDialog(
                                         text = { Text(text = preset.name) },
                                         trailingIcon = {
                                             if (canDeletePreset(preset.id)) {
-                                                IconButton(
-                                                    onClick = {
-                                                        presetMenuExpanded = false
-                                                        onDeletePreset(preset.id)
-                                                    },
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Delete,
-                                                        contentDescription = stringResource(MR.strings.action_delete),
-                                                    )
+                                                Row {
+                                                    IconButton(
+                                                        onClick = {
+                                                            presetMenuExpanded = false
+                                                            onEditPreset(preset.id)
+                                                        },
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Edit,
+                                                            contentDescription = stringResource(MR.strings.action_edit),
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            presetMenuExpanded = false
+                                                            onDeletePreset(preset.id)
+                                                        },
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Delete,
+                                                            contentDescription = stringResource(
+                                                                MR.strings.action_delete,
+                                                            ),
+                                                        )
+                                                    }
                                                 }
                                             }
                                         },

@@ -36,9 +36,7 @@ fun BrowseFeedNameDialog(
     var value by remember(initialValue) { mutableStateOf(initialValue) }
     var chronological by remember(initialChronological) { mutableStateOf(initialChronological) }
     val trimmedValue = value.trim()
-    val isDuplicate = remember(trimmedValue) {
-        trimmedValue.isNotEmpty() && duplicateName(trimmedValue)
-    }
+    val isDuplicate = trimmedValue.isNotEmpty() && duplicateName(trimmedValue)
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
