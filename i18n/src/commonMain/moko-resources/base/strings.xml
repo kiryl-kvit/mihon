@@ -669,6 +669,11 @@
     <!-- Custom settings section -->
     <string name="pref_category_custom">Custom settings</string>
     <string name="pref_custom_summary">Fork's custom settings</string>
+    <string name="pref_view_logs">View logs</string>
+    <string name="pref_view_logs_summary">Open app logs to inspect background failures and other issues</string>
+    <string name="pref_view_logs_clear_title">Clear logs</string>
+    <string name="pref_view_logs_clear_message">Are you sure? Captured app logs will be removed.</string>
+    <string name="pref_view_logs_cleared">Logs cleared</string>
     <string name="profiles_title">Profiles</string>
     <string name="profiles_summary">Manage profiles</string>
     <string name="profiles_user_profiles">User profiles</string>

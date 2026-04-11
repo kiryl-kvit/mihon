@@ -96,17 +96,27 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     private var mangaToUpdate: List<Manga> = mutableListOf()
 
     override suspend fun doWork(): Result {
+        logcat(LogPriority.INFO) {
+            "Starting library update (auto=${tags.contains(
+                WORK_NAME_AUTO,
+            )}, category=${inputData.getLong(KEY_CATEGORY, -1L)}, source=${inputData.getLong(KEY_SOURCE, -1L)})"
+        }
+
         if (tags.contains(WORK_NAME_AUTO)) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 val preferences = Injekt.get<LibraryPreferences>()
                 val restrictions = preferences.autoUpdateDeviceRestrictions.get()
                 if ((DEVICE_ONLY_ON_WIFI in restrictions) && !context.isConnectedToWifi()) {
+                    logcat(LogPriority.INFO) { "Skipping automatic library update because device is not on Wi-Fi" }
                     return Result.retry()
                 }
             }
 
             // Find a running manual worker. If exists, try again later
             if (context.workManager.isRunning(WORK_NAME_MANUAL)) {
+                logcat(LogPriority.INFO) {
+                    "Retrying automatic library update because a manual update is already running"
+                }
                 return Result.retry()
             }
         }
@@ -122,13 +132,15 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         return withIOContext {
             try {
                 updateChapterList()
+                logcat(LogPriority.INFO) { "Library update completed" }
                 Result.success()
             } catch (e: Exception) {
                 if (e is CancellationException) {
                     // Assume success although cancelled
+                    logcat(LogPriority.INFO) { "Library update cancelled" }
                     Result.success()
                 } else {
-                    logcat(LogPriority.ERROR, e)
+                    logcat(LogPriority.ERROR, e) { "Library update failed" }
                     Result.failure()
                 }
             } finally {
@@ -222,9 +234,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         mangaToUpdate = eligibleLibraryManga.expandToMemberManga()
             .sortedBy { it.title }
 
+        logcat(LogPriority.INFO) {
+            "Queued ${mangaToUpdate.size} library entries for update (${skippedUpdates.size} skipped)"
+        }
+
         if (skippedUpdates.isNotEmpty()) {
-            // TODO: surface skipped reasons to user?
-            logcat {
+            logcat(LogPriority.INFO) {
                 skippedUpdates
                     .groupBy { it.second }
                     .map { (reason, entries) -> "$reason: [${entries.map { it.first.title }.sorted().joinToString()}]" }
@@ -263,6 +278,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val hasDownloads = AtomicBoolean(false)
         val fetchWindow = fetchInterval.getWindow(ZonedDateTime.now())
 
+        logcat(LogPriority.INFO) { "Processing ${mangaToUpdate.size} queued library entries" }
+
         coroutineScope {
             mangaToUpdate.groupBy { it.source }.values
                 .map { mangaInSource ->
@@ -297,6 +314,9 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
 
                                             // Convert to the manga that contains new chapters
                                             newUpdates.add(manga to newChapters.toTypedArray())
+                                            logcat(LogPriority.INFO) {
+                                                "Library update found ${newChapters.size} new chapter(s) for ${manga.title}"
+                                            }
                                         }
                                     } catch (e: Throwable) {
                                         val errorMessage = when (e) {
@@ -310,6 +330,13 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             else -> e.message
                                         }
                                         failedUpdates.add(manga to errorMessage)
+                                        val source = sourceManager.getOrStub(manga.source)
+                                        logcat(LogPriority.ERROR, e) {
+                                            buildString {
+                                                append("Library update failed for ${manga.title} (${source.name})")
+                                                errorMessage?.let { append(": $it") }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -326,6 +353,10 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             if (hasDownloads.load()) {
                 downloadManager.startDownloads()
             }
+        }
+
+        logcat(LogPriority.INFO) {
+            "Library update finished with ${newUpdates.size} updated entr${if (newUpdates.size == 1) "y" else "ies"} and ${failedUpdates.size} failure${if (failedUpdates.size == 1) "" else "s"}"
         }
 
         if (failedUpdates.isNotEmpty()) {

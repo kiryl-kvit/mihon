@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.debug.LogsScreen
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
@@ -311,6 +312,13 @@ object CustomSettingsScreen : SearchableSettings {
                         isProfileSpecific = true,
                         onClick = {
                             navigator.push(DuplicateDetectionSettingsScreen)
+                        },
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_view_logs),
+                        subtitle = stringResource(MR.strings.pref_view_logs_summary),
+                        onClick = {
+                            navigator.push(LogsScreen())
                         },
                     ),
                 ),
