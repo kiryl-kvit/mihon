@@ -149,6 +149,11 @@ Current recommendation:
 - Keep video browse, episode, and stream resolution contracts separate from manga contracts.
 - Keep runtime extension models typed so video packages do not carry manga `Source` lists.
 
+Current Phase 0 status:
+
+- initial parallel video source-api scaffolding has been added under `source-api`
+- the current proposed contract includes `VideoSource`, `VideoCatalogueSource`, `VideoSourceFactory`, `ConfigurableVideoSource`, `SVideo`, `SEpisode`, `VideosPage`, `VideoStream`, and `VideoRequest`
+
 ## Playback Layer
 
 Add a dedicated player stack.
@@ -257,6 +262,8 @@ Locked direction:
 
 Goal: freeze the boundaries before implementation starts.
 
+Status: complete
+
 Deliverables:
 
 - finalized profile type model
@@ -271,16 +278,16 @@ Deliverables:
 
 Checklist:
 
-- [ ] Add profile type to the data model design
-- [ ] Define the full parallel video model set (`SVideo`, `SEpisode`, app/domain/data models)
-- [ ] Define the minimum `VideoStream` model
-- [ ] Lock AndroidX Media3 playback integration details
-- [ ] Define the external-player handoff strategy
-- [ ] Define playback progress persistence strategy
-- [ ] Define video `Updates` semantics
-- [ ] Define extension package and repository type metadata
-- [ ] Define video browse/extensions screen strategy
-- [ ] Define typed runtime extension models and manager split
+- [x] Add profile type to the data model design
+- [x] Define the full parallel video model set (`SVideo`, `SEpisode`, app/domain/data models)
+- [x] Define the minimum `VideoStream` model
+- [x] Lock AndroidX Media3 playback integration details
+- [x] Define the external-player handoff strategy
+- [x] Define playback progress persistence strategy
+- [x] Define video `Updates` semantics
+- [x] Define extension package and repository type metadata
+- [x] Define video browse/extensions screen strategy
+- [x] Define typed runtime extension models and manager split
 
 ## Phase 1: Profile Type Foundation
 
@@ -339,13 +346,14 @@ Why this phase exists:
 
 Checklist:
 
-- [ ] Define video source interfaces
-- [ ] Define stream models
+- [x] Define video source interfaces
+- [x] Define stream models
 - [ ] Decide relationship to `CatalogueSource`
 - [ ] Update source manager to expose video-capable sources
 - [ ] Add `VideoSourceManager` and typed source registration
 - [ ] Update extension loading compatibility policy
 - [ ] Add separate video extension screen models/lists
+- [ ] Add video source preference provider and configurable-source wiring
 - [ ] Write extension author guidance for video sources
 
 ## Phase 3: Video Domain and Data Wiring
@@ -484,16 +492,15 @@ Checklist:
 - [ ] Document extension compatibility rules
 - [ ] Decide whether feature flag can be removed
 
-## Key Technical Decisions Still Open
+## Key Technical Decisions
 
-These should be resolved before Phase 2 starts.
+These were finalized in Phase 0 and should guide Phase 1+ work.
 
 ### 1. Profile type storage shape
 
-Decision needed:
+Locked decision:
 
-- enum-like string column
-- integer enum column
+- use an integer-backed enum-like SQL value with a strongly typed Kotlin enum wrapper
 
 Recommendation:
 
@@ -501,9 +508,9 @@ Recommendation:
 
 ### 2. Domain model reuse vs parallel domain models
 
-Decision needed:
+Locked decision:
 
-- whether to keep any shared generic abstraction under parallel video models
+- keep app/domain/data models parallel from the start without adding a shared generic media abstraction in the first implementation
 
 Recommendation:
 
@@ -532,9 +539,9 @@ Recommendation:
 
 ### 5. Source browsing contract
 
-Decision needed:
+Locked decision:
 
-- whether video sources also implement an existing browse contract or a video-specific one
+- keep browse/search familiar at the UX level, but use a video-specific contract end to end
 
 Recommendation:
 
@@ -542,9 +549,9 @@ Recommendation:
 
 ### 6. Video updates semantics
 
-Decision needed:
+Locked decision:
 
-- what exactly appears in `Updates` for video profiles
+- `Updates` represents newly available or newly fetched episodes for library video titles, with video-specific logic and no filters in v1
 
 Recommendation:
 
@@ -577,6 +584,22 @@ Locked direction:
 Locked direction:
 
 - video profiles should use a separate browse/extensions screen with separate video screen models, reusing shared UI components where helpful
+
+## Phase 0 Outcome
+
+Phase 0 is complete.
+
+It produced:
+
+- locked product/profile separation rules
+- locked extension typing and runtime manager split
+- locked initial video source API surface
+- locked Media3 playback direction
+- locked playback progress/completion policy
+- locked video library/history/updates semantics
+- a compiled initial `source-api` contract for video
+
+The next implementation step is `Phase 1: Profile Type Foundation`.
 
 ## Risks
 

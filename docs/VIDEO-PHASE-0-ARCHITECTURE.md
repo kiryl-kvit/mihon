@@ -159,6 +159,33 @@ Define a parallel contract family such as:
 
 Exact names can change, but the separation principle is locked.
 
+Current proposed source-api shape in the repo:
+
+- `VideoSource`
+  - `suspend fun getVideoDetails(video: SVideo): SVideo`
+  - `suspend fun getEpisodeList(video: SVideo): List<SEpisode>`
+  - `suspend fun getStreamList(episode: SEpisode): List<VideoStream>`
+- `VideoCatalogueSource : VideoSource`
+  - `val supportsLatest: Boolean`
+  - `suspend fun getPopularVideos(page: Int): VideosPage`
+  - `suspend fun getSearchVideos(page: Int, query: String, filters: FilterList): VideosPage`
+  - `suspend fun getLatestUpdates(page: Int): VideosPage`
+  - `fun getFilterList(): FilterList`
+- `VideoSourceFactory`
+  - `fun createSources(): List<VideoSource>`
+- `ConfigurableVideoSource : VideoSource`
+  - `fun getSourcePreferences(): SharedPreferences`
+  - `fun setupPreferenceScreen(screen: PreferenceScreen)`
+
+Current proposed model set in the repo:
+
+- `SVideo`
+- `SEpisode`
+- `VideosPage`
+- `VideoStream`
+- `VideoRequest`
+- `VideoStreamType`
+
 ### What the contract must support
 
 - browse/search titles
@@ -172,6 +199,9 @@ Initial scope note:
 
 - Subtitle models are intentionally excluded from the first source API revision.
 - Subtitles can be introduced later in a dedicated API revision if needed.
+- The first API revision uses suspend-only contracts and does not add parallel Rx APIs.
+- The first API revision models external playback metadata through `VideoRequest(headers)` rather than a separate handoff object.
+- The first API revision mirrors configurable-source support for video via `ConfigurableVideoSource`.
 
 ### Affected code areas
 
@@ -186,6 +216,12 @@ Initial scope note:
 - source model set
 - extension factory/loading strategy
 - compatibility/versioning strategy for video extensions
+
+Current status:
+
+- initial source interfaces and models have been added under `source-api`
+- configurable video-source preference hooks have been added under `source-api`
+- they compile successfully in `:source-api:compileDebugKotlinAndroid`
 
 ## C. Extension Loading Strategy
 
@@ -278,6 +314,11 @@ Visibility preference direction:
 - keep separate hidden-source preference sets for manga and video per profile
 - do not reuse one shared hidden-source key across both media types
 - seed new video profiles against video-source visibility only
+
+Source preference direction:
+
+- keep a separate video source preference provider namespace rather than reusing manga source preference keys implicitly
+- mirror `ConfigurableSource` support for video sources in the first API revision
 
 ## D. App, Domain, and Data Models
 
@@ -489,27 +530,26 @@ This vertical slice is the target all later phases should build toward.
 9. Mark the episode completed after the threshold is crossed.
 10. Show the result in video `Library`, `History`, and `Updates` as defined.
 
-## Decisions Still Open In Phase 0
+## Finalized Decisions
 
-These are the remaining architecture decisions that should be resolved before implementation starts.
+The remaining Phase 0 architecture decisions have now been resolved.
 
 ### 1. Profile type storage encoding
 
-Options:
+Locked decision:
 
-- integer enum in SQL
-- string-like value in SQL
+- use an integer-backed enum-like value in SQL with a strongly typed Kotlin enum wrapper
 
 Recommendation:
 
-- prefer stable enum encoding with a strongly typed Kotlin wrapper
+- use `ProfileType` in Kotlin and store it as a stable integer value through SQLDelight adapters
+- keep existing profiles as `MANGA` during migration
 
 ### 2. Extension entry strategy
 
-Options:
+Locked decision:
 
-- parallel video factory interface
-- generic extension entry interface
+- use a parallel video factory/interface path with minimal disruption to existing manga extension loading
 
 Recommendation:
 
@@ -551,6 +591,7 @@ Integration direction:
 
 - host `PlayerView` via `AndroidView`
 - reuse the app `OkHttpClient` and cookie jar through the Media3 OkHttp datasource bridge
+- consume `VideoRequest.url` and `VideoRequest.headers` as the input for Media3 datasource setup
 
 ### 4. Subtitle support depth for v1
 
@@ -564,15 +605,19 @@ Recommendation:
 
 ### 5. External player handoff payload
 
-Decision needed:
+Locked decision:
 
-- URL only
-- URL plus exported request metadata
-- source-specific share/open handlers
+- use `VideoRequest(url, headers)` as the source-level playback and handoff payload
 
 Recommendation:
 
 - export the richest metadata possible when feasible, but treat built-in playback as the only required supported path
+
+Current proposed payload direction:
+
+- use `VideoRequest(url, headers)` as the source-level handoff payload
+- map that request into built-in playback directly
+- reuse the same request metadata for external player handoff where supported by the target app/device
 
 ### 6. Profile type mutability
 
@@ -628,6 +673,74 @@ Recommendation:
 
 - keep separate keys and separate initialization behavior to avoid collisions and manga-specific assumptions in video profiles
 
+### 11. Parallel app/domain/data model direction
+
+Locked decision:
+
+- video app/domain/data stays fully parallel from the start
+
+Recommendation:
+
+- keep source-side models (`SVideo`, `SEpisode`) separate from app/domain/data models (`VideoTitle`, `VideoEpisode`, etc.)
+- do not introduce a shared `MediaTitle` / `MediaEpisode` abstraction in the first implementation
+
+### 12. Video history semantics
+
+Locked decision:
+
+- history rows represent recently watched episodes with resume-oriented behavior
+
+Definition:
+
+- one row represents the latest watch state for an episode/title context
+- history sorting is by `lastWatchedAt` descending
+- opening a history row launches the video player
+- resume position comes from `VideoPlaybackState`, not page-read state
+
+### 13. Video updates semantics
+
+Locked decision:
+
+- updates represent newly available or newly fetched episodes for library video titles
+
+Definition:
+
+- updates are episode-based rows associated with tracked or favorited video titles
+- the v1 tab has no filters
+- sort order is newest episode update signal first
+- opening an update row launches the video player for the episode
+
+### 14. Video library semantics
+
+Locked decision:
+
+- library rows are title-based and watch-aware
+
+Definition:
+
+- rows represent `VideoTitle`
+- v1 row state includes `unwatchedCount`, `hasInProgress`, and `latestEpisodeAt`
+- categories use the same UX as manga, but video title-category relations are stored separately
+
+### 15. Playback progress and completion rules
+
+Locked decision:
+
+- playback progress is stored separately from manga reading progress
+
+Definition:
+
+- save progress every 10 seconds during playback
+- save again on pause and stop
+- mark complete at 90% watched
+- completion and resume state are separate concerns
+
+### 16. First vertical slice
+
+Locked decision:
+
+- the first implementation milestone defined in this document is the required Phase 0 vertical-slice target
+
 ## Risks
 
 ## High Risk
@@ -660,8 +773,15 @@ Phase 0 is complete when all of the following are true.
 - Playback progress schema and completion rules are chosen and documented.
 - `Library`, `Updates`, and `History` semantics for video are documented.
 - Video extension package and repository typing are documented.
+- The initial `source-api` video contract compiles and is documented.
 - The first vertical slice is locked and unambiguous.
 - No Phase 1 task depends on unresolved architecture decisions.
+
+Current status:
+
+- all Phase 0 architecture decisions are now locked in this document
+- the initial `source-api` video contract exists in the repo and compiles
+- the next step is Phase 1 execution, not more Phase 0 architecture work
 
 ## Implementation Handoff To Phase 1
 
@@ -677,16 +797,16 @@ Once Phase 0 is complete, the next doc should break down Phase 1 into concrete w
 
 ## Tracking Checklist
 
-- [ ] Lock `ProfileType` shape and storage
-- [ ] Lock video extension entry/loading strategy
-- [ ] Lock typed extension/runtime model split
-- [ ] Lock video source interface/model set
-- [ ] Lock source manager split
-- [ ] Lock parallel app/domain/data model direction
-- [ ] Lock playback progress model and completion rules
-- [ ] Lock video `Updates` semantics
-- [ ] Lock video `History` semantics
-- [ ] Lock video `Library` semantics
-- [ ] Lock video extension type metadata strategy
-- [ ] Lock video browse/extensions screen strategy
-- [ ] Lock first vertical slice
+- [x] Lock `ProfileType` shape and storage
+- [x] Lock video extension entry/loading strategy
+- [x] Lock typed extension/runtime model split
+- [x] Lock video source interface/model set
+- [x] Lock source manager split
+- [x] Lock parallel app/domain/data model direction
+- [x] Lock playback progress model and completion rules
+- [x] Lock video `Updates` semantics
+- [x] Lock video `History` semantics
+- [x] Lock video `Library` semantics
+- [x] Lock video extension type metadata strategy
+- [x] Lock video browse/extensions screen strategy
+- [x] Lock first vertical slice
