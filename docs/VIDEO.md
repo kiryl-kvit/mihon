@@ -15,12 +15,25 @@ This file is the top-level roadmap. Each implementation phase should get its own
 - No offline downloads in the initial rollout.
 - No local video support in the initial rollout.
 - Built-in playback is the default.
-- External player support is optional and secondary.
+- Built-in playback uses AndroidX Media3.
+- External player support is a design target, not a ship blocker.
 - The content model is one video per chapter/episode.
 - Video content must not mix with manga content in the same UI surfaces.
 - Video content will live in a new profile type dedicated to video.
 - Existing manga profiles must continue to behave exactly as they do now.
 - Video sources will use a new source type dedicated to video.
+- Video profiles include `Library`, `Updates`, `History`, `Browse`, and `More` from the start.
+- Video uses fully parallel source, app, domain, and data models from the start.
+- `ProfileType` is immutable after profile creation.
+- Video extensions must be separate packages.
+- Extension repositories should use one shared format with a package-level `type` field.
+- Video `Updates` has separate screen logic and no filters in v1.
+- Subtitles are deferred out of the initial source API and out of v1.
+- Video categories should support the same UX as manga profiles.
+- Runtime extension models should be typed and not stay centered on manga `Source`.
+- The app should keep a shared `ExtensionManager`, but use separate runtime source managers for manga and video.
+- Per-profile source visibility should use separate hidden-source preference keys for manga and video.
+- Video extension browsing should use separate video screen models, reusing shared rendering components only where useful.
 
 ## Current Architecture Constraints
 
@@ -70,6 +83,7 @@ Planned direction:
 - Keep existing `Source` and `CatalogueSource` behavior intact for manga.
 - Introduce a new source type for video sources.
 - Video sources should be browseable/searchable within video profiles, but playback should use a video-specific chapter resolution contract instead of `Page`.
+- Keep the current `SourceManager` manga-only and add a parallel `VideoSourceManager`.
 
 At a high level, a video source needs to answer different questions than a manga source:
 
@@ -87,7 +101,7 @@ Video playback should use a dedicated player flow.
 Planned direction:
 
 - Add a dedicated player activity/screen for video.
-- Use a built-in playback library suitable for HLS/MP4/other common stream types.
+- Use AndroidX Media3 as the built-in playback stack.
 - Keep a small adapter layer that can also hand the resolved stream off to an external player.
 - Do not attempt to fold video playback into `ReaderActivity`.
 
@@ -113,6 +127,7 @@ Expected core changes:
 - startup/profile picker behavior
 - profile-specific home-tab defaults
 - source visibility defaults
+- video-profile shell defaults including `Library`, `Updates`, `History`, `Browse`, and `More`
 
 ## Source Layer
 
@@ -122,20 +137,17 @@ Suggested shape:
 
 - `VideoCatalogueSource` or equivalent browse/search contract for video titles
 - `VideoSource` or equivalent playback contract for episodes and streams
-- `VideoEpisode` or reuse of `SChapter` for episode rows, depending on how much duplication is acceptable
+- `SVideo` for source-level video title rows
+- `SEpisode` for source-level episode rows
 - `VideoStream` model for a playable stream
-- optional `SubtitleTrack` model
 - optional `ExternalPlaybackTarget` or external-playable metadata
-
-Open design question:
-
-- Whether video browse models should reuse `SManga` and `SChapter` for library compatibility, or define parallel source models and map them into existing domain models.
 
 Current recommendation:
 
-- Reuse existing domain `Manga` and `Chapter` rows in phase 1 to reduce database churn in library/history/update flows.
-- Add content/profile/source typing around them rather than replacing them immediately.
-- Keep the video source API separate at the extension boundary.
+- Keep the video source API fully parallel from the start.
+- Do not reuse `SManga`, `SChapter`, or `Page` in the video stack.
+- Keep video browse, episode, and stream resolution contracts separate from manga contracts.
+- Keep runtime extension models typed so video packages do not carry manga `Source` lists.
 
 ## Playback Layer
 
@@ -160,16 +172,29 @@ Expected core pieces:
 - playback progress persistence
 - episode open-routing entry point
 
-## Data Layer
+## App, Domain, and Data Layer
 
-Keep data separate primarily through profile type, not separate databases.
+Keep data separated by both profile type and model type.
 
 Planned direction:
 
 - Continue using profile-scoped data where it already exists.
 - Add profile type so feature-specific queries and UI behavior can branch early.
+- Introduce parallel app/domain/data models for video titles and episodes.
+- Prefer separate repositories, queries, and storage paths for video flows.
 - Add dedicated playback-progress persistence for video.
 - Do not reuse `last_page_read` as the only source of truth for video position.
+- Keep video stub-source and source-label fallback paths parallel to manga where needed.
+
+Video should not be represented internally as manga-shaped data with thin adapters around it. Clean separation is preferred, even if it means more up-front work.
+
+Suggested model direction:
+
+- `VideoTitle`
+- `VideoEpisode`
+- `VideoTitleUpdate`
+- `VideoHistoryEntry`
+- `VideoPlaybackState`
 
 Suggested playback state model:
 
@@ -179,7 +204,13 @@ Suggested playback state model:
 - `completed`
 - `lastWatchedAt`
 
-The existing chapter `read` flag can still represent watched/completed status, but granular playback position should be stored separately.
+Recommended v1 playback rules:
+
+- persist progress every 10 seconds during playback
+- persist again on pause/stop
+- mark completed at 90% watched
+
+The exact relationship between video completion and any existing generic read-state conventions should be explicit at the video model layer rather than inherited accidentally from manga storage.
 
 ## UI Separation Strategy
 
@@ -201,6 +232,13 @@ The goal is not just filtered data. The app should feel like two product modes s
 
 This likely means home tabs will eventually diverge by profile type, even if phase 1 starts with a minimal shell reuse.
 
+Locked direction:
+
+- Manga profiles keep the current shell.
+- Video profiles start with `Library`, `Updates`, `History`, `Browse`, and `More`.
+- These may share high-level tab names with manga profiles, but their screens, models, actions, and state handling should be video-specific.
+- Video browse/extensions should use a separate screen, reusing shared UI components where useful.
+
 ## Non-Goals For Initial Rollout
 
 - offline downloads
@@ -209,7 +247,7 @@ This likely means home tabs will eventually diverge by profile type, even if pha
 - casting support
 - picture-in-picture unless it comes nearly for free from the chosen player stack
 - background audio mode unless it is needed early
-- subtitles UI beyond basic support if stream extraction already provides them
+- subtitles
 - mixing manga and video in the same profile
 - retrofitting current manga sources to also support video
 
@@ -226,15 +264,23 @@ Deliverables:
 - finalized playback stack choice
 - agreed phase breakdown
 - agreed migration and compatibility approach for extensions
+- agreed parallel app/domain/data model strategy
+- agreed extension type metadata strategy
+- agreed video browse/extensions screen strategy
+- agreed typed runtime extension/source manager split
 
 Checklist:
 
 - [ ] Add profile type to the data model design
-- [ ] Decide whether browse models reuse `SManga` and `SChapter`
+- [ ] Define the full parallel video model set (`SVideo`, `SEpisode`, app/domain/data models)
 - [ ] Define the minimum `VideoStream` model
-- [ ] Choose built-in playback library
+- [ ] Lock AndroidX Media3 playback integration details
 - [ ] Define the external-player handoff strategy
 - [ ] Define playback progress persistence strategy
+- [ ] Define video `Updates` semantics
+- [ ] Define extension package and repository type metadata
+- [ ] Define video browse/extensions screen strategy
+- [ ] Define typed runtime extension models and manager split
 
 ## Phase 1: Profile Type Foundation
 
@@ -247,6 +293,12 @@ Scope:
 - update profile creation/edit/picker flows
 - make startup and navigation react to profile type
 - define separate default tabs/settings seed behavior for video profiles
+- define the initial video-profile shell with `Library`, `Updates`, `History`, `Browse`, and `More`
+
+Locked constraints:
+
+- profile type is immutable after creation
+- source visibility should use separate hidden-source keys for manga and video
 
 Why this phase exists:
 
@@ -260,7 +312,8 @@ Checklist:
 - [ ] Update profile creation UI to choose a type
 - [ ] Update profile bundle/view models to expose the type
 - [ ] Make home-tab defaults depend on profile type
-- [ ] Define source visibility defaults for video profiles
+- [ ] Seed video profiles with `Library`, `Updates`, `History`, `Browse`, and `More`
+- [ ] Define separate hidden-source keys and video visibility defaults
 - [ ] Review backup/restore behavior for typed profiles
 
 ## Phase 2: Video Source API Foundation
@@ -270,9 +323,14 @@ Goal: establish a dedicated extension/source contract for video.
 Scope:
 
 - define new video source interfaces and models
-- decide which browse/listing contracts are shared with existing source types
+- keep browse/listing contracts fully parallel from manga source types
 - update source manager plumbing to recognize video sources
 - update extension compatibility/versioning strategy
+
+Locked constraints:
+
+- video extensions are separate packages
+- subtitles are not part of the first source API revision
 
 Why this phase exists:
 
@@ -282,10 +340,12 @@ Why this phase exists:
 Checklist:
 
 - [ ] Define video source interfaces
-- [ ] Define stream and subtitle models
+- [ ] Define stream models
 - [ ] Decide relationship to `CatalogueSource`
 - [ ] Update source manager to expose video-capable sources
+- [ ] Add `VideoSourceManager` and typed source registration
 - [ ] Update extension loading compatibility policy
+- [ ] Add separate video extension screen models/lists
 - [ ] Write extension author guidance for video sources
 
 ## Phase 3: Video Domain and Data Wiring
@@ -297,21 +357,28 @@ Scope:
 - route video-source browse results into the app domain
 - keep video profile data separated cleanly
 - add playback state persistence
-- ensure history/update/library queries have a video-safe path
+- establish video-specific library/history/update data paths
+
+Locked constraints:
+
+- categories should support the same UX as manga profiles
 
 Why this phase exists:
 
 - Even with separate profiles, current repositories and views were designed around manga reading assumptions.
-- This phase identifies what can be reused and what needs video-specific handling.
+- This phase creates the parallel video app/domain/data foundation rather than trying to reuse manga-shaped internals.
 
 Checklist:
 
-- [ ] Decide how video titles map into domain models
+- [ ] Define app/domain/data models for video titles and episodes
+- [ ] Add storage/query strategy for video titles and episodes
+- [ ] Add video title-category relations
+- [ ] Add video stub-source and fallback label strategy if needed
 - [ ] Add playback-progress persistence
 - [ ] Add watched/completed update logic
-- [ ] Review history query assumptions
-- [ ] Review updates query assumptions
-- [ ] Review library counters and badges for video profiles
+- [ ] Define video history query behavior
+- [ ] Define video updates query behavior
+- [ ] Define video library counters and badges
 - [ ] Review backup serialization for video data
 
 ## Phase 4: Built-In Player Vertical Slice
@@ -339,7 +406,7 @@ Checklist:
 - [ ] Resolve source headers/cookies/referer correctly
 - [ ] Implement quality selection policy
 - [ ] Persist and restore playback position
-- [ ] Mark episode completed using threshold
+- [ ] Mark episode completed at 90% watched
 - [ ] Add a minimal external-player action
 
 ## Phase 5: Video Profile Shell and Core UI
@@ -352,6 +419,11 @@ Scope:
 - add title details screen and episode list behavior for video
 - replace reader intents with player intents in video profiles
 - make continue watching entry points work
+- wire the `Updates` tab to video-specific update data
+
+Locked constraints:
+
+- use a separate video browse/extensions screen instead of reusing manga `BrowseTab` directly
 
 Why this phase exists:
 
@@ -378,6 +450,10 @@ Scope:
 - adapt update semantics to episodes
 - add video preferences
 - review notifications and shortcuts
+
+Locked constraints:
+
+- video `Updates` has no filters in v1
 
 Checklist:
 
@@ -427,33 +503,32 @@ Recommendation:
 
 Decision needed:
 
-- reuse current `Manga` and `Chapter`
-- create parallel `VideoTitle` and `VideoEpisode` domain models
+- whether to keep any shared generic abstraction under parallel video models
 
 Recommendation:
 
-- reuse current domain rows in phase 1 where practical, because profile type already provides top-level separation
-- add parallel playback/source contracts rather than duplicating all library/storage code immediately
+- keep video app/domain/data models parallel from the start
+- do not map video titles and episodes onto `Manga` and `Chapter` as the primary internal representation
 
 ### 3. Player implementation choice
 
-Decision needed:
+Locked decision:
 
-- choose the built-in playback stack
+- use AndroidX Media3 as the built-in playback stack
 
 Recommendation:
 
-- choose a player with strong Android support for HLS/MP4, custom headers, subtitles, and lifecycle handling
+- integrate Media3 with the app's shared `OkHttpClient`, cookies, and request metadata handling
 
 ### 4. External-player support contract
 
-Decision needed:
+Locked direction:
 
-- whether external-player handoff receives only a URL or also exported headers/metadata
+- external-player support should export the richest metadata possible when feasible
 
 Recommendation:
 
-- treat external-player support as best-effort and do not block built-in support on perfect external interoperability
+- treat built-in playback as the only required supported path
 
 ### 5. Source browsing contract
 
@@ -463,7 +538,45 @@ Decision needed:
 
 Recommendation:
 
-- keep browse/search familiar, but avoid inheriting image-reader assumptions into the playback path
+- keep browse/search familiar at the UX level, but use a video-specific contract end to end
+
+### 6. Video updates semantics
+
+Decision needed:
+
+- what exactly appears in `Updates` for video profiles
+
+Recommendation:
+
+- treat `Updates` as newly available or newly fetched episodes in video profiles, with video-specific logic and no filters in v1
+
+### 7. Extension packaging and typing
+
+Locked direction:
+
+- video extensions are separate packages
+- extension repositories should expose a package-level `type` field
+
+### 8. Runtime extension/source manager split
+
+Locked direction:
+
+- use a shared `ExtensionManager` for install/update/trust/repository flows
+- use typed runtime extension models instead of one manga-shaped source-bearing model
+- keep `SourceManager` manga-only
+- add a parallel `VideoSourceManager`
+
+### 9. Source visibility preference split
+
+Locked direction:
+
+- keep separate hidden-source preference keys for manga and video per profile
+
+### 10. Video browse/extensions screen
+
+Locked direction:
+
+- video profiles should use a separate browse/extensions screen with separate video screen models, reusing shared UI components where helpful
 
 ## Risks
 
@@ -476,7 +589,6 @@ Recommendation:
 
 ## Medium Risk
 
-- Reusing manga domain tables may hide video-specific needs that appear later
 - Video profile shell may initially feel too close to the manga shell if tabs and settings are not separated early
 - External-player support may be inconsistent across devices/apps
 
@@ -488,9 +600,10 @@ Recommendation:
 
 The safest execution order is:
 
+0. Architecture lock
 1. Profile typing
 2. Video source API design
-3. Playback progress persistence
+3. Parallel app/domain/data foundation and playback progress persistence
 4. Built-in player vertical slice
 5. Video profile UI shell
 6. History/updates/settings adaptation
@@ -500,6 +613,7 @@ The safest execution order is:
 
 When implementation starts, add phase-specific files such as:
 
+- `docs/VIDEO-PHASE-0-ARCHITECTURE.md`
 - `docs/VIDEO-PHASE-1-PROFILES.md`
 - `docs/VIDEO-PHASE-2-SOURCE-API.md`
 - `docs/VIDEO-PHASE-3-DATA.md`
