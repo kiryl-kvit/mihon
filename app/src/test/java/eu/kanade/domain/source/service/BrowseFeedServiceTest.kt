@@ -1,8 +1,10 @@
 package eu.kanade.domain.source.service
 
 import eu.kanade.domain.source.model.BUILTIN_POPULAR_PRESET_ID
+import eu.kanade.domain.source.model.FeedListingMode
 import eu.kanade.domain.source.model.SourceFeed
 import eu.kanade.domain.source.model.SourceFeedAnchor
+import eu.kanade.domain.source.model.SourceFeedPreset
 import eu.kanade.domain.source.model.SourceFeedTimeline
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
@@ -71,16 +73,169 @@ class BrowseFeedServiceTest {
     @Test
     fun `savePreset persists explicit chronological flag`() {
         service.savePreset(
-            eu.kanade.domain.source.model.SourceFeedPreset(
+            SourceFeedPreset(
                 id = "preset",
                 sourceId = 1L,
                 name = "Popular style",
-                listingMode = eu.kanade.domain.source.model.FeedListingMode.Search,
+                listingMode = FeedListingMode.Search,
                 chronological = false,
             ),
         )
 
         preferences.savedFeedPresets.get().single().chronological shouldBe false
+    }
+
+    @Test
+    fun `savePreset replaces existing preset with matching id`() {
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Original",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+            ),
+        )
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Updated",
+                listingMode = FeedListingMode.Search,
+                chronological = false,
+            ),
+        )
+
+        preferences.savedFeedPresets.get() shouldBe listOf(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Updated",
+                listingMode = FeedListingMode.Search,
+                chronological = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `savePreset keeps timelines for name only updates`() {
+        val feed = SourceFeed(id = "feed-1", sourceId = 1L, presetId = "preset")
+        preferences.savedFeeds.set(listOf(feed))
+        service.saveTimeline(feed.id, SourceFeedTimeline(mangaIds = listOf(1L, 2L), nextPageKey = 3L))
+        service.saveAnchor(feed.id, SourceFeedAnchor(mangaId = 2L, scrollOffset = 48))
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Original",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+                query = "frieren",
+            ),
+        )
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Renamed",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+                query = "frieren",
+            ),
+        )
+
+        service.timelineSnapshot(feed.id) shouldBe SourceFeedTimeline(
+            mangaIds = listOf(1L, 2L),
+            nextPageKey = 3L,
+        )
+        service.anchorSnapshot(feed.id) shouldBe SourceFeedAnchor(mangaId = 2L, scrollOffset = 48)
+    }
+
+    @Test
+    fun `savePreset clears timelines only for affected feeds when preset behavior changes`() {
+        val updatedFeed = SourceFeed(id = "feed-1", sourceId = 1L, presetId = "preset")
+        val untouchedFeed = SourceFeed(id = "feed-2", sourceId = 1L, presetId = "other")
+        preferences.savedFeeds.set(listOf(updatedFeed, untouchedFeed))
+        service.saveTimeline(updatedFeed.id, SourceFeedTimeline(mangaIds = listOf(1L, 2L), nextPageKey = 3L))
+        service.saveAnchor(updatedFeed.id, SourceFeedAnchor(mangaId = 2L, scrollOffset = 48))
+        service.saveTimeline(untouchedFeed.id, SourceFeedTimeline(mangaIds = listOf(4L, 5L), nextPageKey = 6L))
+        service.saveAnchor(untouchedFeed.id, SourceFeedAnchor(mangaId = 5L, scrollOffset = 12))
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Tracked",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+                query = "frieren",
+            ),
+        )
+        service.savePreset(
+            SourceFeedPreset(
+                id = "other",
+                sourceId = 1L,
+                name = "Other",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+                query = "dungeon",
+            ),
+        )
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Tracked",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+                query = "apothecary",
+            ),
+        )
+
+        service.timelineSnapshot(updatedFeed.id) shouldBe SourceFeedTimeline()
+        service.anchorSnapshot(updatedFeed.id) shouldBe SourceFeedAnchor()
+        service.timelineSnapshot(untouchedFeed.id) shouldBe SourceFeedTimeline(
+            mangaIds = listOf(4L, 5L),
+            nextPageKey = 6L,
+        )
+        service.anchorSnapshot(untouchedFeed.id) shouldBe SourceFeedAnchor(mangaId = 5L, scrollOffset = 12)
+    }
+
+    @Test
+    fun `savePreset clears timeline when chronological behavior changes`() {
+        val feed = SourceFeed(id = "feed-1", sourceId = 1L, presetId = "preset")
+        preferences.savedFeeds.set(listOf(feed))
+        service.saveTimeline(feed.id, SourceFeedTimeline(mangaIds = listOf(1L, 2L), nextPageKey = 3L))
+        service.saveAnchor(feed.id, SourceFeedAnchor(mangaId = 2L, scrollOffset = 48))
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Tracked",
+                listingMode = FeedListingMode.Search,
+                chronological = true,
+                query = "frieren",
+            ),
+        )
+
+        service.savePreset(
+            SourceFeedPreset(
+                id = "preset",
+                sourceId = 1L,
+                name = "Tracked",
+                listingMode = FeedListingMode.Search,
+                chronological = false,
+                query = "frieren",
+            ),
+        )
+
+        service.timelineSnapshot(feed.id) shouldBe SourceFeedTimeline()
+        service.anchorSnapshot(feed.id) shouldBe SourceFeedAnchor()
     }
 }
 

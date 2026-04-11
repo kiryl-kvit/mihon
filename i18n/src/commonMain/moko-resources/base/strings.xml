@@ -788,6 +788,9 @@
     <string name="browse_feeds_empty">No feeds configured yet</string>
     <string name="browse_manage_feeds">Manage feeds</string>
     <string name="browse_feed_save_preset">Save preset</string>
+    <string name="browse_feed_save_as_new_preset">Save as new preset</string>
+    <string name="browse_feed_update_preset">Update preset</string>
+    <string name="browse_feed_update_current_preset">Update "%1$s"</string>
     <string name="browse_feed_chronological">Chronological feed</string>
     <string name="browse_feed_chronological_summary">When enabled, feeds reopen from the last seen position and refresh by prepending newer items above it.</string>
     <string name="browse_feed_preset_exists">A preset with this name already exists</string>

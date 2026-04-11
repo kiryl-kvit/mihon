@@ -132,9 +132,10 @@ data class MigrateSourceSearchScreen(
                     presets = emptyList(),
                     onReset = screenModel::resetFilters,
                     onApplyPreset = {},
+                    onEditPreset = {},
                     onDeletePreset = {},
                     canDeletePreset = { false },
-                    onSave = null,
+                    onSaveAsNewPreset = null,
                     onFilter = { screenModel.search(filters = state.filters) },
                     onUpdate = screenModel::setFilters,
                 )

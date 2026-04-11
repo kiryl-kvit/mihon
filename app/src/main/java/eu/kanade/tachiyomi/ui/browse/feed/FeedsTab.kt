@@ -205,10 +205,12 @@ private fun FeedsTabContent(
         )
     } else if (activeFeed != null && activeSource != null && activePreset != null) {
         val browseContentStateHolder = rememberSaveableStateHolder()
-        key(activeProfileId, activeFeed.id) {
+        val presetBehaviorKey = activePreset.behaviorKey()
+        key(activeProfileId, activeFeed.id, presetBehaviorKey) {
             val browseModel = rememberActiveFeedScreenModel(
                 activeProfileId = activeProfileId,
                 activeFeedId = activeFeed.id,
+                presetBehaviorKey = presetBehaviorKey,
                 sourceId = activeSource.id,
                 listingQuery = activePreset.toListing().requestQuery,
                 initialFilterSnapshot = activePreset.filters,
@@ -219,6 +221,7 @@ private fun FeedsTabContent(
                 rememberChronologicalFeedScreenModel(
                     activeProfileId = activeProfileId,
                     activeFeedId = activeFeed.id,
+                    presetBehaviorKey = presetBehaviorKey,
                     sourceId = activeSource.id,
                     listingQuery = activePreset.toListing().requestQuery,
                     initialFilterSnapshot = activePreset.filters,
@@ -238,7 +241,7 @@ private fun FeedsTabContent(
                 browseModel.dismissDialog()
             }
 
-            LaunchedEffect(activeFeed.id, activePreset.id) {
+            LaunchedEffect(activeFeed.id, activePreset.id, presetBehaviorKey) {
                 val savedListing = activePreset.toListing()
                 val currentFilters = browseModelState.filters.snapshot()
                 val shouldApplyPreset = when (activePreset.listingMode) {
@@ -287,6 +290,7 @@ private fun FeedsTabContent(
                         stateHolder = browseContentStateHolder,
                         activeProfileId = activeProfileId,
                         activeFeedId = activeFeed.id,
+                        presetBehaviorKey = presetBehaviorKey,
                     ) {
                         if (chronologicalFeedModel != null) {
                             PullRefresh(
@@ -475,9 +479,12 @@ private fun FeedBrowseContent(
     stateHolder: androidx.compose.runtime.saveable.SaveableStateHolder,
     activeProfileId: Long?,
     activeFeedId: String,
+    presetBehaviorKey: String,
     content: @Composable () -> Unit,
 ) {
-    stateHolder.SaveableStateProvider(key = "feed-content-${activeProfileId ?: "none"}-$activeFeedId") {
+    stateHolder.SaveableStateProvider(
+        key = "feed-content-${activeProfileId ?: "none"}-$activeFeedId-$presetBehaviorKey",
+    ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             content()
         }
@@ -613,19 +620,20 @@ private fun FeedChip(
 private fun rememberActiveFeedScreenModel(
     activeProfileId: Long?,
     activeFeedId: String,
+    presetBehaviorKey: String,
     sourceId: Long,
     listingQuery: String?,
     initialFilterSnapshot: List<eu.kanade.domain.source.model.FilterStateNode>,
 ): BrowseSourceScreenModel {
     val profileKey = activeProfileId?.toString() ?: "none"
     return object : Screen {
-        override val key: ScreenKey = "feed-screen-model-$profileKey-$activeFeedId"
+        override val key: ScreenKey = "feed-screen-model-$profileKey-$activeFeedId-$presetBehaviorKey"
 
         @Composable
         override fun Content() {
             error("Not used")
         }
-    }.rememberScreenModel(tag = "$profileKey:$activeFeedId") {
+    }.rememberScreenModel(tag = "$profileKey:$activeFeedId:$presetBehaviorKey") {
         BrowseSourceScreenModel(
             sourceId = sourceId,
             listingQuery = listingQuery,
@@ -638,25 +646,40 @@ private fun rememberActiveFeedScreenModel(
 private fun rememberChronologicalFeedScreenModel(
     activeProfileId: Long?,
     activeFeedId: String,
+    presetBehaviorKey: String,
     sourceId: Long,
     listingQuery: String?,
     initialFilterSnapshot: List<eu.kanade.domain.source.model.FilterStateNode>,
 ): ChronologicalFeedScreenModel {
     val profileKey = activeProfileId?.toString() ?: "none"
     return object : Screen {
-        override val key: ScreenKey = "chronological-feed-screen-model-$profileKey-$activeFeedId"
+        override val key: ScreenKey = "chronological-feed-screen-model-$profileKey-$activeFeedId-$presetBehaviorKey"
 
         @Composable
         override fun Content() {
             error("Not used")
         }
-    }.rememberScreenModel(tag = "chronological:$profileKey:$activeFeedId") {
+    }.rememberScreenModel(tag = "chronological:$profileKey:$activeFeedId:$presetBehaviorKey") {
         ChronologicalFeedScreenModel(
             feedId = activeFeedId,
             sourceId = sourceId,
             listingQuery = listingQuery,
             initialFilterSnapshot = initialFilterSnapshot,
         )
+    }
+}
+
+private fun SourceFeedPreset.behaviorKey(): String {
+    return buildString {
+        append(sourceId)
+        append(':')
+        append(listingMode.name)
+        append(':')
+        append(chronological)
+        append(':')
+        append(query.orEmpty())
+        append(':')
+        append(filters.hashCode())
     }
 }
 

@@ -42,12 +42,21 @@ class BrowseFeedService(
     }
 
     fun savePreset(preset: SourceFeedPreset) {
+        val existingPresets = preferences.savedFeedPresets.get()
+        val previousPreset = existingPresets.firstOrNull { it.id == preset.id }
         preferences.savedFeedPresets.set(
-            preferences.savedFeedPresets.get()
+            existingPresets
                 .filterNot { it.id == preset.id }
                 .plus(preset)
                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }),
         )
+
+        if (previousPreset != null && previousPreset.feedBehaviorChanged(preset)) {
+            preferences.savedFeeds.get()
+                .filter { it.presetId == preset.id }
+                .map(SourceFeed::id)
+                .forEach(::clearTimeline)
+        }
     }
 
     fun removePreset(presetId: String) {
@@ -149,4 +158,12 @@ class BrowseFeedService(
         val feeds: List<SourceFeed>,
         val selectedFeedId: String?,
     )
+}
+
+private fun SourceFeedPreset.feedBehaviorChanged(other: SourceFeedPreset): Boolean {
+    return sourceId != other.sourceId ||
+        listingMode != other.listingMode ||
+        chronological != other.chronological ||
+        query != other.query ||
+        filters != other.filters
 }

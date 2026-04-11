@@ -249,6 +249,7 @@ data class BrowseSourceScreen(
         }
 
         val onDismissRequest = screenModel::dismissDialog
+        val appliedCustomPreset = if (feedsEnabled) screenModel.appliedCustomPreset() else null
         when (val dialog = state.dialog) {
             is BrowseSourceScreenModel.Dialog.Filter -> {
                 SourceFilterDialog(
@@ -257,18 +258,29 @@ data class BrowseSourceScreen(
                     presets = if (feedsEnabled) screenModel.feedPresets() else emptyList(),
                     onReset = screenModel::resetFilters,
                     onApplyPreset = screenModel::applyPreset,
+                    onEditPreset = screenModel::showEditPresetDialog,
                     onDeletePreset = { presetPendingDeletion = it },
                     canDeletePreset = screenModel::canDeletePreset,
-                    onSave = if (feedsEnabled) screenModel::showSavePresetDialog else null,
+                    onSaveAsNewPreset = if (feedsEnabled) screenModel::showSavePresetDialog else null,
+                    currentPresetName = appliedCustomPreset?.name,
+                    onUpdateCurrentPreset = if (feedsEnabled) screenModel::showUpdateCurrentPresetDialog else null,
                     onFilter = { screenModel.search(filters = state.filters) },
                     onUpdate = screenModel::setFilters,
                 )
             }
             is BrowseSourceScreenModel.Dialog.SavePreset -> if (feedsEnabled) {
                 BrowseFeedNameDialog(
-                    title = MR.strings.browse_feed_save_preset,
+                    title = when (dialog.mode) {
+                        BrowseSourceScreenModel.Dialog.SavePreset.Mode.Create -> MR.strings.browse_feed_save_preset
+                        BrowseSourceScreenModel.Dialog.SavePreset.Mode.EditMetadata -> MR.strings.action_edit
+                        BrowseSourceScreenModel.Dialog.SavePreset.Mode.UpdateFromCurrentState ->
+                            MR.strings.browse_feed_update_preset
+                    },
+                    initialValue = dialog.name,
                     initialChronological = dialog.chronological,
-                    duplicateName = screenModel::hasPresetName,
+                    duplicateName = { name ->
+                        screenModel.hasPresetName(name, excludingPresetId = dialog.presetId)
+                    },
                     onDismissRequest = onDismissRequest,
                     onConfirm = screenModel::savePreset,
                 )

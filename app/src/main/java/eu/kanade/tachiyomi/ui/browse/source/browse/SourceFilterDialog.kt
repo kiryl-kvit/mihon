@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDropDown
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -51,14 +52,18 @@ fun SourceFilterDialog(
     presets: List<SourceFeedPreset>,
     onReset: () -> Unit,
     onApplyPreset: (String) -> Unit,
+    onEditPreset: (String) -> Unit,
     onDeletePreset: (String) -> Unit,
     canDeletePreset: (String) -> Boolean,
-    onSave: (() -> Unit)? = null,
+    onSaveAsNewPreset: (() -> Unit)? = null,
+    currentPresetName: String? = null,
+    onUpdateCurrentPreset: (() -> Unit)? = null,
     onFilter: () -> Unit,
     onUpdate: (FilterList) -> Unit,
 ) {
     val updateFilters = { onUpdate(filters) }
     var presetMenuExpanded by remember { mutableStateOf(false) }
+    var saveMenuExpanded by remember { mutableStateOf(false) }
 
     AdaptiveSheet(onDismissRequest = onDismissRequest) {
         LazyColumn {
@@ -97,16 +102,31 @@ fun SourceFilterDialog(
                                         text = { Text(text = preset.name) },
                                         trailingIcon = {
                                             if (canDeletePreset(preset.id)) {
-                                                IconButton(
-                                                    onClick = {
-                                                        presetMenuExpanded = false
-                                                        onDeletePreset(preset.id)
-                                                    },
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Outlined.Delete,
-                                                        contentDescription = stringResource(MR.strings.action_delete),
-                                                    )
+                                                Row {
+                                                    IconButton(
+                                                        onClick = {
+                                                            presetMenuExpanded = false
+                                                            onEditPreset(preset.id)
+                                                        },
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Edit,
+                                                            contentDescription = stringResource(MR.strings.action_edit),
+                                                        )
+                                                    }
+                                                    IconButton(
+                                                        onClick = {
+                                                            presetMenuExpanded = false
+                                                            onDeletePreset(preset.id)
+                                                        },
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Outlined.Delete,
+                                                            contentDescription = stringResource(
+                                                                MR.strings.action_delete,
+                                                            ),
+                                                        )
+                                                    }
                                                 }
                                             }
                                         },
@@ -120,12 +140,52 @@ fun SourceFilterDialog(
                         }
                     }
 
-                    if (onSave != null) {
-                        IconButton(onClick = onSave) {
-                            Icon(
-                                imageVector = Icons.Outlined.Save,
-                                contentDescription = stringResource(MR.strings.action_save),
-                            )
+                    if (onSaveAsNewPreset != null) {
+                        if (currentPresetName != null && onUpdateCurrentPreset != null) {
+                            Box {
+                                IconButton(onClick = { saveMenuExpanded = true }) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Save,
+                                        contentDescription = stringResource(MR.strings.action_save),
+                                    )
+                                }
+
+                                DropdownMenu(
+                                    expanded = saveMenuExpanded,
+                                    onDismissRequest = { saveMenuExpanded = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(text = stringResource(MR.strings.browse_feed_save_as_new_preset))
+                                        },
+                                        onClick = {
+                                            saveMenuExpanded = false
+                                            onSaveAsNewPreset()
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = stringResource(
+                                                    MR.strings.browse_feed_update_current_preset,
+                                                    currentPresetName,
+                                                ),
+                                            )
+                                        },
+                                        onClick = {
+                                            saveMenuExpanded = false
+                                            onUpdateCurrentPreset()
+                                        },
+                                    )
+                                }
+                            }
+                        } else {
+                            IconButton(onClick = onSaveAsNewPreset) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Save,
+                                    contentDescription = stringResource(MR.strings.action_save),
+                                )
+                            }
                         }
                     }
 
