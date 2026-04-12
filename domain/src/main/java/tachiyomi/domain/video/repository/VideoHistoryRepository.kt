@@ -11,6 +11,8 @@ interface VideoHistoryRepository {
 
     suspend fun getLastHistory(): VideoHistoryWithRelations?
 
+    fun getLastHistoryAsFlow(): Flow<VideoHistoryWithRelations?>
+
     suspend fun getTotalWatchedDuration(): Long
 
     suspend fun getHistoryByVideoId(videoId: Long): List<VideoHistory>

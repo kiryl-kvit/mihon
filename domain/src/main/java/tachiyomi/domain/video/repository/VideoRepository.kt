@@ -16,6 +16,8 @@ interface VideoRepository {
 
     suspend fun getFavorites(): List<VideoTitle>
 
+    fun getFavoritesAsFlow(): Flow<List<VideoTitle>>
+
     suspend fun getAllVideosByProfile(profileId: Long): List<VideoTitle>
 
     suspend fun update(update: VideoTitleUpdate): Boolean

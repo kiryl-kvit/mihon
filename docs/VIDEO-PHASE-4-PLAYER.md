@@ -434,10 +434,13 @@ Phase 4 is complete when all of the following are true.
 
 ## Handoff To Phase 5
 
-Once Phase 4 is complete, the next doc should break down Phase 5 into concrete work items covering:
+Phase 5 planning now lives in `docs/VIDEO-PHASE-5-UI.md`.
+
+It covers concrete work items for:
 
 - routing real video browse and details flows into the player
 - replacing placeholder tabs with real video surfaces
 - continue-watching entry points
 - episode-list progress indicators
-- video `Updates` and `History` UI presentation on top of the Phase 3 and 4 backend work
+
+`VideoUpdatesTab` and `VideoHistoryTab` presentation remain deferred to Phase 6.

@@ -23,6 +23,15 @@ FROM video_playback_state
 WHERE profile_id = :profileId
 AND episode_id = :episodeId;
 
+getByVideoId:
+SELECT VPS.*
+FROM video_playback_state VPS
+JOIN video_episodes VE
+ON VPS.episode_id = VE._id
+WHERE VPS.profile_id = :profileId
+AND VE.profile_id = :profileId
+AND VE.video_id = :videoId;
+
 deleteByProfile:
 DELETE FROM video_playback_state
 WHERE profile_id = :profileId;

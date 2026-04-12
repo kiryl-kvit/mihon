@@ -455,11 +455,13 @@ Scope:
 - add title details screen and episode list behavior for video
 - replace reader intents with player intents in video profiles
 - make continue watching entry points work
-- wire the `Updates` tab to video-specific update data
+- keep `Updates` and `History` tab presentation deferred to Phase 6
 
 Locked constraints:
 
 - use a separate video browse/extensions screen instead of reusing manga `BrowseTab` directly
+
+Detailed plan: `docs/VIDEO-PHASE-5-UI.md`
 
 Why this phase exists:
 
@@ -476,6 +478,11 @@ Checklist:
 - [ ] Add watch progress indicators in episode lists
 - [ ] Review search behavior inside video profiles
 
+Current note:
+
+- Phase 5 planning now lives in `docs/VIDEO-PHASE-5-UI.md`.
+- This phase intentionally excludes `Updates` and `History` tab presentation, which remain part of Phase 6.
+
 ## Phase 6: History, Updates, and Settings for Video
 
 Goal: make video profiles feel complete outside playback.
@@ -484,6 +491,7 @@ Scope:
 
 - adapt history semantics to watching
 - adapt update semantics to episodes
+- wire the `Updates` and `History` tabs to video-specific data
 - add video preferences
 - review notifications and shortcuts
 

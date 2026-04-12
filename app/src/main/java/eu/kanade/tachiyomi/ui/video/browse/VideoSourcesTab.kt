@@ -1,4 +1,4 @@
-package eu.kanade.tachiyomi.ui.browse.source
+package eu.kanade.tachiyomi.ui.video.browse
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterList
@@ -11,24 +11,22 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.domain.source.interactor.SourceListListing
 import eu.kanade.presentation.browse.SourceOptionsDialog
 import eu.kanade.presentation.browse.SourcesScreen
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
-import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
-import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
+import eu.kanade.tachiyomi.ui.video.browse.globalsearch.VideoGlobalSearchScreen
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import tachiyomi.domain.source.interactor.GetRemoteManga
+import tachiyomi.domain.source.interactor.GetRemoteVideo
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
-fun Screen.sourcesTab(): TabContent {
+fun Screen.videoSourcesTab(): TabContent {
     val navigator = LocalNavigator.currentOrThrow
-    val screenModel = rememberScreenModel { SourcesScreenModel() }
+    val screenModel = rememberScreenModel { VideoSourcesScreenModel() }
     val state by screenModel.state.collectAsState()
 
     return TabContent(
@@ -37,12 +35,7 @@ fun Screen.sourcesTab(): TabContent {
             AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
                 icon = Icons.Outlined.TravelExplore,
-                onClick = { navigator.push(GlobalSearchScreen()) },
-            ),
-            AppBar.Action(
-                title = stringResource(MR.strings.action_filter),
-                icon = Icons.Outlined.FilterList,
-                onClick = { navigator.push(SourcesFilterScreen()) },
+                onClick = { navigator.push(VideoGlobalSearchScreen()) },
             ),
         ),
         content = { contentPadding, snackbarHostState ->
@@ -51,10 +44,12 @@ fun Screen.sourcesTab(): TabContent {
                 contentPadding = contentPadding,
                 onClickItem = { source, listing ->
                     val listingQuery = when (listing) {
-                        SourceListListing.Popular -> GetRemoteManga.QUERY_POPULAR
-                        SourceListListing.Latest -> GetRemoteManga.QUERY_LATEST
+                        eu.kanade.domain.source.interactor.SourceListListing.Popular ->
+                            GetRemoteVideo.QUERY_POPULAR
+                        eu.kanade.domain.source.interactor.SourceListListing.Latest ->
+                            GetRemoteVideo.QUERY_LATEST
                     }
-                    navigator.push(BrowseSourceScreen(source.id, listingQuery))
+                    navigator.push(VideoBrowseSourceScreen(source.id, listingQuery))
                 },
                 onClickPin = screenModel::togglePin,
                 onLongClickItem = screenModel::showSourceDialog,
@@ -80,7 +75,7 @@ fun Screen.sourcesTab(): TabContent {
             LaunchedEffect(Unit) {
                 screenModel.events.collectLatest { event ->
                     when (event) {
-                        SourcesScreenModel.Event.FailedFetchingSources -> {
+                        VideoSourcesScreenModel.Event.FailedFetchingSources -> {
                             launch { snackbarHostState.showSnackbar(internalErrString) }
                         }
                     }

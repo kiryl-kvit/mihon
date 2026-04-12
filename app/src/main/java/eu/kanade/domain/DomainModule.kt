@@ -17,6 +17,7 @@ import eu.kanade.domain.manga.interactor.SetExcludedScanlators
 import eu.kanade.domain.manga.interactor.SetMangaViewerFlags
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.source.interactor.GetEnabledSources
+import eu.kanade.domain.source.interactor.GetEnabledVideoSources
 import eu.kanade.domain.source.interactor.GetIncognitoState
 import eu.kanade.domain.source.interactor.GetLanguagesWithSources
 import eu.kanade.domain.source.interactor.GetSourcesWithFavoriteCount
@@ -25,6 +26,8 @@ import eu.kanade.domain.source.interactor.ToggleIncognito
 import eu.kanade.domain.source.interactor.ToggleLanguage
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
+import eu.kanade.domain.source.interactor.ToggleVideoSource
+import eu.kanade.domain.source.interactor.ToggleVideoSourcePin
 import eu.kanade.domain.source.service.BrowseFeedService
 import eu.kanade.domain.source.service.ProfileHiddenSourceIds
 import eu.kanade.domain.track.interactor.AddTracks
@@ -52,6 +55,7 @@ import tachiyomi.data.manga.MergedMangaRepositoryImpl
 import tachiyomi.data.release.ReleaseServiceImpl
 import tachiyomi.data.source.SourceRepositoryImpl
 import tachiyomi.data.source.StubSourceRepositoryImpl
+import tachiyomi.data.source.VideoSourceRepositoryImpl
 import tachiyomi.data.track.TrackRepositoryImpl
 import tachiyomi.data.updates.UpdatesRepositoryImpl
 import tachiyomi.data.video.VideoEpisodeRepositoryImpl
@@ -104,9 +108,11 @@ import tachiyomi.domain.manga.repository.MergedMangaRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.service.ReleaseService
 import tachiyomi.domain.source.interactor.GetRemoteManga
+import tachiyomi.domain.source.interactor.GetRemoteVideo
 import tachiyomi.domain.source.interactor.GetSourcesWithNonLibraryManga
 import tachiyomi.domain.source.repository.SourceRepository
 import tachiyomi.domain.source.repository.StubSourceRepository
+import tachiyomi.domain.source.repository.VideoSourceRepository
 import tachiyomi.domain.source.service.HiddenSourceIds
 import tachiyomi.domain.track.interactor.DeleteTrack
 import tachiyomi.domain.track.interactor.GetTracks
@@ -120,6 +126,9 @@ import tachiyomi.domain.video.repository.VideoHistoryRepository
 import tachiyomi.domain.video.repository.VideoPlaybackStateRepository
 import tachiyomi.domain.video.repository.VideoRepository
 import tachiyomi.domain.video.repository.VideoUpdatesRepository
+import tachiyomi.domain.video.interactor.GetVideo
+import tachiyomi.domain.video.interactor.NetworkToLocalVideo
+import tachiyomi.domain.video.interactor.SyncVideoWithSource
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addFactory
@@ -220,20 +229,28 @@ class DomainModule : InjektModule {
         addSingletonFactory<VideoHistoryRepository> { VideoHistoryRepositoryImpl(get(), get()) }
         addSingletonFactory<VideoPlaybackStateRepository> { VideoPlaybackStateRepositoryImpl(get(), get()) }
         addSingletonFactory<VideoUpdatesRepository> { VideoUpdatesRepositoryImpl(get(), get()) }
+        addFactory { GetVideo(get()) }
+        addFactory { NetworkToLocalVideo(get()) }
+        addFactory { SyncVideoWithSource(get(), get(), get()) }
 
         addSingletonFactory<HiddenSourceIds> { ProfileHiddenSourceIds(get()) }
         addSingletonFactory<SourceRepository> { SourceRepositoryImpl(get(), get(), get()) }
+        addSingletonFactory<VideoSourceRepository> { VideoSourceRepositoryImpl(get()) }
         addSingletonFactory<StubSourceRepository> { StubSourceRepositoryImpl(get()) }
         addFactory { GetEnabledSources(get(), get()) }
+        addFactory { GetEnabledVideoSources(get(), get()) }
         addSingletonFactory { BrowseFeedService(get()) }
         addFactory { GetLanguagesWithSources(get(), get()) }
         addFactory { GetRemoteManga(get()) }
+        addFactory { GetRemoteVideo(get()) }
         addFactory { GetSourcesWithFavoriteCount(get(), get()) }
         addFactory { GetSourcesWithNonLibraryManga(get(), get()) }
         addFactory { SetMigrateSorting(get()) }
         addFactory { ToggleLanguage(get()) }
         addFactory { ToggleSource(get()) }
+        addFactory { ToggleVideoSource(get()) }
         addFactory { ToggleSourcePin(get()) }
+        addFactory { ToggleVideoSourcePin(get()) }
         addFactory { TrustExtension(get(), get()) }
 
         addSingletonFactory<ExtensionRepoRepository> { ExtensionRepoRepositoryImpl(get()) }

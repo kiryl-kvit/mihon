@@ -24,6 +24,8 @@ class SourcePreferences(
         const val LEGACY_HIDDEN_SOURCES_KEY = "hidden_catalogues"
         const val MANGA_HIDDEN_SOURCES_KEY = "hidden_manga_catalogues"
         const val VIDEO_HIDDEN_SOURCES_KEY = "hidden_video_catalogues"
+        const val MANGA_PINNED_SOURCES_KEY = "pinned_catalogues"
+        const val VIDEO_PINNED_SOURCES_KEY = "pinned_video_catalogues"
     }
 
 
@@ -45,10 +47,17 @@ class SourcePreferences(
 
     val incognitoExtensions: Preference<Set<String>> = preferenceStore.getStringSet("incognito_extensions", emptySet())
 
-    val pinnedSources: Preference<Set<String>> = preferenceStore.getStringSet("pinned_catalogues", emptySet())
+    val pinnedSources: Preference<Set<String>> = preferenceStore.getStringSet(MANGA_PINNED_SOURCES_KEY, emptySet())
+
+    val pinnedVideoSources: Preference<Set<String>> = preferenceStore.getStringSet(VIDEO_PINNED_SOURCES_KEY, emptySet())
 
     val lastUsedSource: Preference<Long> = preferenceStore.getLong(
         Preference.appStateKey("last_catalogue_source"),
+        -1,
+    )
+
+    val lastUsedVideoSource: Preference<Long> = preferenceStore.getLong(
+        Preference.appStateKey("last_video_catalogue_source"),
         -1,
     )
 

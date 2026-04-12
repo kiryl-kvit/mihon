@@ -32,6 +32,14 @@ class VideoHistoryRepositoryImpl(
         }
     }
 
+    override fun getLastHistoryAsFlow(): Flow<VideoHistoryWithRelations?> {
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            handler.subscribeToOneOrNull {
+                video_historyQueries.getLatestHistory(profileId, VideoHistoryMapper::mapHistoryWithRelations)
+            }
+        }
+    }
+
     override suspend fun getTotalWatchedDuration(): Long {
         return handler.awaitOne { video_historyQueries.getWatchedDuration(profileProvider.activeProfileId) }
     }

@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.VideoStreamType
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -162,6 +163,10 @@ class VideoPlayerViewModelTest {
 
         override fun getByEpisodeIdAsFlow(episodeId: Long): Flow<VideoPlaybackState?> = emptyFlow()
 
+        override fun getByVideoIdAsFlow(videoId: Long): Flow<List<VideoPlaybackState>> {
+            return flowOf(existingState?.let(::listOf) ?: emptyList())
+        }
+
         override suspend fun upsert(state: VideoPlaybackState) {
             error("Not used")
         }
@@ -177,6 +182,8 @@ class VideoPlayerViewModelTest {
         override fun getHistory(query: String): Flow<List<VideoHistoryWithRelations>> = emptyFlow()
 
         override suspend fun getLastHistory(): VideoHistoryWithRelations? = error("Not used")
+
+        override fun getLastHistoryAsFlow(): Flow<VideoHistoryWithRelations?> = emptyFlow()
 
         override suspend fun getTotalWatchedDuration(): Long = error("Not used")
 

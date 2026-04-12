@@ -1,12 +1,12 @@
-package eu.kanade.tachiyomi.ui.browse.source
+package eu.kanade.tachiyomi.ui.video.browse
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.domain.source.interactor.GetEnabledSources
+import eu.kanade.domain.source.interactor.GetEnabledVideoSources
 import eu.kanade.domain.source.interactor.SourceListState
 import eu.kanade.domain.source.interactor.SourceListUiMapper
-import eu.kanade.domain.source.interactor.ToggleSource
-import eu.kanade.domain.source.interactor.ToggleSourcePin
+import eu.kanade.domain.source.interactor.ToggleVideoSource
+import eu.kanade.domain.source.interactor.ToggleVideoSourcePin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -19,18 +19,18 @@ import tachiyomi.domain.source.model.Source
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class SourcesScreenModel(
-    private val getEnabledSources: GetEnabledSources = Injekt.get(),
-    private val toggleSource: ToggleSource = Injekt.get(),
-    private val toggleSourcePin: ToggleSourcePin = Injekt.get(),
-) : StateScreenModel<SourcesScreenModel.State>(State()) {
+class VideoSourcesScreenModel(
+    private val getEnabledVideoSources: GetEnabledVideoSources = Injekt.get(),
+    private val toggleVideoSource: ToggleVideoSource = Injekt.get(),
+    private val toggleVideoSourcePin: ToggleVideoSourcePin = Injekt.get(),
+) : StateScreenModel<VideoSourcesScreenModel.State>(State()) {
 
     private val _events = Channel<Event>(Int.MAX_VALUE)
     val events = _events.receiveAsFlow()
 
     init {
         screenModelScope.launchIO {
-            getEnabledSources.subscribe()
+            getEnabledVideoSources.subscribe()
                 .catch {
                     logcat(LogPriority.ERROR, it)
                     _events.send(Event.FailedFetchingSources)
@@ -46,11 +46,11 @@ class SourcesScreenModel(
     }
 
     fun toggleSource(source: Source) {
-        toggleSource.await(source)
+        toggleVideoSource.await(source)
     }
 
     fun togglePin(source: Source) {
-        toggleSourcePin.await(source)
+        toggleVideoSourcePin.await(source)
     }
 
     fun showSourceDialog(source: Source) {

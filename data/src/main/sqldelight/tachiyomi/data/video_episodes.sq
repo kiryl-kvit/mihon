@@ -58,6 +58,12 @@ FROM video_episodes
 WHERE profile_id = :profileId
 AND video_id = :videoId;
 
+getEpisodesByVideoIds:
+SELECT *
+FROM video_episodes
+WHERE profile_id = :profileId
+AND video_id IN :videoIds;
+
 getEpisodeByUrlAndVideoId:
 SELECT *
 FROM video_episodes

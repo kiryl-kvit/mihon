@@ -36,6 +36,18 @@ class VideoPlaybackStateRepositoryImpl(
         }
     }
 
+    override fun getByVideoIdAsFlow(videoId: Long): Flow<List<VideoPlaybackState>> {
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            handler.subscribeToList {
+                video_playback_stateQueries.getByVideoId(
+                    profileId = profileId,
+                    videoId = videoId,
+                    mapper = VideoPlaybackStateMapper::mapState,
+                )
+            }
+        }
+    }
+
     override suspend fun upsert(state: VideoPlaybackState) {
         handler.await(inTransaction = true) {
             video_playback_stateQueries.upsertUpdate(

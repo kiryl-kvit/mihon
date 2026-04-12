@@ -5,8 +5,10 @@ import eu.kanade.tachiyomi.source.model.VideoRequest
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoStreamType
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.source.service.VideoSourceManager
@@ -133,6 +135,8 @@ class ResolveVideoStreamTest {
 
         override suspend fun getFavorites(): List<VideoTitle> = error("Not used")
 
+        override fun getFavoritesAsFlow(): Flow<List<VideoTitle>> = flowOf(emptyList())
+
         override suspend fun getAllVideosByProfile(profileId: Long): List<VideoTitle> = error("Not used")
 
         override suspend fun update(update: tachiyomi.domain.video.model.VideoTitleUpdate): Boolean = error("Not used")
@@ -158,6 +162,8 @@ class ResolveVideoStreamTest {
         override suspend fun getEpisodesByVideoId(videoId: Long): List<VideoEpisode> = error("Not used")
 
         override fun getEpisodesByVideoIdAsFlow(videoId: Long) = error("Not used")
+
+        override fun getEpisodesByVideoIdsAsFlow(videoIds: List<Long>) = error("Not used")
 
         override suspend fun getEpisodeById(id: Long): VideoEpisode? = episode?.takeIf { it.id == id }
 

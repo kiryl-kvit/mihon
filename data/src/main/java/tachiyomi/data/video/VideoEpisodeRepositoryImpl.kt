@@ -82,6 +82,20 @@ class VideoEpisodeRepositoryImpl(
         }
     }
 
+    override fun getEpisodesByVideoIdsAsFlow(videoIds: List<Long>): Flow<List<VideoEpisode>> {
+        if (videoIds.isEmpty()) return kotlinx.coroutines.flow.flowOf(emptyList())
+
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            handler.subscribeToList {
+                video_episodesQueries.getEpisodesByVideoIds(
+                    profileId = profileId,
+                    videoIds = videoIds,
+                    mapper = VideoEpisodeMapper::mapEpisode,
+                )
+            }
+        }
+    }
+
     override suspend fun getEpisodeById(id: Long): VideoEpisode? {
         return handler.awaitOneOrNull {
             video_episodesQueries.getEpisodeById(id, profileProvider.activeProfileId, VideoEpisodeMapper::mapEpisode)

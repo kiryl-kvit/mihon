@@ -18,6 +18,8 @@ interface VideoEpisodeRepository {
 
     fun getEpisodesByVideoIdAsFlow(videoId: Long): Flow<List<VideoEpisode>>
 
+    fun getEpisodesByVideoIdsAsFlow(videoIds: List<Long>): Flow<List<VideoEpisode>>
+
     suspend fun getEpisodeById(id: Long): VideoEpisode?
 
     suspend fun getEpisodeByUrlAndVideoId(url: String, videoId: Long): VideoEpisode?

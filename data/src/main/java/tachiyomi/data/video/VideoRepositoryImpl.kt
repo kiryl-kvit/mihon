@@ -62,6 +62,14 @@ class VideoRepositoryImpl(
         }
     }
 
+    override fun getFavoritesAsFlow(): Flow<List<VideoTitle>> {
+        return profileProvider.activeProfileIdFlow.flatMapLatest { profileId ->
+            handler.subscribeToList {
+                videosQueries.getFavorites(profileId, VideoMapper::mapVideo)
+            }
+        }
+    }
+
     override suspend fun getAllVideosByProfile(profileId: Long): List<VideoTitle> {
         return handler.awaitList {
             videosQueries.getAllVideos(profileId, VideoMapper::mapVideo)
