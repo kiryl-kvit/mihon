@@ -229,15 +229,15 @@ private fun VideoGlobalSearchContent(
     onClickItem: (VideoTitle) -> Unit,
     onLongClickItem: (VideoTitle) -> Unit,
 ) {
+    if (items.isEmpty()) {
+        EmptyScreen(
+            stringRes = MR.strings.video_no_global_search_results,
+            modifier = Modifier.padding(contentPadding),
+        )
+        return
+    }
+
     LazyColumn(contentPadding = contentPadding) {
-        if (items.isEmpty()) {
-            item {
-                EmptyScreen(
-                    stringRes = MR.strings.video_no_global_search_results,
-                )
-            }
-            return@LazyColumn
-        }
         items.forEach { (source, result) ->
             item(key = source.id) {
                 GlobalSearchResultItem(
