@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,10 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -71,6 +74,7 @@ fun BrowseMangaPreviewSheet(
     mangaId: Long,
     previewSize: MangaPreviewSizeUi,
     onLibraryAction: (Manga) -> Unit,
+    onOpenManga: (Long) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -137,6 +141,10 @@ fun BrowseMangaPreviewSheet(
                     snackbarHostState = screenModel.snackbarHostState,
                     onDismissRequest = onDismissRequest,
                     onLibraryAction = onLibraryAction,
+                    onOpenManga = {
+                        onDismissRequest()
+                        onOpenManga(currentState.manga.id)
+                    },
                     onRetry = screenModel::retryPreview,
                     onPageLoad = screenModel::loadPreviewPage,
                     onPageClick = { chapterId, pageIndex ->
@@ -162,6 +170,7 @@ private fun BrowseMangaPreviewDialogContent(
     snackbarHostState: SnackbarHostState,
     onDismissRequest: () -> Unit,
     onLibraryAction: (Manga) -> Unit,
+    onOpenManga: () -> Unit,
     onRetry: () -> Unit,
     onPageLoad: (Int) -> Unit,
     onPageClick: (Long, Int) -> Unit,
@@ -193,7 +202,8 @@ private fun BrowseMangaPreviewDialogContent(
         bottomBar = {
             BrowseMangaPreviewBottomBar(
                 favorite = state.manga.favorite,
-                onClick = { onLibraryAction(state.manga) },
+                onOpenManga = onOpenManga,
+                onLibraryAction = { onLibraryAction(state.manga) },
             )
         },
     ) { contentPadding ->
@@ -258,7 +268,8 @@ private fun BrowseMangaPreviewTitle(title: String) {
 @Composable
 private fun BrowseMangaPreviewBottomBar(
     favorite: Boolean,
-    onClick: () -> Unit,
+    onOpenManga: () -> Unit,
+    onLibraryAction: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -266,15 +277,28 @@ private fun BrowseMangaPreviewBottomBar(
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         HorizontalDivider()
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
         ) {
+            FilledTonalButton(
+                onClick = onOpenManga,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                )
+                Spacer(modifier = Modifier.width(MaterialTheme.padding.small))
+                Text(text = stringResource(MR.strings.action_open))
+            }
+
             Button(
-                onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
+                onClick = onLibraryAction,
+                modifier = Modifier.weight(1f),
             ) {
                 Icon(
                     imageVector = if (favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,

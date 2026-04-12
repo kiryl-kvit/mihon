@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.more.settings.Preference
+import eu.kanade.presentation.more.settings.screen.debug.LogsScreen
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
@@ -254,30 +255,6 @@ object CustomSettingsScreen : SearchableSettings {
 
         return listOf(
             Preference.PreferenceGroup(
-                title = stringResource(MR.strings.profiles_user_profiles),
-                preferenceItems = persistentListOf(
-                    Preference.PreferenceItem.TextPreference(
-                        title = stringResource(MR.strings.profiles_manage_title),
-                        subtitle = stringResource(MR.strings.profiles_manage_summary),
-                        widget = {
-                            IconButton(onClick = { showProfilesInfo = true }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Info,
-                                    contentDescription = stringResource(MR.strings.profiles_info_title),
-                                )
-                            }
-                        },
-                        onClick = {
-                            navigator.push(ProfilesSettingsScreen())
-                        },
-                    ),
-                    Preference.PreferenceItem.SwitchPreference(
-                        preference = profilesPreferences.pickerEnabled,
-                        title = stringResource(MR.strings.profiles_choose_on_launch),
-                    ),
-                ),
-            ),
-            Preference.PreferenceGroup(
                 title = stringResource(MR.strings.pref_category_general),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.TextPreference(
@@ -291,51 +268,10 @@ object CustomSettingsScreen : SearchableSettings {
                         title = stringResource(MR.strings.pref_enable_feeds),
                         subtitle = stringResource(MR.strings.pref_enable_feeds_summary),
                     ),
-                    Preference.PreferenceItem.ListPreference(
-                        preference = customPreferences.browseLongPressAction,
-                        entries = CustomPreferences.BrowseLongPressAction.entries
-                            .associateWith { stringResource(it.titleRes) }
-                            .toImmutableMap(),
-                        title = stringResource(MR.strings.pref_browse_long_press_action),
-                        entryEnabledProvider = {
-                            previewEnabled || it != CustomPreferences.BrowseLongPressAction.MANGA_PREVIEW
-                        },
-                    ),
-                    Preference.PreferenceItem.SwitchPreference(
-                        preference = globalCustomPreferences.extensionsAutoUpdates,
-                        title = stringResource(MR.strings.pref_extensions_auto_update),
-                    ),
-                    Preference.PreferenceItem.TextPreference(
-                        title = stringResource(MR.strings.pref_duplicate_detection),
-                        subtitle = stringResource(MR.strings.pref_duplicate_detection_summary),
-                        isProfileSpecific = true,
-                        onClick = {
-                            navigator.push(DuplicateDetectionSettingsScreen)
-                        },
-                    ),
                 ),
             ),
             Preference.PreferenceGroup(
-                title = stringResource(MR.strings.pref_auto_scroll),
-                preferenceItems = persistentListOf(
-                    Preference.PreferenceItem.SwitchPreference(
-                        preference = readerPreferences.autoScrollEnabled,
-                        title = stringResource(MR.strings.pref_enable_auto_scroll),
-                        subtitle = stringResource(MR.strings.pref_auto_scroll_summary),
-                    ),
-                    Preference.PreferenceItem.SliderPreference(
-                        value = autoScrollSpeed,
-                        preference = readerPreferences.autoScrollSpeed,
-                        valueRange = ReaderPreferences.AUTO_SCROLL_SPEED_RANGE,
-                        title = stringResource(MR.strings.pref_auto_scroll_speed),
-                        valueString = stringResource(ReaderPreferences.AutoScrollLevelLabels[autoScrollSpeed]),
-                        enabled = autoScrollEnabled,
-                        onValueChanged = { readerPreferences.autoScrollSpeed.set(it) },
-                    ),
-                ),
-            ),
-            Preference.PreferenceGroup(
-                title = stringResource(MR.strings.pref_manga_preview),
+                title = stringResource(MR.strings.browse),
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.SwitchPreference(
                         preference = customPreferences.enableMangaPreview,
@@ -360,6 +296,88 @@ object CustomSettingsScreen : SearchableSettings {
                             .toImmutableMap(),
                         title = stringResource(MR.strings.pref_manga_preview_size),
                         enabled = previewEnabled,
+                    ),
+                    Preference.PreferenceItem.ListPreference(
+                        preference = customPreferences.browseLongPressAction,
+                        entries = CustomPreferences.BrowseLongPressAction.entries
+                            .associateWith { stringResource(it.titleRes) }
+                            .toImmutableMap(),
+                        title = stringResource(MR.strings.pref_browse_long_press_action),
+                        entryEnabledProvider = {
+                            previewEnabled || it != CustomPreferences.BrowseLongPressAction.MANGA_PREVIEW
+                        },
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_auto_scroll),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = readerPreferences.autoScrollEnabled,
+                        title = stringResource(MR.strings.pref_enable_auto_scroll),
+                        subtitle = stringResource(MR.strings.pref_auto_scroll_summary),
+                    ),
+                    Preference.PreferenceItem.SliderPreference(
+                        value = autoScrollSpeed,
+                        preference = readerPreferences.autoScrollSpeed,
+                        valueRange = ReaderPreferences.AUTO_SCROLL_SPEED_RANGE,
+                        title = stringResource(MR.strings.pref_auto_scroll_speed),
+                        valueString = stringResource(ReaderPreferences.AutoScrollLevelLabels[autoScrollSpeed]),
+                        enabled = autoScrollEnabled,
+                        onValueChanged = { readerPreferences.autoScrollSpeed.set(it) },
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_duplicate_detection),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_duplicate_detection),
+                        subtitle = stringResource(MR.strings.pref_duplicate_detection_summary),
+                        isProfileSpecific = true,
+                        onClick = {
+                            navigator.push(DuplicateDetectionSettingsScreen)
+                        },
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.profiles_user_profiles),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.profiles_manage_title),
+                        subtitle = stringResource(MR.strings.profiles_manage_summary),
+                        widget = {
+                            IconButton(onClick = { showProfilesInfo = true }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Info,
+                                    contentDescription = stringResource(MR.strings.profiles_info_title),
+                                )
+                            }
+                        },
+                        onClick = {
+                            navigator.push(ProfilesSettingsScreen())
+                        },
+                    ),
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = profilesPreferences.pickerEnabled,
+                        title = stringResource(MR.strings.profiles_choose_on_launch),
+                    ),
+                ),
+            ),
+            Preference.PreferenceGroup(
+                title = stringResource(MR.strings.pref_category_advanced),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.SwitchPreference(
+                        preference = globalCustomPreferences.extensionsAutoUpdates,
+                        title = stringResource(MR.strings.pref_extensions_auto_update),
+                    ),
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(MR.strings.pref_view_logs),
+                        subtitle = stringResource(MR.strings.pref_view_logs_summary),
+                        onClick = {
+                            navigator.push(LogsScreen())
+                        },
                     ),
                 ),
             ),
@@ -417,7 +435,7 @@ object CustomSettingsScreen : SearchableSettings {
     ): String {
         return buildString {
             append(enabledTabs.joinToString { homeTabEntries.getValue(it) })
-            append('\n')
+            append(" | ")
             append(startupScreenTitle)
             append(": ")
             append(homeTabEntries.getValue(startupTab))

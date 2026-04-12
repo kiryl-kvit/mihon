@@ -22,6 +22,7 @@ import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.AndroidSourceManager
 import eu.kanade.tachiyomi.source.AndroidVideoSourceManager
 import eu.kanade.tachiyomi.source.SourcePreferenceProvider
+import eu.kanade.tachiyomi.util.logging.AppLogStore
 import eu.kanade.tachiyomi.source.VideoSourcePreferenceProvider
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
@@ -131,6 +132,7 @@ class AppModule(val app: Application) : InjektModule {
 
         addSingletonFactory { ChapterCache(app, get()) }
         addSingletonFactory { CoverCache(app) }
+        addSingletonFactory { AppLogStore(app) }
 
         addSingletonFactory { NetworkHelper(app, get()) }
         addSingletonFactory { JavaScriptEngine(app) }

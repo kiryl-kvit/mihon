@@ -290,6 +290,7 @@ data class BrowseSourceScreen(
                     mangaId = dialog.mangaId,
                     previewSize = screenModel.mangaPreviewSizeUi(),
                     onLibraryAction = screenModel::onMangaLibraryAction,
+                    onOpenManga = { navigator.push(MangaScreen(it, true)) },
                     onDismissRequest = onDismissRequest,
                 )
             }

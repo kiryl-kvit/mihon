@@ -42,6 +42,7 @@ import eu.kanade.tachiyomi.di.PreferenceModule
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.network.NetworkPreferences
 import eu.kanade.tachiyomi.ui.base.delegate.SecureActivityDelegate
+import eu.kanade.tachiyomi.util.logging.AppLogStore
 import eu.kanade.tachiyomi.util.system.DeviceUtil
 import eu.kanade.tachiyomi.util.system.GLUtil
 import eu.kanade.tachiyomi.util.system.WebViewUtil
@@ -167,6 +168,7 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             }
             LogcatLogger.install()
             LogcatLogger.loggers += AndroidLogcatLogger(minLogPriority)
+            LogcatLogger.loggers += Injekt.get<AppLogStore>().logger(minLogPriority)
         }
 
         initializeMigrator()

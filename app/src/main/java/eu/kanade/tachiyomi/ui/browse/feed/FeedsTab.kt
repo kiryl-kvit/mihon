@@ -396,6 +396,7 @@ private fun FeedsTabContent(
                             mangaId = dialog.mangaId,
                             previewSize = browseModel.mangaPreviewSizeUi(),
                             onLibraryAction = browseModel::onMangaLibraryAction,
+                            onOpenManga = { navigator.push(MangaScreen(it, true)) },
                             onDismissRequest = browseModel::dismissDialog,
                         )
                     }
