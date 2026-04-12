@@ -415,6 +415,8 @@ Checklist:
 
 Goal: play one episode from one video source in-app with progress persistence.
 
+Detailed plan: `docs/VIDEO-PHASE-4-PLAYER.md`
+
 Scope:
 
 - add player dependency

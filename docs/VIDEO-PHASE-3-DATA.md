@@ -425,7 +425,9 @@ Phase 3 is complete when all of the following are true.
 
 ## Handoff To Phase 4
 
-Once Phase 3 is complete, the next doc should break down Phase 4 into concrete work items covering:
+Phase 4 planning now lives in `docs/VIDEO-PHASE-4-PLAYER.md`.
+
+It covers concrete work items for:
 
 - Media3 integration with the resolved video request/stream model
 - player screen/activity state handling
