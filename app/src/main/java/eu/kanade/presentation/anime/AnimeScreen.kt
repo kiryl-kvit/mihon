@@ -38,18 +38,22 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -89,6 +93,7 @@ import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.AppBarTitle
+import eu.kanade.presentation.manga.components.DotSeparatorText
 import eu.kanade.presentation.manga.components.MangaNotesDisplay
 import eu.kanade.presentation.components.relativeDateText
 import eu.kanade.presentation.manga.components.MangaCover
@@ -107,6 +112,7 @@ import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.VerticalFastScroller
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.PullRefresh
+import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
@@ -126,6 +132,8 @@ fun AnimeScreen(
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onWebViewClicked: (() -> Unit)?,
+    onWebViewLongClicked: (() -> Unit)?,
     onEpisodeClick: (Long) -> Unit,
 ) {
     if (isTabletUi()) {
@@ -136,6 +144,8 @@ fun AnimeScreen(
             onRefresh = onRefresh,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onEditCategoryClicked = onEditCategoryClicked,
+            onWebViewClicked = onWebViewClicked,
+            onWebViewLongClicked = onWebViewLongClicked,
             onEpisodeClick = onEpisodeClick,
         )
     } else {
@@ -146,6 +156,8 @@ fun AnimeScreen(
             onRefresh = onRefresh,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onEditCategoryClicked = onEditCategoryClicked,
+            onWebViewClicked = onWebViewClicked,
+            onWebViewLongClicked = onWebViewLongClicked,
             onEpisodeClick = onEpisodeClick,
         )
     }
@@ -159,6 +171,8 @@ private fun AnimeScreenSmallImpl(
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onWebViewClicked: (() -> Unit)?,
+    onWebViewLongClicked: (() -> Unit)?,
     onEpisodeClick: (Long) -> Unit,
 ) {
     val episodeListState = rememberLazyListState()
@@ -254,6 +268,8 @@ private fun AnimeScreenSmallImpl(
                             onAddToLibraryClicked = onAddToLibraryClicked,
                             onRefresh = onRefresh,
                             onEditCategoryClicked = onEditCategoryClicked,
+                            onWebViewClicked = onWebViewClicked,
+                            onWebViewLongClicked = onWebViewLongClicked,
                         )
                     }
                     item {
@@ -290,6 +306,8 @@ private fun AnimeScreenLargeImpl(
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onWebViewClicked: (() -> Unit)?,
+    onWebViewLongClicked: (() -> Unit)?,
     onEpisodeClick: (Long) -> Unit,
 ) {
     val episodeListState = rememberLazyListState()
@@ -368,6 +386,8 @@ private fun AnimeScreenLargeImpl(
                             onAddToLibraryClicked = onAddToLibraryClicked,
                             onRefresh = onRefresh,
                             onEditCategoryClicked = onEditCategoryClicked,
+                            onWebViewClicked = onWebViewClicked,
+                            onWebViewLongClicked = onWebViewLongClicked,
                         )
                         ExpandableAnimeDescription(
                             description = state.anime.description,
@@ -576,6 +596,8 @@ private fun AnimeActionRow(
     onAddToLibraryClicked: () -> Unit,
     onRefresh: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onWebViewClicked: (() -> Unit)?,
+    onWebViewLongClicked: (() -> Unit)?,
 ) {
     val defaultActionButtonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
     Row(modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)) {
@@ -593,12 +615,22 @@ private fun AnimeActionRow(
             color = if (nextUpdateMillis > 0L) MaterialTheme.colorScheme.primary else defaultActionButtonColor,
             onClick = {},
         )
-        AnimeActionButton(
-            title = stringResource(MR.strings.action_retry),
-            icon = Icons.Outlined.Refresh,
-            color = MaterialTheme.colorScheme.primary,
-            onClick = onRefresh,
-        )
+        if (onWebViewClicked != null) {
+            AnimeActionButton(
+                title = stringResource(MR.strings.action_web_view),
+                icon = Icons.Outlined.Public,
+                color = defaultActionButtonColor,
+                onClick = onWebViewClicked,
+                onLongClick = onWebViewLongClicked,
+            )
+        } else {
+            AnimeActionButton(
+                title = stringResource(MR.strings.action_retry),
+                icon = Icons.Outlined.Refresh,
+                color = MaterialTheme.colorScheme.primary,
+                onClick = onRefresh,
+            )
+        }
     }
 }
 
@@ -858,70 +890,100 @@ private fun AnimeEpisodeListItem(
         ?.positionMs
         ?.milliseconds
         ?.toDurationString(context, fallback = stringResource(MR.strings.not_applicable))
+    val subtitleDate = episode.dateUpload
+        .takeIf { it > 0L }
+        ?.let { relativeDateText(it) }
+    val subtitleStatus = when {
+        episode.completed || playbackState?.completed == true -> stringResource(MR.strings.completed)
+        resumeText != null -> stringResource(MR.strings.action_resume) + " " + resumeText
+        episode.watched -> stringResource(MR.strings.anime_watched)
+        else -> null
+    }
+    val titleAlpha = if (episode.completed || playbackState?.completed == true) DISABLED_ALPHA else 1f
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = sourceAvailable, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!episode.watched && !episode.completed && playbackState?.completed != true) {
+                    Icon(
+                        imageVector = Icons.Filled.Circle,
+                        contentDescription = stringResource(MR.strings.unread),
+                        modifier = Modifier
+                            .height(8.dp)
+                            .padding(end = 4.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Text(
                     text = episode.name.ifBlank { episode.url },
-                    maxLines = 2,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    text = buildList {
-                        if (episode.completed || playbackState?.completed == true) {
-                            add(stringResource(MR.strings.completed))
-                        } else if (resumeText != null) {
-                            add(stringResource(MR.strings.action_resume) + " " + resumeText)
-                        } else if (episode.watched) {
-                            add(stringResource(MR.strings.anime_watched))
-                        }
-                        if (episode.dateUpload > 0L) {
-                            add(relativeDateText(episode.dateUpload))
-                        }
-                    }.ifEmpty { listOf(stringResource(MR.strings.not_applicable)) }.joinToString(" • "),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = LocalContentColor.current.copy(alpha = titleAlpha),
                 )
             }
 
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = stringResource(
-                    if (playbackState?.positionMs?.let { it > 0L } == true) {
-                        MR.strings.action_resume
-                    } else {
-                        MR.strings.action_start
-                    },
-                ),
-                tint = if (sourceAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            if (subtitleDate != null || subtitleStatus != null) {
+                Row {
+                    val subtitleColor = LocalContentColor.current.copy(alpha = SECONDARY_ALPHA)
+                    val subtitleStyle = MaterialTheme.typography.bodySmall.copy(color = subtitleColor)
+                    ProvideTextStyle(value = subtitleStyle) {
+                        if (subtitleDate != null) {
+                            Text(
+                                text = subtitleDate,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (subtitleStatus != null) DotSeparatorText()
+                        }
+                        if (subtitleStatus != null) {
+                            Text(
+                                text = subtitleStatus,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = LocalContentColor.current.copy(alpha = DISABLED_ALPHA),
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (progress != null) {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp),
+                )
+            }
         }
 
-        if (progress != null) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp),
-            )
-        }
-
-        HorizontalDivider()
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = stringResource(
+                if (playbackState?.positionMs?.let { it > 0L } == true) {
+                    MR.strings.action_resume
+                } else {
+                    MR.strings.action_start
+                },
+            ),
+            modifier = Modifier.padding(start = 4.dp),
+            tint = if (sourceAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
+
+    HorizontalDivider()
 }
 
 private fun AnimePlaybackState?.progressFraction(): Float? {

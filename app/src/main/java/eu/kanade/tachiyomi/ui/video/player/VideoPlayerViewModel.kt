@@ -18,7 +18,7 @@ import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-class VideoPlayerViewModel(
+class VideoPlayerViewModel @JvmOverloads constructor(
     private val savedState: SavedStateHandle,
     private val resolveVideoStream: VideoStreamResolver = Injekt.get<ResolveVideoStream>(),
     private val videoPlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),

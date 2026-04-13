@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.anime
 import android.content.Context
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
+import eu.kanade.tachiyomi.source.AnimeWebViewSource
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.presentation.util.formattedMessage
@@ -50,6 +51,9 @@ class AnimeScreenModel(
     private val syncAnimeWithSource: SyncAnimeWithSource = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<AnimeScreenModel.State>(State.Loading) {
+
+    val webViewSource: AnimeWebViewSource?
+        get() = successState?.anime?.let { animeSourceManager.get(it.source) as? AnimeWebViewSource }
 
     private val successState: State.Success?
         get() = state.value as? State.Success
