@@ -3,8 +3,8 @@ package eu.kanade.tachiyomi.ui.anime
 import android.app.Application
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +28,12 @@ import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.category.repository.CategoryRepository
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import mihon.feature.profiles.core.ProfileAwareStore
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -65,15 +71,20 @@ class AnimeLibraryScreenModelTest {
             animePlaybackStateRepository = FakeAnimePlaybackStateRepository(mapOf(video.id to listOf(inProgress))),
             animeHistoryRepository = FakeAnimeHistoryRepository(),
             animeSourceManager = FakeAnimeSourceManager(),
+            getCategories = GetCategories(FakeCategoryRepository()),
+            categoryRepository = FakeCategoryRepository(),
+            libraryPreferences = LibraryPreferences(InMemoryPreferenceStore()),
+            profileStore = FakeProfileAwareStore(),
             application = mockk<Application>(relaxed = true),
         )
 
         advanceUntilIdle()
 
         eventually(2.seconds) {
-            val state = model.state.value as AnimeLibraryScreenModel.State.Success
-            state.animes.single().primaryEpisodeId shouldBe secondEpisode.id
-            state.animes.single().hasInProgress shouldBe true
+            val state = model.state.value
+            state.libraryItems.single().primaryEpisodeId shouldBe secondEpisode.id
+            state.libraryItems.single().hasInProgress shouldBe true
+            state.pages.single().itemIds shouldBe listOf(video.id)
         }
     }
 
@@ -88,7 +99,7 @@ class AnimeLibraryScreenModelTest {
         override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(favorites)
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = favorites
         override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = true
-        override suspend fun updateAll(videoUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
+        override suspend fun updateAll(animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
         override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = animes
         override suspend fun setAnimeCategories(animeId: Long, categoryIds: List<Long>) = Unit
     }
@@ -102,7 +113,7 @@ class AnimeLibraryScreenModelTest {
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
         override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
         override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId == animeId })
-        override fun getEpisodesByAnimeIdsAsFlow(videoIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in videoIds })
+        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
         override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
         override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): AnimeEpisode? = episodes.firstOrNull { it.url == url && it.animeId == animeId }
     }
@@ -132,9 +143,58 @@ class AnimeLibraryScreenModelTest {
     }
 
     private class FakeAnimeSourceManager : AnimeSourceManager {
+        private val source = FakeAnimeSource(99L)
+
         override val isInitialized = MutableStateFlow(true)
         override val catalogueSources = emptyFlow<List<eu.kanade.tachiyomi.source.AnimeCatalogueSource>>()
-        override fun get(sourceKey: Long): eu.kanade.tachiyomi.source.AnimeSource? = null
+        override fun get(sourceKey: Long): eu.kanade.tachiyomi.source.AnimeSource? = source.takeIf { it.id == sourceKey }
         override fun getCatalogueSources(): List<eu.kanade.tachiyomi.source.AnimeCatalogueSource> = emptyList()
+    }
+
+    private class FakeAnimeSource(
+        override val id: Long,
+    ) : eu.kanade.tachiyomi.source.AnimeSource {
+        override val name: String = "Fake"
+        override val lang: String = "en"
+
+        override suspend fun getAnimeDetails(anime: eu.kanade.tachiyomi.source.model.SAnime) = error("Not used")
+
+        override suspend fun getEpisodeList(anime: eu.kanade.tachiyomi.source.model.SAnime) = error("Not used")
+
+        override suspend fun getStreamList(episode: eu.kanade.tachiyomi.source.model.SEpisode) = error("Not used")
+    }
+
+    private class FakeCategoryRepository : CategoryRepository {
+        private val categories = listOf(Category(Category.UNCATEGORIZED_ID, "", -1L, 0L))
+
+        override suspend fun get(id: Long): Category? = null
+        override suspend fun getAll(): List<Category> = categories
+        override fun getAllAsFlow(): Flow<List<Category>> = flowOf(categories)
+        override suspend fun getCategoriesByMangaId(mangaId: Long): List<Category> = emptyList()
+        override fun getCategoriesByMangaIdAsFlow(mangaId: Long): Flow<List<Category>> = flowOf(emptyList())
+        override suspend fun getCategoriesByAnimeId(animeId: Long): List<Category> = emptyList()
+        override fun getCategoriesByAnimeIdAsFlow(animeId: Long): Flow<List<Category>> = flowOf(emptyList())
+        override suspend fun getAnimeCategoryIds(animeIds: List<Long>): Map<Long, List<Long>> = emptyMap()
+        override suspend fun insert(category: Category) = Unit
+        override suspend fun updatePartial(update: tachiyomi.domain.category.model.CategoryUpdate) = Unit
+        override suspend fun updatePartial(updates: List<tachiyomi.domain.category.model.CategoryUpdate>) = Unit
+        override suspend fun updateAllFlags(flags: Long?) = Unit
+        override suspend fun delete(categoryId: Long) = Unit
+    }
+
+    private class FakeProfileAwareStore : ProfileAwareStore {
+        override val currentProfileId: Long = 1L
+        override val currentProfileIdFlow: Flow<Long> = flowOf(1L)
+        override val activeProfileId: Long = 1L
+        override val activeProfileIdFlow: Flow<Long> = flowOf(1L)
+        override fun setCurrentProfileId(profileId: Long) = Unit
+        override fun basePreferenceStore() = InMemoryPreferenceStore()
+        override fun appStateStore() = InMemoryPreferenceStore()
+        override fun privateStore() = InMemoryPreferenceStore()
+        override fun profileStore() = InMemoryPreferenceStore()
+        override fun profileStore(profileId: Long) = InMemoryPreferenceStore()
+        override fun appStateStore(profileId: Long) = InMemoryPreferenceStore()
+        override fun privateStore(profileId: Long) = InMemoryPreferenceStore()
+        override fun sourcePreferenceKey(sourceId: Long, profileId: Long): String = "$profileId-$sourceId"
     }
 }

@@ -62,6 +62,19 @@ class CategoryRepositoryImpl(
         }
     }
 
+    override suspend fun getAnimeCategoryIds(animeIds: List<Long>): Map<Long, List<Long>> {
+        if (animeIds.isEmpty()) return emptyMap()
+
+        return handler.await {
+            categoriesQueries.getAnimeCategoryMappings(profileProvider.activeProfileId, animeIds)
+                .executeAsList()
+                .groupBy(
+                    keySelector = { it.anime_id },
+                    valueTransform = { it.category_id },
+                )
+        }
+    }
+
     override suspend fun insert(category: Category) {
         handler.await {
             categoriesQueries.insert(

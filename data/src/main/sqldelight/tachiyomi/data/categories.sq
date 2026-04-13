@@ -63,6 +63,14 @@ ON C._id = VC.category_id
 WHERE VC.profile_id = :profileId
 AND VC.anime_id = :animeId;
 
+getAnimeCategoryMappings:
+SELECT
+VC.anime_id,
+VC.category_id
+FROM animes_categories VC
+WHERE VC.profile_id = :profileId
+AND VC.anime_id IN :animeIds;
+
 insert:
 INSERT INTO categories(profile_id, name, sort, flags)
 VALUES (:profileId, :name, :order, :flags);
