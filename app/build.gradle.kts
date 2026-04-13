@@ -217,6 +217,7 @@ dependencies {
     implementation(libs.androidx.core)
     implementation(libs.androidx.coreSplashScreen)
     implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayerHls)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.datasourceOkhttp)
     implementation(libs.androidx.recyclerView)

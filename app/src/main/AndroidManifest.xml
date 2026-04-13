@@ -151,8 +151,11 @@
 
         <activity
             android:name=".ui.video.player.VideoPlayerActivity"
+            android:configChanges="keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="false"
-            android:launchMode="singleTask" />
+            android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@style/Theme.Tachiyomi" />
 
         <activity
             android:name=".ui.security.UnlockActivity"

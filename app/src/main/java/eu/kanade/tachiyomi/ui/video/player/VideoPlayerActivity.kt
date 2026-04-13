@@ -4,49 +4,62 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.view.View
 import android.os.Build
 import android.os.Bundle
 import android.provider.Browser
 import android.view.ViewGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.activity.viewModels
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
-import eu.kanade.presentation.components.AppBar
-import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
-import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
-import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -55,6 +68,7 @@ class VideoPlayerActivity : BaseActivity() {
 
     private val viewModel by viewModels<VideoPlayerViewModel>()
     private val networkHelper: NetworkHelper by lazy { Injekt.get() }
+    private val windowInsetsController by lazy { WindowInsetsControllerCompat(window, window.decorView) }
     private var player by mutableStateOf<ExoPlayer?>(null)
     private var progressSaveJob: Job? = null
 
@@ -73,6 +87,17 @@ class VideoPlayerActivity : BaseActivity() {
             @Suppress("DEPRECATION")
             overridePendingTransition(R.anim.shared_axis_x_push_enter, R.anim.shared_axis_x_push_exit)
         }
+
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.decorView.setBackgroundColor(android.graphics.Color.BLACK)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        hideSystemUi()
+
         super.onCreate(savedInstanceState)
 
         val animeId = intent.extras?.getLong(EXTRA_VIDEO_ID, INVALID_ID) ?: INVALID_ID
@@ -109,6 +134,11 @@ class VideoPlayerActivity : BaseActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        hideSystemUi()
+    }
+
     @Composable
     private fun VideoPlayerScaffold(
         state: VideoPlayerViewModel.State,
@@ -116,38 +146,13 @@ class VideoPlayerActivity : BaseActivity() {
         episodeId: Long,
         networkHelper: NetworkHelper,
     ) {
-        val current = state as? VideoPlayerViewModel.State.Ready
-        tachiyomi.presentation.core.components.material.Scaffold(
-            topBar = {
-                AppBar(
-                    title = current?.videoTitle ?: "Video Player",
-                    subtitle = current?.episodeName,
-                    navigateUp = ::finish,
-                    actions = {
-                        current?.let { readyState ->
-                            AppBarActions(
-                                persistentListOf(
-                                    AppBar.Action(
-                                        title = stringResource(MR.strings.action_open_in_browser),
-                                        icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                                        onClick = { openInExternalPlayer(readyState.stream) },
-                                    ),
-                                ),
-                            )
-                        }
-                    },
-                    scrollBehavior = it,
-                )
-            },
-        ) { contentPadding ->
-            VideoPlayerScreen(
-                state = state,
-                animeId = animeId,
-                episodeId = episodeId,
-                networkHelper = networkHelper,
-                contentPadding = contentPadding,
-            )
-        }
+        HideSystemUiEffect()
+        VideoPlayerScreen(
+            state = state,
+            animeId = animeId,
+            episodeId = episodeId,
+            networkHelper = networkHelper,
+        )
     }
 
     @Composable
@@ -156,15 +161,11 @@ class VideoPlayerActivity : BaseActivity() {
         animeId: Long,
         episodeId: Long,
         networkHelper: NetworkHelper,
-        contentPadding: androidx.compose.foundation.layout.PaddingValues,
     ) {
         when (val current = state) {
             VideoPlayerViewModel.State.Loading -> {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(contentPadding)
-                        .padding(24.dp),
+                    modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -181,9 +182,9 @@ class VideoPlayerActivity : BaseActivity() {
             }
             is VideoPlayerViewModel.State.Ready -> {
                 val context = LocalContext.current
-                LaunchedEffect(context, current.streamUrl) {
-                    releasePlayer()
-                    player = buildVideoPlayer(
+                var controlsVisible by remember(current.streamUrl) { mutableStateOf(false) }
+                val currentPlayer = remember(current.streamUrl) {
+                    buildVideoPlayer(
                         context = context,
                         networkHelper = networkHelper,
                         stream = current.stream,
@@ -204,27 +205,34 @@ class VideoPlayerActivity : BaseActivity() {
                         if (current.resumePositionMs > 0L) {
                             exoPlayer.seekTo(current.resumePositionMs)
                         }
-                        startProgressSaves(exoPlayer)
+                        exoPlayer.playWhenReady = true
                     }
                 }
 
-                DisposableEffect(current.streamUrl) {
-                    onDispose {
-                        flushPlaybackState()
-                        releasePlayer()
-                    }
+                LaunchedEffect(context, current.streamUrl) {
+                    releasePlayer(persistState = false)
+                    player = currentPlayer
+                    startProgressSaves(currentPlayer)
                 }
 
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(contentPadding),
+                        .background(Color.Black),
                 ) {
                     AndroidView(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black),
                         factory = { androidContext ->
                             PlayerView(androidContext).apply {
                                 useController = true
+                                controllerAutoShow = true
+                                setControllerVisibilityListener(PlayerControlView.VisibilityListener { visibility ->
+                                    controlsVisible = visibility == View.VISIBLE
+                                })
+                                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                                setBackgroundColor(android.graphics.Color.BLACK)
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -235,14 +243,21 @@ class VideoPlayerActivity : BaseActivity() {
                             playerView.player = player
                         },
                     )
+
+                    if (controlsVisible) {
+                        VideoPlayerInfoOverlay(
+                            modifier = Modifier.align(Alignment.TopStart),
+                            videoTitle = current.videoTitle,
+                            episodeName = current.episodeName,
+                            onBack = ::finish,
+                            onOpenExternal = { openInExternalPlayer(current.stream) },
+                        )
+                    }
                 }
             }
             is VideoPlayerViewModel.State.Error -> {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(contentPadding)
-                        .padding(24.dp),
+                    modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
@@ -260,6 +275,59 @@ class VideoPlayerActivity : BaseActivity() {
         }
     }
 
+    @Composable
+    private fun VideoPlayerInfoOverlay(
+        modifier: Modifier = Modifier,
+        videoTitle: String,
+        episodeName: String,
+        onBack: () -> Unit,
+        onOpenExternal: () -> Unit,
+    ) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.72f))
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White,
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+            ) {
+                Text(
+                    text = videoTitle,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = episodeName,
+                    color = Color.White.copy(alpha = 0.82f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+            IconButton(onClick = onOpenExternal) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = "Open externally",
+                    tint = Color.White,
+                )
+            }
+        }
+    }
+
     override fun onPause() {
         player?.pause()
         flushPlaybackState()
@@ -272,13 +340,13 @@ class VideoPlayerActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
-        releasePlayer()
+        releasePlayer(persistState = false)
         super.onDestroy()
     }
 
     private fun startProgressSaves(player: ExoPlayer) {
         progressSaveJob?.cancel()
-        progressSaveJob = lifecycleScope.launchIO {
+        progressSaveJob = lifecycleScope.launch {
             while (isActive) {
                 delay(PROGRESS_SAVE_INTERVAL_MS)
                 persistPlayback(player)
@@ -297,11 +365,27 @@ class VideoPlayerActivity : BaseActivity() {
         )
     }
 
-    private fun releasePlayer() {
+    private fun releasePlayer(persistState: Boolean = true) {
         progressSaveJob?.cancel()
         progressSaveJob = null
+        if (persistState) {
+            flushPlaybackState()
+        }
         player?.release()
         player = null
+    }
+
+    @Composable
+    private fun HideSystemUiEffect() {
+        LaunchedEffect(Unit) {
+            hideSystemUi()
+        }
+    }
+
+    private fun hideSystemUi() {
+        windowInsetsController.hide(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+        )
     }
 
     private fun openInExternalPlayer(stream: eu.kanade.tachiyomi.source.model.VideoStream) {

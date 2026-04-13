@@ -23,6 +23,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
     private val resolveVideoStream: VideoStreamResolver = Injekt.get<ResolveVideoStream>(),
     private val videoPlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
     private val videoHistoryRepository: AnimeHistoryRepository = Injekt.get(),
+    private val resolveDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val persistenceDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
@@ -41,7 +42,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
 
         viewModelScope.launch {
             mutableState.value = State.Loading
-            mutableState.value = when (val result = resolveVideoStream(animeId, episodeId)) {
+            mutableState.value = when (val result = withContext(resolveDispatcher) { resolveVideoStream(animeId, episodeId) }) {
                 is ResolveVideoStream.Result.Success -> State.Ready(
                     episodeId = result.episode.id,
                     videoTitle = result.video.displayTitle,
@@ -109,7 +110,10 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             ResolveVideoStream.Reason.SourceNotFound -> "Video source not available"
             ResolveVideoStream.Reason.NoStreams -> "No playable streams returned"
             ResolveVideoStream.Reason.StreamFetchTimeout -> "Timed out while resolving streams"
-            is ResolveVideoStream.Reason.StreamFetchFailed -> cause.message ?: "Failed to resolve streams"
+            is ResolveVideoStream.Reason.StreamFetchFailed -> listOfNotNull(
+                cause::class.simpleName,
+                cause.message,
+            ).joinToString(": ").ifBlank { "Failed to resolve streams" }
         }
     }
 

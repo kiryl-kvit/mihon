@@ -397,9 +397,6 @@ private fun AnimeLibraryList(
                     if (item.unwatchedCount > 0) {
                         Badge(text = item.unwatchedCount.toString())
                     }
-                    if (item.hasInProgress) {
-                        Badge(text = stringResource(MR.strings.action_resume))
-                    }
                 },
                 onLongClick = { onOpenAnime(item.animeId) },
                 onClick = { onOpenAnime(item.animeId) },
@@ -442,9 +439,6 @@ private fun AnimeLibraryComfortableGrid(
                     }
                 },
                 coverBadgeEnd = {
-                    if (item.hasInProgress) {
-                        Badge(text = stringResource(MR.strings.action_resume))
-                    }
                 },
                 onLongClick = { onOpenAnime(item.animeId) },
                 onClick = { onOpenAnime(item.animeId) },
@@ -488,9 +482,6 @@ private fun AnimeLibraryCompactGrid(
                     }
                 },
                 coverBadgeEnd = {
-                    if (item.hasInProgress) {
-                        Badge(text = stringResource(MR.strings.action_resume))
-                    }
                 },
                 onLongClick = { onOpenAnime(item.animeId) },
                 onClick = { onOpenAnime(item.animeId) },

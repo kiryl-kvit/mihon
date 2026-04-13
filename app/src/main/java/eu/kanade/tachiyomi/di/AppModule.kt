@@ -24,6 +24,8 @@ import eu.kanade.tachiyomi.source.AndroidAnimeSourceManager
 import eu.kanade.tachiyomi.source.SourcePreferenceProvider
 import eu.kanade.tachiyomi.util.logging.AppLogStore
 import eu.kanade.tachiyomi.source.AnimeSourcePreferenceProvider
+import eu.kanade.tachiyomi.ui.video.player.ResolveVideoStream
+import eu.kanade.tachiyomi.ui.video.player.VideoStreamResolver
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.protobuf.ProtoBuf
 import mihon.feature.profiles.core.ProfileDatabase
@@ -140,6 +142,8 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory<SourceManager> { AndroidSourceManager(app, get(), get()) }
         addSingletonFactory<AnimeSourceManager> { AndroidAnimeSourceManager(get()) }
         addSingletonFactory { ExtensionManager(app) }
+        addSingletonFactory { ResolveVideoStream(get(), get(), get()) }
+        addSingletonFactory<VideoStreamResolver> { get<ResolveVideoStream>() }
 
         addSingletonFactory { DownloadProvider(app) }
         addSingletonFactory { DownloadManager(app) }
