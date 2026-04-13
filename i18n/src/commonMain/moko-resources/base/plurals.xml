@@ -56,6 +56,11 @@
         <item quantity="other">%1$s chapters</item>
     </plurals>
 
+    <plurals name="video_num_episodes">
+        <item quantity="one">%1$s episode</item>
+        <item quantity="other">%1$s episodes</item>
+    </plurals>
+
     <plurals name="download_amount">
         <item quantity="one">Next chapter</item>
         <item quantity="other">Next %d chapters</item>
