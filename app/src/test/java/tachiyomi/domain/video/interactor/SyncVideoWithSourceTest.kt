@@ -8,6 +8,7 @@ import eu.kanade.tachiyomi.source.model.SAnime
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.AnimesPage
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,6 +102,92 @@ class SyncAnimeWithSourceTest {
         episodeRepository.inserts.single().name shouldBe "Episode 2"
         episodeRepository.inserts.single().episodeNumber shouldBe 2.0
         episodeRepository.inserts.single().sourceOrder shouldBe 1L
+        episodeRepository.removals shouldBe emptyList()
+    }
+
+    @Test
+    fun `sync reuses existing episodes when source urls change and removes stale duplicates`() = runTest {
+        val localVideo = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            url = "/animes/1",
+            title = "Video",
+        )
+        val staleEpisode1 = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = localVideo.id,
+            url = "/animes/1/episode-1-old",
+            name = "Episode 1",
+            watched = true,
+            sourceOrder = 0L,
+            episodeNumber = 1.0,
+        )
+        val duplicateEpisode1 = AnimeEpisode.create().copy(
+            id = 11L,
+            animeId = localVideo.id,
+            url = "/animes/1/episode-1-new",
+            name = "Episode 1",
+            sourceOrder = 0L,
+            episodeNumber = 1.0,
+        )
+        val staleEpisode2 = AnimeEpisode.create().copy(
+            id = 20L,
+            animeId = localVideo.id,
+            url = "/animes/1/episode-2-old",
+            name = "Episode 2",
+            sourceOrder = 1L,
+            episodeNumber = 2.0,
+        )
+        val duplicateEpisode2 = AnimeEpisode.create().copy(
+            id = 21L,
+            animeId = localVideo.id,
+            url = "/animes/1/episode-2-new",
+            name = "Episode 2",
+            completed = true,
+            sourceOrder = 1L,
+            episodeNumber = 2.0,
+        )
+        val source = FakeAnimeSource(
+            details = SAnime.create().also {
+                it.url = localVideo.url
+                it.title = localVideo.title
+            },
+            episodes = listOf(
+                SEpisode.create().also {
+                    it.url = duplicateEpisode1.url
+                    it.name = duplicateEpisode1.name
+                    it.episode_number = duplicateEpisode1.episodeNumber.toFloat()
+                },
+                SEpisode.create().also {
+                    it.url = duplicateEpisode2.url
+                    it.name = duplicateEpisode2.name
+                    it.episode_number = duplicateEpisode2.episodeNumber.toFloat()
+                },
+            ),
+        )
+        val episodeRepository = FakeAnimeEpisodeRepository(
+            listOf(staleEpisode1, duplicateEpisode1, staleEpisode2, duplicateEpisode2),
+        )
+
+        SyncAnimeWithSource(
+            animeRepository = FakeAnimeRepository(localVideo),
+            animeEpisodeRepository = episodeRepository,
+            animeSourceManager = FakeAnimeSourceManager(source),
+        )(localVideo)
+
+        episodeRepository.inserts shouldBe emptyList()
+        episodeRepository.updates shouldContainExactly listOf(
+            AnimeEpisodeUpdate(
+                id = staleEpisode1.id,
+                url = duplicateEpisode1.url,
+                dateUpload = 0L,
+            ),
+            AnimeEpisodeUpdate(
+                id = duplicateEpisode2.id,
+                dateUpload = 0L,
+            ),
+        )
+        episodeRepository.removals.flatten().sorted() shouldContainExactly listOf(11L, 20L)
     }
 
     private class FakeAnimeRepository(
@@ -137,9 +224,10 @@ class SyncAnimeWithSourceTest {
     private class FakeAnimeEpisodeRepository(
         existingEpisodes: List<AnimeEpisode>,
     ) : AnimeEpisodeRepository {
-        private val episodes = existingEpisodes.associateBy { it.url }
+        private val episodes = existingEpisodes
         val inserts = mutableListOf<AnimeEpisode>()
         val updates = mutableListOf<AnimeEpisodeUpdate>()
+        val removals = mutableListOf<List<Long>>()
 
         override suspend fun addAll(episodes: List<AnimeEpisode>): List<AnimeEpisode> {
             inserts += episodes
@@ -152,9 +240,11 @@ class SyncAnimeWithSourceTest {
             updates += episodeUpdates
         }
 
-        override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = error("Not used")
+        override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) {
+            removals += episodeIds
+        }
 
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.values.toList()
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
 
         override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = emptyFlow()
 
