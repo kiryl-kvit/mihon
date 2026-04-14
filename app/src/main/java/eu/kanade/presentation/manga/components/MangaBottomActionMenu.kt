@@ -76,6 +76,8 @@ fun MangaBottomActionMenu(
     onRemoveBookmarkClicked: (() -> Unit)? = null,
     onMarkAsReadClicked: (() -> Unit)? = null,
     onMarkAsUnreadClicked: (() -> Unit)? = null,
+    markAsReadLabel: StringResource = MR.strings.action_mark_as_read,
+    markAsUnreadLabel: StringResource = MR.strings.action_mark_as_unread,
     onMarkPreviousAsReadClicked: (() -> Unit)? = null,
     onDownloadClicked: (() -> Unit)? = null,
     onDeleteClicked: (() -> Unit)? = null,
@@ -132,7 +134,7 @@ fun MangaBottomActionMenu(
                 }
                 if (onMarkAsReadClicked != null) {
                     Button(
-                        title = stringResource(MR.strings.action_mark_as_read),
+                        title = stringResource(markAsReadLabel),
                         icon = Icons.Outlined.DoneAll,
                         toConfirm = confirm[2],
                         onLongClick = { onLongClickItem(2) },
@@ -141,7 +143,7 @@ fun MangaBottomActionMenu(
                 }
                 if (onMarkAsUnreadClicked != null) {
                     Button(
-                        title = stringResource(MR.strings.action_mark_as_unread),
+                        title = stringResource(markAsUnreadLabel),
                         icon = Icons.Outlined.RemoveDone,
                         toConfirm = confirm[3],
                         onLongClick = { onLongClickItem(3) },

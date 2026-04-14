@@ -29,6 +29,7 @@ import eu.kanade.domain.source.interactor.ToggleSourcePin
 import eu.kanade.domain.source.interactor.ToggleAnimeSource
 import eu.kanade.domain.source.interactor.ToggleAnimeSourcePin
 import eu.kanade.domain.source.service.BrowseFeedService
+import eu.kanade.domain.source.service.ProfileHiddenAnimeSourceIds
 import eu.kanade.domain.source.service.ProfileHiddenSourceIds
 import eu.kanade.domain.track.interactor.AddTracks
 import eu.kanade.domain.track.interactor.RefreshTracks
@@ -114,6 +115,7 @@ import tachiyomi.domain.source.interactor.GetSourcesWithNonLibraryManga
 import tachiyomi.domain.source.repository.SourceRepository
 import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.repository.AnimeSourceRepository
+import tachiyomi.domain.source.service.HiddenAnimeSourceIds
 import tachiyomi.domain.source.service.HiddenSourceIds
 import tachiyomi.domain.track.interactor.DeleteTrack
 import tachiyomi.domain.track.interactor.GetTracks
@@ -129,6 +131,7 @@ import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
 import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetAnimeUpdates
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
 import uy.kohesive.injekt.api.InjektModule
@@ -233,10 +236,12 @@ class DomainModule : InjektModule {
         addSingletonFactory<AnimePlaybackStateRepository> { AnimePlaybackStateRepositoryImpl(get(), get()) }
         addSingletonFactory<AnimeUpdatesRepository> { AnimeUpdatesRepositoryImpl(get(), get()) }
         addFactory { GetAnime(get()) }
+        addFactory { GetAnimeUpdates(get(), get()) }
         addFactory { NetworkToLocalAnime(get()) }
         addFactory { SyncAnimeWithSource(get(), get(), get()) }
 
         addSingletonFactory<HiddenSourceIds> { ProfileHiddenSourceIds(get()) }
+        addSingletonFactory<HiddenAnimeSourceIds> { ProfileHiddenAnimeSourceIds(get()) }
         addSingletonFactory<SourceRepository> { SourceRepositoryImpl(get(), get(), get()) }
         addSingletonFactory<AnimeSourceRepository> { AnimeSourceRepositoryImpl(get()) }
         addSingletonFactory<StubSourceRepository> { StubSourceRepositoryImpl(get()) }

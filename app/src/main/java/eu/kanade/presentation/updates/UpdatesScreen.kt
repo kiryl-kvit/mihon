@@ -21,16 +21,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.util.fastAll
-import androidx.compose.ui.util.fastAny
+import androidx.compose.foundation.lazy.LazyListScope
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
-import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.manga.components.MangaBottomActionMenu
-import eu.kanade.tachiyomi.data.download.model.Download
-import eu.kanade.tachiyomi.ui.updates.UpdatesItem
-import eu.kanade.tachiyomi.ui.updates.UpdatesScreenModel
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
@@ -41,27 +38,26 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.theme.active
-import java.time.LocalDate
 import kotlin.time.Duration.Companion.seconds
 
 @Composable
-fun UpdateScreen(
-    state: UpdatesScreenModel.State,
+fun <T> UpdatesScreen(
+    state: UpdatesScreenState<T>,
     snackbarHostState: SnackbarHostState,
-    lastUpdated: Long,
-    onClickCover: (UpdatesItem) -> Unit,
     onSelectAll: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
-    onCalendarClicked: () -> Unit,
     onUpdateLibrary: () -> Boolean,
-    onDownloadChapter: (List<UpdatesItem>, ChapterDownloadAction) -> Unit,
-    onMultiBookmarkClicked: (List<UpdatesItem>, bookmark: Boolean) -> Unit,
-    onMultiMarkAsReadClicked: (List<UpdatesItem>, read: Boolean) -> Unit,
-    onMultiDeleteClicked: (List<UpdatesItem>) -> Unit,
-    onUpdateSelected: (UpdatesItem, Boolean, Boolean) -> Unit,
-    onOpenChapter: (UpdatesItem) -> Unit,
-    onFilterClicked: () -> Unit,
+    onCalendarClicked: (() -> Unit)?,
+    onFilterClicked: (() -> Unit)?,
     hasActiveFilters: Boolean,
+    loadingContent: @Composable (Modifier) -> Unit = { LoadingScreen(it) },
+    emptyContent: @Composable (Modifier) -> Unit = {
+        EmptyScreen(
+            stringRes = MR.strings.information_no_recent,
+            modifier = it,
+        )
+    },
+    content: LazyListScope.() -> Unit,
 ) {
     BackHandler(enabled = state.selectionMode) {
         onSelectAll(false)
@@ -70,34 +66,27 @@ fun UpdateScreen(
     Scaffold(
         topBar = { scrollBehavior ->
             UpdatesAppBar(
-                onCalendarClicked = { onCalendarClicked() },
+                onCalendarClicked = onCalendarClicked,
                 onUpdateLibrary = { onUpdateLibrary() },
-                onFilterClicked = { onFilterClicked() },
+                onFilterClicked = onFilterClicked,
                 hasFilters = hasActiveFilters,
-                actionModeCounter = state.selected.size,
+                actionModeCounter = state.selectedCount,
                 onSelectAll = { onSelectAll(true) },
-                onInvertSelection = { onInvertSelection() },
+                onInvertSelection = onInvertSelection,
                 onCancelActionMode = { onSelectAll(false) },
                 scrollBehavior = scrollBehavior,
             )
         },
         bottomBar = {
-            UpdatesBottomBar(
-                selected = state.selected,
-                onDownloadChapter = onDownloadChapter,
-                onMultiBookmarkClicked = onMultiBookmarkClicked,
-                onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
-                onMultiDeleteClicked = onMultiDeleteClicked,
-            )
+            state.bottomBarConfig?.let { bottomBarConfig ->
+                UpdatesBottomBar(config = bottomBarConfig)
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { contentPadding ->
         when {
-            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-            state.items.isEmpty() -> EmptyScreen(
-                stringRes = MR.strings.information_no_recent,
-                modifier = Modifier.padding(contentPadding),
-            )
+            state.isLoading -> loadingContent(Modifier.padding(contentPadding))
+            state.isEmpty -> emptyContent(Modifier.padding(contentPadding))
             else -> {
                 val scope = rememberCoroutineScope()
                 var isRefreshing by remember { mutableStateOf(false) }
@@ -108,7 +97,6 @@ fun UpdateScreen(
                         val started = onUpdateLibrary()
                         if (!started) return@PullRefresh
                         scope.launch {
-                            // Fake refresh status but hide it after a second as it's a long running task
                             isRefreshing = true
                             delay(1.seconds)
                             isRefreshing = false
@@ -119,31 +107,40 @@ fun UpdateScreen(
                 ) {
                     FastScrollLazyColumn(
                         contentPadding = contentPadding,
-                    ) {
-                        updatesLastUpdatedItem(lastUpdated)
-
-                        updatesUiItems(
-                            uiModels = state.getUiModel(),
-                            selectionMode = state.selectionMode,
-                            onUpdateSelected = onUpdateSelected,
-                            onClickCover = onClickCover,
-                            onClickUpdate = onOpenChapter,
-                            onDownloadChapter = onDownloadChapter,
-                        )
-                    }
+                        content = content,
+                    )
                 }
             }
         }
     }
 }
 
+data class UpdatesScreenState<T>(
+    val isLoading: Boolean,
+    val isEmpty: Boolean,
+    val selectionMode: Boolean,
+    val selectedCount: Int,
+    val bottomBarConfig: UpdatesBottomBarConfig? = null,
+)
+
+data class UpdatesBottomBarConfig(
+    val visible: Boolean,
+    val onBookmarkClicked: (() -> Unit)? = null,
+    val onRemoveBookmarkClicked: (() -> Unit)? = null,
+    val onMarkAsReadClicked: (() -> Unit)? = null,
+    val onMarkAsUnreadClicked: (() -> Unit)? = null,
+    val markAsReadLabel: StringResource = MR.strings.action_mark_as_read,
+    val markAsUnreadLabel: StringResource = MR.strings.action_mark_as_unread,
+    val onDownloadClicked: (() -> Unit)? = null,
+    val onDeleteClicked: (() -> Unit)? = null,
+)
+
 @Composable
 private fun UpdatesAppBar(
-    onCalendarClicked: () -> Unit,
+    onCalendarClicked: (() -> Unit)?,
     onUpdateLibrary: () -> Unit,
-    onFilterClicked: () -> Unit,
+    onFilterClicked: (() -> Unit)?,
     hasFilters: Boolean,
-    // For action mode
     actionModeCounter: Int,
     onSelectAll: () -> Unit,
     onInvertSelection: () -> Unit,
@@ -155,26 +152,36 @@ private fun UpdatesAppBar(
         modifier = modifier,
         title = stringResource(MR.strings.label_recent_updates),
         actions = {
-            AppBarActions(
-                persistentListOf(
-                    AppBar.Action(
-                        title = stringResource(MR.strings.action_filter),
-                        icon = Icons.Outlined.FilterList,
-                        iconTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current,
-                        onClick = onFilterClicked,
-                    ),
-                    AppBar.Action(
-                        title = stringResource(MR.strings.action_view_upcoming),
-                        icon = Icons.Outlined.CalendarMonth,
-                        onClick = onCalendarClicked,
-                    ),
+            val actions = buildList {
+                if (onFilterClicked != null) {
+                    add(
+                        AppBar.Action(
+                            title = stringResource(MR.strings.action_filter),
+                            icon = Icons.Outlined.FilterList,
+                            iconTint = if (hasFilters) MaterialTheme.colorScheme.active else LocalContentColor.current,
+                            onClick = onFilterClicked,
+                        ),
+                    )
+                }
+                if (onCalendarClicked != null) {
+                    add(
+                        AppBar.Action(
+                            title = stringResource(MR.strings.action_view_upcoming),
+                            icon = Icons.Outlined.CalendarMonth,
+                            onClick = onCalendarClicked,
+                        ),
+                    )
+                }
+                add(
                     AppBar.Action(
                         title = stringResource(MR.strings.action_update_library),
                         icon = Icons.Outlined.Refresh,
                         onClick = onUpdateLibrary,
                     ),
-                ),
-            )
+                )
+            }
+
+            AppBarActions(actions = actions.toPersistentList())
         },
         actionModeCounter = actionModeCounter,
         onCancelActionMode = onCancelActionMode,
@@ -200,39 +207,18 @@ private fun UpdatesAppBar(
 
 @Composable
 private fun UpdatesBottomBar(
-    selected: List<UpdatesItem>,
-    onDownloadChapter: (List<UpdatesItem>, ChapterDownloadAction) -> Unit,
-    onMultiBookmarkClicked: (List<UpdatesItem>, bookmark: Boolean) -> Unit,
-    onMultiMarkAsReadClicked: (List<UpdatesItem>, read: Boolean) -> Unit,
-    onMultiDeleteClicked: (List<UpdatesItem>) -> Unit,
+    config: UpdatesBottomBarConfig,
 ) {
     MangaBottomActionMenu(
-        visible = selected.isNotEmpty(),
+        visible = config.visible,
         modifier = Modifier.fillMaxWidth(),
-        onBookmarkClicked = {
-            onMultiBookmarkClicked.invoke(selected, true)
-        }.takeIf { selected.fastAny { !it.update.bookmark } },
-        onRemoveBookmarkClicked = {
-            onMultiBookmarkClicked.invoke(selected, false)
-        }.takeIf { selected.fastAll { it.update.bookmark } },
-        onMarkAsReadClicked = {
-            onMultiMarkAsReadClicked(selected, true)
-        }.takeIf { selected.fastAny { !it.update.read } },
-        onMarkAsUnreadClicked = {
-            onMultiMarkAsReadClicked(selected, false)
-        }.takeIf { selected.fastAny { it.update.read || it.update.lastPageRead > 0L } },
-        onDownloadClicked = {
-            onDownloadChapter(selected, ChapterDownloadAction.START)
-        }.takeIf {
-            selected.fastAny { it.downloadStateProvider() != Download.State.DOWNLOADED }
-        },
-        onDeleteClicked = {
-            onMultiDeleteClicked(selected)
-        }.takeIf { selected.fastAny { it.downloadStateProvider() == Download.State.DOWNLOADED } },
+        onBookmarkClicked = config.onBookmarkClicked,
+        onRemoveBookmarkClicked = config.onRemoveBookmarkClicked,
+        onMarkAsReadClicked = config.onMarkAsReadClicked,
+        onMarkAsUnreadClicked = config.onMarkAsUnreadClicked,
+        markAsReadLabel = config.markAsReadLabel,
+        markAsUnreadLabel = config.markAsUnreadLabel,
+        onDownloadClicked = config.onDownloadClicked,
+        onDeleteClicked = config.onDeleteClicked,
     )
-}
-
-sealed interface UpdatesUiModel {
-    data class Header(val date: LocalDate) : UpdatesUiModel
-    data class Item(val item: UpdatesItem) : UpdatesUiModel
 }

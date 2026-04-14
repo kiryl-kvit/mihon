@@ -26,6 +26,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
+import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
@@ -40,6 +41,7 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.io.File
+import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
@@ -68,6 +70,7 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
         }
 
         setForegroundSafely()
+        libraryPreferences.lastUpdatedTimestamp.set(Instant.now().toEpochMilli())
         addAnimeToQueue(categoryId, sourceId)
 
         return withIOContext {
@@ -151,6 +154,9 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                     try {
                                         val result = syncAnimeWithSource(currentAnime)
                                         if (result.hasChanges) {
+                                            if (result.insertedEpisodes > 0) {
+                                                libraryPreferences.newUpdatesCount.getAndSet { it + result.insertedEpisodes }
+                                            }
                                             logcat(LogPriority.INFO) {
                                                 "Anime library update found ${result.insertedEpisodes} new episode(s) for ${currentAnime.title}"
                                             }

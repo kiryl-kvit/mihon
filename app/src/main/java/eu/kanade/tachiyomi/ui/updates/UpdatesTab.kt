@@ -15,16 +15,23 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
-import eu.kanade.presentation.updates.UpdateScreen
+import eu.kanade.presentation.manga.components.ChapterDownloadAction
+import eu.kanade.presentation.updates.UpdatesBottomBarConfig
 import eu.kanade.presentation.updates.UpdatesDeleteConfirmationDialog
 import eu.kanade.presentation.updates.UpdatesFilterDialog
+import eu.kanade.presentation.updates.UpdatesScreen
+import eu.kanade.presentation.updates.UpdatesScreenState
+import eu.kanade.presentation.updates.mangaUpdatesUiItems
+import eu.kanade.presentation.updates.updatesLastUpdatedItem
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
+import eu.kanade.tachiyomi.ui.updates.UpdatesItem
 import eu.kanade.tachiyomi.ui.updates.UpdatesScreenModel.Event
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -60,29 +67,57 @@ data object UpdatesTab : Tab {
         val settingsScreenModel = rememberScreenModel { UpdatesSettingsScreenModel() }
         val state by screenModel.state.collectAsState()
 
-        UpdateScreen(
-            state = state,
+        UpdatesScreen(
+            state = UpdatesScreenState<UpdatesItem>(
+                isLoading = state.isLoading,
+                isEmpty = state.items.isEmpty(),
+                selectionMode = state.selectionMode,
+                selectedCount = state.selected.size,
+                bottomBarConfig = UpdatesBottomBarConfig(
+                    visible = state.selected.isNotEmpty(),
+                    onBookmarkClicked = {
+                        screenModel.bookmarkUpdates(state.selected, true)
+                    }.takeIf { state.selected.any { !it.update.bookmark } },
+                    onRemoveBookmarkClicked = {
+                        screenModel.bookmarkUpdates(state.selected, false)
+                    }.takeIf { state.selected.isNotEmpty() && state.selected.all { it.update.bookmark } },
+                    onMarkAsReadClicked = {
+                        screenModel.markUpdatesRead(state.selected, true)
+                    }.takeIf { state.selected.any { !it.update.read } },
+                    onMarkAsUnreadClicked = {
+                        screenModel.markUpdatesRead(state.selected, false)
+                    }.takeIf { state.selected.any { it.update.read || it.update.lastPageRead > 0L } },
+                    onDownloadClicked = {
+                        screenModel.downloadChapters(state.selected, ChapterDownloadAction.START)
+                    }.takeIf { state.selected.any { it.downloadStateProvider() != Download.State.DOWNLOADED } },
+                    onDeleteClicked = {
+                        screenModel.showConfirmDeleteChapters(state.selected)
+                    }.takeIf { state.selected.any { it.downloadStateProvider() == Download.State.DOWNLOADED } },
+                ),
+            ),
             snackbarHostState = screenModel.snackbarHostState,
-            lastUpdated = screenModel.lastUpdated,
-            onClickCover = { item ->
-                navigator.push(MangaScreen(item.visibleMangaId))
-            },
             onSelectAll = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
             onUpdateLibrary = screenModel::updateLibrary,
-            onDownloadChapter = screenModel::downloadChapters,
-            onMultiBookmarkClicked = screenModel::bookmarkUpdates,
-            onMultiMarkAsReadClicked = screenModel::markUpdatesRead,
-            onMultiDeleteClicked = screenModel::showConfirmDeleteChapters,
-            onUpdateSelected = screenModel::toggleSelection,
-            onOpenChapter = {
-                val intent = ReaderActivity.newIntent(context, it.visibleMangaId, it.update.chapterId)
-                context.startActivity(intent)
-            },
             onCalendarClicked = { navigator.push(UpcomingScreen()) },
             onFilterClicked = screenModel::showFilterDialog,
             hasActiveFilters = state.hasActiveFilters,
-        )
+        ) {
+            updatesLastUpdatedItem(screenModel.lastUpdated)
+            mangaUpdatesUiItems(
+                uiModels = state.getUiModel(),
+                selectionMode = state.selectionMode,
+                onUpdateSelected = screenModel::toggleSelection,
+                onClickCover = { item ->
+                    navigator.push(MangaScreen(item.visibleMangaId))
+                },
+                onClickUpdate = {
+                    val intent = ReaderActivity.newIntent(context, it.visibleMangaId, it.update.chapterId)
+                    context.startActivity(intent)
+                },
+                onDownloadChapter = screenModel::downloadChapters,
+            )
+        }
 
         val onDismissDialog = { screenModel.setDialog(null) }
         when (val dialog = state.dialog) {

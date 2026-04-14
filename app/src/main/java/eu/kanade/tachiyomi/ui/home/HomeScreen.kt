@@ -475,8 +475,24 @@ object HomeScreen : Screen() {
                         }
                     }
                     tab is AnimeUpdatesTab -> {
-                        // Video profiles do not yet have a dedicated unseen-updates counter.
-                        // Avoid reusing manga chapter badges for video until a real video update pipeline exists.
+                        val count by produceState(initialValue = 0) {
+                            val pref = Injekt.get<LibraryPreferences>()
+                            combine(
+                                pref.newShowUpdatesCount.changes(),
+                                pref.newUpdatesCount.changes(),
+                            ) { show, count -> if (show) count else 0 }
+                                .collectLatest { value = it }
+                        }
+                        if (count > 0) {
+                            Badge {
+                                Text(
+                                    text = count.toString(),
+                                    modifier = Modifier.semantics {
+                                        contentDescription = "$count updates"
+                                    },
+                                )
+                            }
+                        }
                     }
                     BrowseTab::class.isInstance(tab) -> {
                         val count by produceState(initialValue = 0) {

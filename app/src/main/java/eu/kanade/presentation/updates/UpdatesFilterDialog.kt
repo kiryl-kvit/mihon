@@ -17,10 +17,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.components.TabbedDialogPaddings
 import eu.kanade.tachiyomi.ui.updates.UpdatesSettingsScreenModel
 import kotlinx.collections.immutable.persistentListOf
+import tachiyomi.core.common.preference.Preference
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
@@ -34,6 +37,7 @@ import tachiyomi.presentation.core.util.collectAsState
 fun UpdatesFilterDialog(
     onDismissRequest: () -> Unit,
     screenModel: UpdatesSettingsScreenModel,
+    options: List<UpdatesFilterOption> = mangaUpdatesFilterOptions(),
 ) {
     TabbedDialog(
         onDismissRequest = onDismissRequest,
@@ -46,66 +50,113 @@ fun UpdatesFilterDialog(
                 .padding(vertical = TabbedDialogPaddings.Vertical)
                 .verticalScroll(rememberScrollState()),
         ) {
-            FilterSheet(screenModel = screenModel)
+            FilterSheet(
+                screenModel = screenModel,
+                options = options,
+            )
         }
     }
+}
+
+fun mangaUpdatesFilterOptions(): List<UpdatesFilterOption> {
+    return listOf(
+        UpdatesFilterOption.TriStateOption(
+            label = MR.strings.label_downloaded,
+            preference = UpdatesPreferences::filterDownloaded,
+        ),
+        UpdatesFilterOption.TriStateOption(
+            label = MR.strings.action_filter_unread,
+            preference = UpdatesPreferences::filterUnread,
+        ),
+        UpdatesFilterOption.TriStateOption(
+            label = MR.strings.label_started,
+            preference = UpdatesPreferences::filterStarted,
+        ),
+        UpdatesFilterOption.TriStateOption(
+            label = MR.strings.action_filter_bookmarked,
+            preference = UpdatesPreferences::filterBookmarked,
+        ),
+        UpdatesFilterOption.SwitchOption(
+            label = MR.strings.action_filter_excluded_scanlators,
+            preference = UpdatesPreferences::filterExcludedScanlators,
+            showDividerBefore = true,
+        ),
+    )
+}
+
+fun animeUpdatesFilterOptions(): List<UpdatesFilterOption> {
+    return listOf(
+        UpdatesFilterOption.TriStateOption(
+            label = MR.strings.action_filter_unwatched,
+            preference = UpdatesPreferences::filterUnread,
+        ),
+        UpdatesFilterOption.TriStateOption(
+            label = MR.strings.label_started,
+            preference = UpdatesPreferences::filterStarted,
+        ),
+    )
 }
 
 @Composable
 private fun ColumnScope.FilterSheet(
     screenModel: UpdatesSettingsScreenModel,
+    options: List<UpdatesFilterOption>,
 ) {
-    val filterDownloaded by screenModel.updatesPreferences.filterDownloaded.collectAsState()
-    TriStateItem(
-        label = stringResource(MR.strings.label_downloaded),
-        state = filterDownloaded,
-        onClick = { screenModel.toggleFilter(UpdatesPreferences::filterDownloaded) },
-    )
+    options.forEach { option ->
+        when (option) {
+            is UpdatesFilterOption.TriStateOption -> {
+                val state by option.preference(screenModel.updatesPreferences).collectAsState()
+                TriStateItem(
+                    label = stringResource(option.label),
+                    state = state,
+                    onClick = { screenModel.toggleFilter(option.preference) },
+                )
+            }
 
-    val filterUnread by screenModel.updatesPreferences.filterUnread.collectAsState()
-    TriStateItem(
-        label = stringResource(MR.strings.action_filter_unread),
-        state = filterUnread,
-        onClick = { screenModel.toggleFilter(UpdatesPreferences::filterUnread) },
-    )
+            is UpdatesFilterOption.SwitchOption -> {
+                if (option.showDividerBefore) {
+                    HorizontalDivider(modifier = Modifier.padding(MaterialTheme.padding.small))
+                }
 
-    val filterStarted by screenModel.updatesPreferences.filterStarted.collectAsState()
-    TriStateItem(
-        label = stringResource(MR.strings.label_started),
-        state = filterStarted,
-        onClick = { screenModel.toggleFilter(UpdatesPreferences::filterStarted) },
-    )
+                val checked by option.preference(screenModel.updatesPreferences).collectAsState()
 
-    val filterBookmarked by screenModel.updatesPreferences.filterBookmarked.collectAsState()
-    TriStateItem(
-        label = stringResource(MR.strings.action_filter_bookmarked),
-        state = filterBookmarked,
-        onClick = { screenModel.toggleFilter(UpdatesPreferences::filterBookmarked) },
-    )
+                fun toggleSwitch() {
+                    option.preference(screenModel.updatesPreferences).getAndSet { !it }
+                }
 
-    HorizontalDivider(modifier = Modifier.padding(MaterialTheme.padding.small))
+                Row(
+                    modifier = Modifier
+                        .clickable { toggleSwitch() }
+                        .fillMaxWidth()
+                        .padding(horizontal = SettingsItemsPaddings.Horizontal),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(option.label),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
 
-    val filterExcludedScanlators by screenModel.updatesPreferences.filterExcludedScanlators.collectAsState()
-
-    fun toggleScanlatorFilter() = screenModel.updatesPreferences.filterExcludedScanlators.getAndSet { !it }
-
-    Row(
-        modifier = Modifier
-            .clickable { toggleScanlatorFilter() }
-            .fillMaxWidth()
-            .padding(horizontal = SettingsItemsPaddings.Horizontal),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(
-            text = stringResource(MR.strings.action_filter_excluded_scanlators),
-            color = MaterialTheme.colorScheme.onSurface,
-            style = MaterialTheme.typography.bodyMedium,
-        )
-
-        Switch(
-            checked = filterExcludedScanlators,
-            onCheckedChange = { toggleScanlatorFilter() },
-        )
+                    Switch(
+                        checked = checked,
+                        onCheckedChange = { toggleSwitch() },
+                    )
+                }
+            }
+        }
     }
+}
+
+sealed interface UpdatesFilterOption {
+    data class TriStateOption(
+        val label: StringResource,
+        val preference: (UpdatesPreferences) -> Preference<TriState>,
+    ) : UpdatesFilterOption
+
+    data class SwitchOption(
+        val label: StringResource,
+        val preference: (UpdatesPreferences) -> Preference<Boolean>,
+        val showDividerBefore: Boolean = false,
+    ) : UpdatesFilterOption
 }

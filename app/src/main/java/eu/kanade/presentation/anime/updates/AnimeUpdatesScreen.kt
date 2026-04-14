@@ -1,17 +1,10 @@
 package eu.kanade.presentation.anime.updates
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -19,176 +12,130 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import eu.kanade.presentation.components.AppBar
-import eu.kanade.presentation.components.relativeDateText
-import eu.kanade.presentation.manga.components.MangaCover
-import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesScreenModel
-import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesUiModel
+import eu.kanade.presentation.manga.components.DotSeparatorText
+import eu.kanade.presentation.updates.UpdatesBaseUiItem
+import eu.kanade.presentation.updates.UpdatesBottomBarConfig
+import eu.kanade.presentation.updates.UpdatesScreen
+import eu.kanade.presentation.updates.UpdatesScreenState
+import eu.kanade.presentation.updates.UpdatesUiModel
+import eu.kanade.presentation.updates.updatesLastUpdatedItem
+import eu.kanade.presentation.updates.updatesUiItems
+import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesItem
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.FastScrollLazyColumn
-import tachiyomi.presentation.core.components.ListGroupHeader
-import tachiyomi.presentation.core.components.material.Scaffold
-import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
-import tachiyomi.presentation.core.screens.EmptyScreenAction
-import tachiyomi.presentation.core.screens.EmptyScreen
-import tachiyomi.presentation.core.screens.LoadingScreen
-import kotlinx.collections.immutable.persistentListOf
 
 @Composable
 fun AnimeUpdatesScreen(
-    state: AnimeUpdatesScreenModel.State,
-    onClickCover: (animeId: Long) -> Unit,
-    onClickUpdate: (animeId: Long, episodeId: Long) -> Unit,
-    onRetry: () -> Unit,
+    state: UpdatesScreenState<AnimeUpdatesItem>,
+    uiModels: List<UpdatesUiModel<AnimeUpdatesItem>>,
+    snackbarHostState: androidx.compose.material3.SnackbarHostState,
+    lastUpdated: Long,
+    onSelectAll: (Boolean) -> Unit,
+    onInvertSelection: () -> Unit,
+    onUpdateLibrary: () -> Boolean,
+    onFilterClicked: () -> Unit,
+    hasActiveFilters: Boolean,
+    onClickCover: (AnimeUpdatesItem) -> Unit,
+    onOpenEpisode: (AnimeUpdatesItem) -> Unit,
+    onUpdateSelected: (AnimeUpdatesItem, Boolean, Boolean) -> Unit,
 ) {
-    Scaffold(
-        topBar = { scrollBehavior ->
-            AppBar(
-                title = stringResource(MR.strings.label_recent_updates),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-    ) { contentPadding ->
-        when {
-            state.isLoading -> LoadingScreen(Modifier.padding(contentPadding))
-            state.error != null -> EmptyScreen(
-                message = state.error,
-                actions = persistentListOf(
-                    EmptyScreenAction(
-                        stringRes = MR.strings.action_retry,
-                        icon = Icons.Outlined.Refresh,
-                        onClick = onRetry,
-                    ),
-                ),
-                modifier = Modifier.padding(contentPadding),
-            )
-            state.list.isEmpty() -> EmptyScreen(
-                stringRes = MR.strings.information_no_recent,
-                modifier = Modifier.padding(contentPadding),
-            )
-            else -> AnimeUpdatesScreenContent(
-                items = state.list,
-                contentPadding = contentPadding,
-                onClickCover = onClickCover,
-                onClickUpdate = onClickUpdate,
-            )
-        }
-    }
-}
-
-@Composable
-private fun AnimeUpdatesScreenContent(
-    items: List<AnimeUpdatesUiModel>,
-    contentPadding: PaddingValues,
-    onClickCover: (animeId: Long) -> Unit,
-    onClickUpdate: (animeId: Long, episodeId: Long) -> Unit,
-) {
-    FastScrollLazyColumn(
-        contentPadding = contentPadding,
+    UpdatesScreen(
+        state = state,
+        snackbarHostState = snackbarHostState,
+        onSelectAll = onSelectAll,
+        onInvertSelection = onInvertSelection,
+        onUpdateLibrary = onUpdateLibrary,
+        onCalendarClicked = null,
+        onFilterClicked = onFilterClicked,
+        hasActiveFilters = hasActiveFilters,
     ) {
-        items(
-            items = items,
-            key = { "anime-updates-${it.hashCode()}" },
-            contentType = {
-                when (it) {
-                    is AnimeUpdatesUiModel.Header -> "header"
-                    is AnimeUpdatesUiModel.Item -> "item"
-                }
-            },
+        updatesLastUpdatedItem(lastUpdated)
+        updatesUiItems(
+            uiModels = uiModels,
+            itemKey = { "anime-updates-${it.update.animeId}-${it.update.episodeId}" },
         ) { item ->
-            when (item) {
-                is AnimeUpdatesUiModel.Header -> {
-                    ListGroupHeader(text = relativeDateText(item.date))
-                }
-                is AnimeUpdatesUiModel.Item -> {
-                    AnimeUpdatesItem(
-                        update = item.update,
-                        onClickCover = { onClickCover(item.update.animeId) },
-                        onClickUpdate = { onClickUpdate(item.update.animeId, item.update.episodeId) },
-                    )
-                }
-            }
+            AnimeUpdatesUiItem(
+                item = item,
+                selectionMode = state.selectionMode,
+                onUpdateSelected = onUpdateSelected,
+                onClickCover = onClickCover,
+                onOpenEpisode = onOpenEpisode,
+            )
         }
     }
 }
 
+fun animeUpdatesBottomBarConfig(
+    selected: List<AnimeUpdatesItem>,
+    onMarkWatched: (List<AnimeUpdatesItem>, Boolean) -> Unit,
+): UpdatesBottomBarConfig {
+    return UpdatesBottomBarConfig(
+        visible = selected.isNotEmpty(),
+        markAsReadLabel = MR.strings.action_mark_as_watched,
+        markAsUnreadLabel = MR.strings.action_mark_as_unwatched,
+        onMarkAsReadClicked = {
+            onMarkWatched(selected, true)
+        }.takeIf { selected.any { !it.update.completed || !it.update.watched } },
+        onMarkAsUnreadClicked = {
+            onMarkWatched(selected, false)
+        }.takeIf { selected.any { it.update.completed || it.update.watched } },
+    )
+}
+
 @Composable
-private fun AnimeUpdatesItem(
-    update: tachiyomi.domain.anime.model.AnimeUpdatesWithRelations,
-    onClickCover: () -> Unit,
-    onClickUpdate: () -> Unit,
-    modifier: Modifier = Modifier,
+private fun AnimeUpdatesUiItem(
+    item: AnimeUpdatesItem,
+    selectionMode: Boolean,
+    onUpdateSelected: (AnimeUpdatesItem, Boolean, Boolean) -> Unit,
+    onClickCover: (AnimeUpdatesItem) -> Unit,
+    onOpenEpisode: (AnimeUpdatesItem) -> Unit,
 ) {
-    Row(
-        modifier = modifier
-            .clickable(onClick = onClickUpdate)
-            .height(72.dp)
-            .padding(horizontal = MaterialTheme.padding.medium),
-    ) {
-        MangaCover.Square(
-            modifier = Modifier
-                .padding(vertical = 6.dp)
-                .fillMaxHeight(),
-            data = update.coverData,
-            onClick = onClickCover,
-        )
-        Column(
-            modifier = Modifier
-                .padding(horizontal = MaterialTheme.padding.medium)
-                .weight(1f),
-        ) {
-            Text(
-                text = update.animeTitle,
-                maxLines = 1,
-                style = MaterialTheme.typography.bodyMedium,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Row {
-                if (update.completed) {
-                    Text(
-                        text = stringResource(MR.strings.completed),
-                        maxLines = 1,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                } else {
-                    if (!update.watched) {
-                        Icon(
-                            imageVector = Icons.Filled.Circle,
-                            contentDescription = stringResource(MR.strings.unread),
-                            modifier = Modifier
-                                .height(8.dp)
-                                .padding(end = 4.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(MR.strings.anime_watched),
-                            maxLines = 1,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(end = 6.dp),
-                        )
-                    }
-                    Text(
-                        text = update.episodeName,
-                        maxLines = 1,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                }
+    UpdatesBaseUiItem(
+        title = item.update.animeTitle,
+        coverData = item.update.coverData,
+        selected = item.selected,
+        read = item.update.completed,
+        onClick = {
+            when {
+                selectionMode -> onUpdateSelected(item, !item.selected, false)
+                else -> onOpenEpisode(item)
             }
-        }
-        Icon(
-            imageVector = Icons.Filled.PlayArrow,
-            contentDescription = stringResource(MR.strings.action_start),
-            modifier = Modifier.padding(vertical = 24.dp),
-        )
-    }
+        },
+        onLongClick = {
+            onUpdateSelected(item, !item.selected, true)
+        },
+        onClickCover = { onClickCover(item) }.takeIf { !selectionMode },
+        subtitle = { textAlpha ->
+            if (!item.update.watched) {
+                Icon(
+                    imageVector = Icons.Filled.Circle,
+                    contentDescription = stringResource(MR.strings.action_filter_unwatched),
+                    modifier = Modifier.padding(end = 4.dp),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+            Text(
+                text = when {
+                    item.update.completed -> stringResource(MR.strings.completed)
+                    item.update.watched -> stringResource(MR.strings.anime_watched)
+                    else -> item.update.episodeName
+                },
+                maxLines = 1,
+                style = MaterialTheme.typography.bodySmall,
+                color = LocalContentColor.current.copy(alpha = textAlpha),
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(weight = 1f, fill = false),
+            )
+            if (!item.update.completed && item.update.watched) {
+                DotSeparatorText()
+                Text(
+                    text = item.update.episodeName,
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalContentColor.current.copy(alpha = textAlpha),
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        },
+    )
 }

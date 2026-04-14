@@ -9,10 +9,11 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.preference.asState
 import eu.kanade.core.util.addOrRemove
-import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.updates.UpdatesUiModel
+import eu.kanade.presentation.updates.UpdatesSelectionState
+import eu.kanade.presentation.updates.toUpdatesUiModels
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
@@ -78,8 +79,7 @@ class UpdatesScreenModel(
 
     val lastUpdated by libraryPreferences.lastUpdatedTimestamp.asState(screenModelScope)
 
-    // First and last selected index in list
-    private val selectedPositions: Array<Int> = arrayOf(-1, -1)
+    private val selectionState = UpdatesSelectionState()
     private val selectedChapterIds: HashSet<Long> = HashSet()
 
     init {
@@ -356,45 +356,20 @@ class UpdatesScreenModel(
                 selectedChapterIds.addOrRemove(item.update.chapterId, selected)
 
                 if (selected && fromLongPress) {
-                    if (firstSelection) {
-                        selectedPositions[0] = selectedIndex
-                        selectedPositions[1] = selectedIndex
-                    } else {
-                        // Try to select the items in-between when possible
-                        val range: IntRange
-                        if (selectedIndex < selectedPositions[0]) {
-                            range = selectedIndex + 1..<selectedPositions[0]
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            range = (selectedPositions[1] + 1)..<selectedIndex
-                            selectedPositions[1] = selectedIndex
-                        } else {
-                            // Just select itself
-                            range = IntRange.EMPTY
-                        }
-
-                        range.forEach {
-                            val inbetweenItem = get(it)
-                            if (!inbetweenItem.selected) {
-                                selectedChapterIds.add(inbetweenItem.update.chapterId)
-                                set(it, inbetweenItem.copy(selected = true))
-                            }
+                    selectionState.updateRangeSelection(selectedIndex, firstSelection).forEach {
+                        val inbetweenItem = get(it)
+                        if (!inbetweenItem.selected) {
+                            selectedChapterIds.add(inbetweenItem.update.chapterId)
+                            set(it, inbetweenItem.copy(selected = true))
                         }
                     }
                 } else if (!fromLongPress) {
-                    if (!selected) {
-                        if (selectedIndex == selectedPositions[0]) {
-                            selectedPositions[0] = indexOfFirst { it.selected }
-                        } else if (selectedIndex == selectedPositions[1]) {
-                            selectedPositions[1] = indexOfLast { it.selected }
-                        }
-                    } else {
-                        if (selectedIndex < selectedPositions[0]) {
-                            selectedPositions[0] = selectedIndex
-                        } else if (selectedIndex > selectedPositions[1]) {
-                            selectedPositions[1] = selectedIndex
-                        }
-                    }
+                    selectionState.updateSelectionBounds(
+                        selectedIndex = selectedIndex,
+                        selected = selected,
+                        firstSelectedIndex = indexOfFirst { it.selected },
+                        lastSelectedIndex = indexOfLast { it.selected },
+                    )
                 }
             }
             state.copy(items = newItems.toPersistentList())
@@ -410,8 +385,7 @@ class UpdatesScreenModel(
             state.copy(items = newItems.toPersistentList())
         }
 
-        selectedPositions[0] = -1
-        selectedPositions[1] = -1
+        selectionState.reset()
     }
 
     fun invertSelection() {
@@ -422,8 +396,7 @@ class UpdatesScreenModel(
             }
             state.copy(items = newItems.toPersistentList())
         }
-        selectedPositions[0] = -1
-        selectedPositions[1] = -1
+        selectionState.reset()
     }
 
     fun setDialog(dialog: Dialog?) {
@@ -479,18 +452,8 @@ class UpdatesScreenModel(
         val selected = items.filter { it.selected }
         val selectionMode = selected.isNotEmpty()
 
-        fun getUiModel(): List<UpdatesUiModel> {
-            return items
-                .map { UpdatesUiModel.Item(it) }
-                .insertSeparators { before, after ->
-                    val beforeDate = before?.item?.update?.dateFetch?.toLocalDate()
-                    val afterDate = after?.item?.update?.dateFetch?.toLocalDate()
-                    when {
-                        beforeDate != afterDate && afterDate != null -> UpdatesUiModel.Header(afterDate)
-                        // Return null to avoid adding a separator between two items.
-                        else -> null
-                    }
-                }
+        fun getUiModel(): List<UpdatesUiModel<UpdatesItem>> {
+            return items.toUpdatesUiModels { it.update.dateFetch.toLocalDate() }
         }
     }
 

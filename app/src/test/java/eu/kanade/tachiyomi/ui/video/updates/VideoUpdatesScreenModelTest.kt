@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.ui.anime.updates
 
 import android.app.Application
+import eu.kanade.presentation.updates.UpdatesUiModel
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -16,8 +16,18 @@ import io.mockk.mockk
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.domain.anime.interactor.GetAnimeUpdates
+import tachiyomi.domain.anime.model.AnimeEpisode
+import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
+import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeUpdatesWithRelations
+import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
+import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.source.service.HiddenAnimeSourceIds
+import tachiyomi.domain.updates.service.UpdatesPreferences
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -37,29 +47,32 @@ class AnimeUpdatesScreenModelTest {
 
     @Test
     fun `groups updates by fetch date`() = runTest(dispatcher) {
-        val repository = FakeAnimeUpdatesRepository(
-            listOf(
-                update(1L, 1_700_000_000_000L),
-                update(2L, 1_700_000_000_000L),
-                update(3L, 1_699_000_000_000L),
-            ),
-        )
-
         val model = AnimeUpdatesScreenModel(
-            animeUpdatesRepository = repository,
+            getAnimeUpdates = GetAnimeUpdates(
+                repository = FakeAnimeUpdatesRepository(
+                    listOf(
+                        update(1L, 1_700_000_000_000L),
+                        update(2L, 1_700_000_000_000L),
+                        update(3L, 1_699_000_000_000L),
+                    ),
+                ),
+                hiddenAnimeSourceIds = FakeHiddenAnimeSourceIds(),
+            ),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(emptyList()),
+            animePlaybackStateRepository = FakeAnimePlaybackStateRepository(),
+            updatesPreferences = UpdatesPreferences(InMemoryPreferenceStore()),
+            libraryPreferences = LibraryPreferences(InMemoryPreferenceStore()),
             application = mockk<Application>(relaxed = true),
         )
 
-        advanceUntilIdle()
-
         eventually(2.seconds) {
-            val list = model.state.value.list
-            list.shouldHaveSize(5)
-            list[0]::class shouldBe AnimeUpdatesUiModel.Header::class
-            list[1]::class shouldBe AnimeUpdatesUiModel.Item::class
-            list[2]::class shouldBe AnimeUpdatesUiModel.Item::class
-            list[3]::class shouldBe AnimeUpdatesUiModel.Header::class
-            list[4]::class shouldBe AnimeUpdatesUiModel.Item::class
+            val uiModels = model.state.value.getUiModel()
+            uiModels.shouldHaveSize(5)
+            uiModels[0]::class shouldBe UpdatesUiModel.Header::class
+            uiModels[1]::class shouldBe UpdatesUiModel.Item::class
+            uiModels[2]::class shouldBe UpdatesUiModel.Item::class
+            uiModels[3]::class shouldBe UpdatesUiModel.Header::class
+            uiModels[4]::class shouldBe UpdatesUiModel.Item::class
         }
     }
 
@@ -91,8 +104,59 @@ class AnimeUpdatesScreenModelTest {
             return items
         }
 
+        override fun subscribeAll(
+            after: Long,
+            limit: Long,
+            unread: Boolean?,
+            started: Boolean?,
+        ): Flow<List<AnimeUpdatesWithRelations>> {
+            return flowOf(items)
+        }
+
         override fun subscribeWithWatched(watched: Boolean, after: Long, limit: Long): Flow<List<AnimeUpdatesWithRelations>> {
             return flowOf(items)
         }
+    }
+
+    private class FakeHiddenAnimeSourceIds : HiddenAnimeSourceIds {
+        override fun get(): Set<Long> = emptySet()
+
+        override fun subscribe(): Flow<Set<Long>> = flowOf(emptySet())
+    }
+
+    private class FakeAnimeEpisodeRepository(
+        private val episodes: List<AnimeEpisode>,
+    ) : AnimeEpisodeRepository {
+        override suspend fun addAll(episodes: List<AnimeEpisode>): List<AnimeEpisode> = episodes
+
+        override suspend fun update(episodeUpdate: AnimeEpisodeUpdate) = Unit
+
+        override suspend fun updateAll(episodeUpdates: List<AnimeEpisodeUpdate>) = Unit
+
+        override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
+
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
+
+        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId == animeId })
+
+        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
+
+        override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
+
+        override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): AnimeEpisode? {
+            return episodes.firstOrNull { it.url == url && it.animeId == animeId }
+        }
+    }
+
+    private class FakeAnimePlaybackStateRepository : AnimePlaybackStateRepository {
+        override suspend fun getByEpisodeId(episodeId: Long): AnimePlaybackState? = null
+
+        override fun getByEpisodeIdAsFlow(episodeId: Long): Flow<AnimePlaybackState?> = flowOf(null)
+
+        override fun getByAnimeIdAsFlow(animeId: Long): Flow<List<AnimePlaybackState>> = flowOf(emptyList())
+
+        override suspend fun upsert(state: AnimePlaybackState) = Unit
+
+        override suspend fun upsertAndSyncEpisodeState(state: AnimePlaybackState) = Unit
     }
 }

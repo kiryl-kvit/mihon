@@ -1,3 +1,41 @@
+getAnimeRecentUpdatesWithFilters:
+SELECT
+    V.profile_id,
+    V._id,
+    V.title,
+    VE._id,
+    VE.name,
+    VE.url,
+    VE.watched,
+    VE.completed,
+    V.source,
+    V.favorite,
+    V.thumbnail_url,
+    0 AS cover_last_modified,
+    VE.date_fetch
+FROM anime_episodes VE
+JOIN animes V
+ON VE.anime_id = V._id
+LEFT JOIN anime_playback_state VPS
+ON VPS.profile_id = VE.profile_id
+AND VPS.episode_id = VE._id
+WHERE V.profile_id = :profileId
+AND VE.profile_id = :profileId
+AND V.favorite = 1
+AND VE.date_upload > :after
+AND (
+    :unread IS NULL
+    OR (:unread = 1 AND VE.watched = 0)
+    OR (:unread = 0 AND VE.watched = 1)
+)
+AND (
+    :started IS NULL
+    OR (:started = 1 AND (VE.watched = 1 OR VE.completed = 1 OR (VPS.position_ms > 0 AND VPS.duration_ms > 0 AND VPS.completed = 0)))
+    OR (:started = 0 AND VE.watched = 0 AND VE.completed = 0 AND coalesce(VPS.position_ms, 0) = 0)
+)
+ORDER BY VE.date_fetch DESC
+LIMIT :limit;
+
 getAnimeUpdatesByWatchedStatus:
 SELECT
     V.profile_id,
