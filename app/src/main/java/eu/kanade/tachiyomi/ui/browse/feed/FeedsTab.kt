@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -42,6 +43,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +86,8 @@ import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import mihon.feature.migration.dialog.MigrateMangaDialog
 import mihon.feature.profiles.core.ProfileManager
 import mihon.presentation.core.util.collectAsLazyPagingItems
@@ -204,21 +208,21 @@ private fun FeedsTabContent(
             modifier = Modifier.padding(contentPadding),
         )
     } else if (activeFeed != null && activeSource != null && activePreset != null) {
+        val enabledFeeds = state.enabledFeeds
         val browseContentStateHolder = rememberSaveableStateHolder()
+        val chipListState = rememberLazyListState()
         val presetBehaviorKey = activePreset.behaviorKey()
-        key(activeProfileId, activeFeed.id, presetBehaviorKey) {
-            val browseModel = rememberActiveFeedScreenModel(
-                activeProfileId = activeProfileId,
-                activeFeedId = activeFeed.id,
-                presetBehaviorKey = presetBehaviorKey,
-                sourceId = activeSource.id,
-                listingQuery = activePreset.toListing().requestQuery,
-                initialFilterSnapshot = activePreset.filters,
-            )
-            val browseModelState by browseModel.state.collectAsState()
-            val source = browseModel.source as CatalogueSource
-            val chronologicalFeedModel = if (activePreset.chronological) {
-                rememberChronologicalFeedScreenModel(
+        val activeIndex = remember(enabledFeeds, activeFeed.id) {
+            enabledFeeds.indexOfFirst { it.id == activeFeed.id }
+        }
+        val hasPreviousFeed = activeIndex > 0
+        val hasNextFeed = activeIndex in 0 until enabledFeeds.lastIndex
+
+        Column(
+            modifier = Modifier.pointerInput(Unit) {},
+        ) {
+            key(activeProfileId, activeFeed.id, presetBehaviorKey) {
+                val browseModel = rememberActiveFeedScreenModel(
                     activeProfileId = activeProfileId,
                     activeFeedId = activeFeed.id,
                     presetBehaviorKey = presetBehaviorKey,
@@ -226,58 +230,61 @@ private fun FeedsTabContent(
                     listingQuery = activePreset.toListing().requestQuery,
                     initialFilterSnapshot = activePreset.filters,
                 )
-            } else {
-                null
-            }
-            val chronologicalFeedState = chronologicalFeedModel?.state?.collectAsState()?.value
-            val activeIndex = remember(state.enabledFeeds, activeFeed.id) {
-                state.enabledFeeds.indexOfFirst { it.id == activeFeed.id }
-            }
-            val hasPreviousFeed = activeIndex > 0
-            val hasNextFeed = activeIndex in 0 until state.enabledFeeds.lastIndex
+                val browseModelState by browseModel.state.collectAsState()
+                val source = browseModel.source as CatalogueSource
+                val chronologicalFeedModel = if (activePreset.chronological) {
+                    rememberChronologicalFeedScreenModel(
+                        activeProfileId = activeProfileId,
+                        activeFeedId = activeFeed.id,
+                        presetBehaviorKey = presetBehaviorKey,
+                        sourceId = activeSource.id,
+                        listingQuery = activePreset.toListing().requestQuery,
+                        initialFilterSnapshot = activePreset.filters,
+                    )
+                } else {
+                    null
+                }
+                val chronologicalFeedState = chronologicalFeedModel?.state?.collectAsState()?.value
 
-            LaunchedEffect(activeProfileId) {
-                screenModel.closeDialog()
-                browseModel.dismissDialog()
-            }
+                LaunchedEffect(activeProfileId) {
+                    screenModel.closeDialog()
+                    browseModel.dismissDialog()
+                }
 
-            LaunchedEffect(activeFeed.id, activePreset.id, presetBehaviorKey) {
-                val savedListing = activePreset.toListing()
-                val currentFilters = browseModelState.filters.snapshot()
-                val shouldApplyPreset = when (activePreset.listingMode) {
-                    FeedListingMode.Popular -> browseModelState.listing != BrowseSourceScreenModel.Listing.Popular
-                    FeedListingMode.Latest -> browseModelState.listing != BrowseSourceScreenModel.Listing.Latest
-                    FeedListingMode.Search -> {
-                        val listing = browseModelState.listing as? BrowseSourceScreenModel.Listing.Search
-                        listing?.query != activePreset.query || currentFilters != savedListing.filters
+                LaunchedEffect(activeFeed.id, activePreset.id, presetBehaviorKey) {
+                    val savedListing = activePreset.toListing()
+                    val currentFilters = browseModelState.filters.snapshot()
+                    val shouldApplyPreset = when (activePreset.listingMode) {
+                        FeedListingMode.Popular -> browseModelState.listing != BrowseSourceScreenModel.Listing.Popular
+                        FeedListingMode.Latest -> browseModelState.listing != BrowseSourceScreenModel.Listing.Latest
+                        FeedListingMode.Search -> {
+                            val listing = browseModelState.listing as? BrowseSourceScreenModel.Listing.Search
+                            listing?.query != activePreset.query || currentFilters != savedListing.filters
+                        }
+                    }
+
+                    if (!shouldApplyPreset) return@LaunchedEffect
+
+                    val filters = source.getFilterList().applySnapshot(activePreset.filters)
+                    when (activePreset.listingMode) {
+                        FeedListingMode.Popular -> {
+                            browseModel.resetFilters()
+                            browseModel.setListing(BrowseSourceScreenModel.Listing.Popular)
+                        }
+                        FeedListingMode.Latest -> {
+                            browseModel.resetFilters()
+                            browseModel.setListing(BrowseSourceScreenModel.Listing.Latest)
+                        }
+                        FeedListingMode.Search -> {
+                            browseModel.setFilters(filters)
+                            browseModel.search(
+                                query = activePreset.query,
+                                filters = filters,
+                            )
+                        }
                     }
                 }
 
-                if (!shouldApplyPreset) return@LaunchedEffect
-
-                val filters = source.getFilterList().applySnapshot(activePreset.filters)
-                when (activePreset.listingMode) {
-                    FeedListingMode.Popular -> {
-                        browseModel.resetFilters()
-                        browseModel.setListing(BrowseSourceScreenModel.Listing.Popular)
-                    }
-                    FeedListingMode.Latest -> {
-                        browseModel.resetFilters()
-                        browseModel.setListing(BrowseSourceScreenModel.Listing.Latest)
-                    }
-                    FeedListingMode.Search -> {
-                        browseModel.setFilters(filters)
-                        browseModel.search(
-                            query = activePreset.query,
-                            filters = filters,
-                        )
-                    }
-                }
-            }
-
-            Column(
-                modifier = Modifier.pointerInput(Unit) {},
-            ) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -373,23 +380,6 @@ private fun FeedsTabContent(
                     }
                 }
 
-                if (state.enabledFeeds.size > 1) {
-                    FeedNavigationBar(
-                        feeds = state.enabledFeeds,
-                        selectedFeedId = activeFeed.id,
-                        screenModel = screenModel,
-                        canGoPrevious = hasPreviousFeed,
-                        canGoNext = hasNextFeed,
-                        onPreviousClick = {
-                            state.enabledFeeds.getOrNull(activeIndex - 1)?.let { screenModel.selectFeed(it.id) }
-                        },
-                        onNextClick = {
-                            state.enabledFeeds.getOrNull(activeIndex + 1)?.let { screenModel.selectFeed(it.id) }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-
                 when (val dialog = browseModelState.dialog) {
                     is BrowseSourceScreenModel.Dialog.MangaPreview -> {
                         BrowseMangaPreviewSheet(
@@ -441,6 +431,24 @@ private fun FeedsTabContent(
                     }
                     else -> Unit
                 }
+            }
+
+            if (enabledFeeds.size > 1) {
+                FeedNavigationBar(
+                    feeds = enabledFeeds,
+                    selectedFeedId = activeFeed.id,
+                    chipListState = chipListState,
+                    screenModel = screenModel,
+                    canGoPrevious = hasPreviousFeed,
+                    canGoNext = hasNextFeed,
+                    onPreviousClick = {
+                        enabledFeeds.getOrNull(activeIndex - 1)?.let { screenModel.selectFeed(it.id) }
+                    },
+                    onNextClick = {
+                        enabledFeeds.getOrNull(activeIndex + 1)?.let { screenModel.selectFeed(it.id) }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
@@ -496,6 +504,7 @@ private fun FeedBrowseContent(
 private fun FeedNavigationBar(
     feeds: List<SourceFeed>,
     selectedFeedId: String,
+    chipListState: LazyListState,
     screenModel: FeedsScreenModel,
     canGoPrevious: Boolean,
     canGoNext: Boolean,
@@ -503,12 +512,18 @@ private fun FeedNavigationBar(
     onNextClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val chipListState = rememberLazyListState()
-
     LaunchedEffect(selectedFeedId, feeds) {
         val selectedIndex = feeds.indexOfFirst { it.id == selectedFeedId }
-        if (selectedIndex >= 0) {
-            chipListState.animateScrollToItem(selectedIndex)
+        if (selectedIndex < 0) return@LaunchedEffect
+
+        val visibleItemIndexes = snapshotFlow {
+            chipListState.layoutInfo.visibleItemsInfo.map { it.index }
+        }
+            .filter { it.isNotEmpty() }
+            .first()
+
+        if (selectedIndex !in visibleItemIndexes) {
+            chipListState.scrollToItem(selectedIndex)
         }
     }
 
