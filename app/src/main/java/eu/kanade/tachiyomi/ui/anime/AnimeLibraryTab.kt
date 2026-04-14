@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Refresh
@@ -28,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
@@ -378,22 +381,62 @@ private fun AnimeLibraryContent(
         contentPadding = contentPadding,
         currentPage = state.coercedActivePageIndex,
         hasActiveFilters = state.hasActiveFilters,
-        showPageTabs = state.showCategoryTabs,
+        showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
         onChangeCurrentPage = onChangeCurrentPage,
         onRefresh = onRefresh,
         onGlobalSearchClicked = onGlobalSearchClicked,
         getItemCountForPage = state::getItemCountForPage,
         getItemCountForPrimaryTab = state::getItemCountForPrimaryTab,
-    ) { _, _, libraryPage ->
-        val items = libraryPage?.let(state::getItemsForPage).orEmpty()
-        if (libraryPage == null || items.isEmpty()) {
+    ) { pagerState, _, _ ->
+        AnimeLibraryPager(
+            pagerState = pagerState,
+            state = state,
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+            getDisplayMode = getDisplayMode,
+            getColumnsForOrientation = getColumnsForOrientation,
+            onToggleSelection = onToggleSelection,
+            onToggleRangeSelection = onToggleRangeSelection,
+            onOpenAnime = onOpenAnime,
+            onOpenEpisode = onOpenEpisode,
+            onGlobalSearchClicked = onGlobalSearchClicked,
+        )
+    }
+}
+
+@Composable
+private fun AnimeLibraryPager(
+    pagerState: PagerState,
+    state: AnimeLibraryScreenModel.State,
+    contentPadding: PaddingValues,
+    getDisplayMode: () -> PreferenceMutableState<LibraryDisplayMode>,
+    getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
+    onToggleSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
+    onToggleRangeSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
+    onOpenAnime: (Long) -> Unit,
+    onOpenEpisode: (Long, Long) -> Unit,
+    onGlobalSearchClicked: () -> Unit,
+) {
+    HorizontalPager(
+        modifier = Modifier.fillMaxSize(),
+        state = pagerState,
+        verticalAlignment = Alignment.Top,
+    ) { page ->
+        if (page !in ((pagerState.currentPage - 1)..(pagerState.currentPage + 1))) {
+            // Only keep nearby pages composed, matching the manga library pager behavior.
+            return@HorizontalPager
+        }
+
+        val libraryPage = state.pages[page]
+        val items = state.getItemsForPage(libraryPage)
+
+        if (items.isEmpty()) {
             LibraryPageEmptyScreen(
                 searchQuery = state.searchQuery,
                 hasActiveFilters = state.hasActiveFilters,
-                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                contentPadding = contentPadding,
                 onGlobalSearchClicked = onGlobalSearchClicked,
             )
-            return@SharedLibraryContent
+            return@HorizontalPager
         }
 
         val displayMode by getDisplayMode()
@@ -410,7 +453,7 @@ private fun AnimeLibraryContent(
                 page = libraryPage,
                 items = items,
                 selection = state.selection,
-                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                contentPadding = contentPadding,
                 searchQuery = state.searchQuery,
                 onGlobalSearchClicked = onGlobalSearchClicked,
                 onToggleSelection = onToggleSelection,
@@ -423,7 +466,7 @@ private fun AnimeLibraryContent(
                 items = items,
                 selection = state.selection,
                 columns = columns,
-                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                contentPadding = contentPadding,
                 searchQuery = state.searchQuery,
                 onGlobalSearchClicked = onGlobalSearchClicked,
                 onToggleSelection = onToggleSelection,
@@ -439,7 +482,7 @@ private fun AnimeLibraryContent(
                 selection = state.selection,
                 showTitle = displayMode == LibraryDisplayMode.CompactGrid,
                 columns = columns,
-                contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+                contentPadding = contentPadding,
                 searchQuery = state.searchQuery,
                 onGlobalSearchClicked = onGlobalSearchClicked,
                 onToggleSelection = onToggleSelection,
