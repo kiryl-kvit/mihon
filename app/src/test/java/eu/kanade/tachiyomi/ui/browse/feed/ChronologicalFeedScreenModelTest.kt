@@ -142,6 +142,43 @@ class ChronologicalFeedScreenModelTest {
     }
 
     @Test
+    fun `init with existing timeline skips automatic refresh`() = runTest {
+        val preferences = SourcePreferences(TestPreferenceStore(), testJson)
+        val browseFeedService = BrowseFeedService(preferences)
+        browseFeedService.saveTimeline(
+            feedId = FEED_ID,
+            timeline = SourceFeedTimeline(mangaIds = listOf(7L, 8L), nextPageKey = 9L),
+        )
+
+        val pagingSources = mutableListOf<RecordingPagingSource>()
+        val screenModel = ChronologicalFeedScreenModel(
+            feedId = FEED_ID,
+            sourceId = SOURCE_ID,
+            listingQuery = null,
+            initialFilterSnapshot = emptyList(),
+            browseFeedService = browseFeedService,
+            sourcePreferences = preferences,
+            sourceManager = fakeSourceManager(),
+            getRemoteManga = fakeGetRemoteManga {
+                RecordingPagingSource(emptyMap()).also(pagingSources::add)
+            },
+            getManga = fakeGetManga(manga(7L), manga(8L)),
+        )
+
+        try {
+            eventually(2.seconds) {
+                screenModel.state.value.mangaIds shouldBe listOf(7L, 8L)
+                screenModel.state.value.nextPageKey shouldBe 9L
+                screenModel.state.value.hasLoaded shouldBe true
+                screenModel.state.value.isRefreshing shouldBe false
+                pagingSources shouldBe emptyList()
+            }
+        } finally {
+            screenModel.onDispose()
+        }
+    }
+
+    @Test
     fun `refresh reuses one paging source so duplicates across scanned pages are suppressed`() = runTest {
         val preferences = SourcePreferences(TestPreferenceStore(), testJson)
         val browseFeedService = BrowseFeedService(preferences)

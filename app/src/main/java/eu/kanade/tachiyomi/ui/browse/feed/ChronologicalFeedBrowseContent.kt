@@ -49,7 +49,6 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.manga.model.Manga
@@ -151,42 +150,6 @@ fun ChronologicalFeedBrowseContent(
                     mangaId = state.mangaIds.getOrNull(index),
                     scrollOffset = offset,
                 )
-            }
-    }
-
-    LaunchedEffect(displayMode, state.mangaIds, state.isAppending, state.nextPageKey) {
-        if (displayMode != LibraryDisplayMode.List) return@LaunchedEffect
-
-        snapshotFlow {
-            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleIndex to listState.layoutInfo.totalItemsCount
-        }
-            .map { (lastVisibleIndex, totalItemsCount) ->
-                totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - LOAD_MORE_THRESHOLD
-            }
-            .distinctUntilChanged()
-            .collectLatest { shouldLoadMore ->
-                if (shouldLoadMore) {
-                    screenModel.loadMore()
-                }
-            }
-    }
-
-    LaunchedEffect(displayMode, state.mangaIds, state.isAppending, state.nextPageKey) {
-        if (displayMode == LibraryDisplayMode.List) return@LaunchedEffect
-
-        snapshotFlow {
-            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisibleIndex to gridState.layoutInfo.totalItemsCount
-        }
-            .map { (lastVisibleIndex, totalItemsCount) ->
-                totalItemsCount > 0 && lastVisibleIndex >= totalItemsCount - LOAD_MORE_THRESHOLD
-            }
-            .distinctUntilChanged()
-            .collectLatest { shouldLoadMore ->
-                if (shouldLoadMore) {
-                    screenModel.loadMore()
-                }
             }
     }
 
@@ -529,5 +492,4 @@ private fun Manga.browseCoverAlpha(): Float {
     return if (favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f
 }
 
-private const val LOAD_MORE_THRESHOLD = 8
 private const val ANCHOR_SAVE_DEBOUNCE_MILLIS = 150L
