@@ -3,15 +3,19 @@ package eu.kanade.tachiyomi.ui.anime
 import android.content.Context
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
+import eu.kanade.core.util.addOrRemove
+import eu.kanade.presentation.updates.UpdatesSelectionState
 import eu.kanade.tachiyomi.source.AnimeWebViewSource
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.presentation.util.formattedMessage
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import tachiyomi.core.common.util.lang.launchNonCancellable
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
@@ -26,6 +30,7 @@ import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
 import tachiyomi.domain.anime.model.AnimeEpisode
+import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
@@ -51,6 +56,9 @@ class AnimeScreenModel(
     private val syncAnimeWithSource: SyncAnimeWithSource = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<AnimeScreenModel.State>(State.Loading) {
+
+    private val selectionState = UpdatesSelectionState()
+    private val selectedEpisodeIds = HashSet<Long>()
 
     val webViewSource: AnimeWebViewSource?
         get() = successState?.anime?.let { animeSourceManager.get(it.source) as? AnimeWebViewSource }
@@ -80,6 +88,11 @@ class AnimeScreenModel(
                     episodes = sortedEpisodes.toImmutableList(),
                     playbackStateByEpisodeId = playbackStateByEpisodeId,
                     primaryEpisodeId = selectPrimaryEpisodeId(sortedEpisodes, playbackStateByEpisodeId),
+                    selection = sortedEpisodes.asSequence()
+                        .map(AnimeEpisode::id)
+                        .filter(selectedEpisodeIds::contains)
+                        .toSet()
+                        .toImmutableSet(),
                     categories = categories.filterNot { it.isSystemCategory }.toImmutableList(),
                     isRefreshing = currentSuccess?.isRefreshing ?: false,
                     dialog = currentSuccess?.dialog,
@@ -124,6 +137,9 @@ class AnimeScreenModel(
 
     fun toggleFavorite() {
         val currentAnime = successState?.anime ?: return
+        if (currentAnime.favorite && successState?.isSelectionMode == true) {
+            clearSelection()
+        }
         screenModelScope.launchIO {
             val favorite = !currentAnime.favorite
             val updated = animeRepository.update(
@@ -141,6 +157,121 @@ class AnimeScreenModel(
                     snackbarHostState.showSnackbar(context.stringResource(MR.strings.unknown_error))
                 }
             }
+        }
+    }
+
+    fun toggleSelection(
+        episode: AnimeEpisode,
+        selected: Boolean,
+        fromLongPress: Boolean = false,
+    ) {
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            val selectedIndex = success.episodes.indexOfFirst { it.id == episode.id }
+            if (selectedIndex < 0) return@update currentState
+
+            val currentlySelected = episode.id in success.selection
+            if (currentlySelected == selected) return@update currentState
+
+            val mutableSelection = HashSet(success.selection)
+            val firstSelection = mutableSelection.isEmpty()
+            mutableSelection.addOrRemove(episode.id, selected)
+            selectedEpisodeIds.addOrRemove(episode.id, selected)
+
+            if (selected && fromLongPress) {
+                selectionState.updateRangeSelection(selectedIndex, firstSelection).forEach { rangeIndex ->
+                    val inbetweenEpisode = success.episodes[rangeIndex]
+                    if (mutableSelection.add(inbetweenEpisode.id)) {
+                        selectedEpisodeIds.add(inbetweenEpisode.id)
+                    }
+                }
+            } else if (!fromLongPress) {
+                selectionState.updateSelectionBounds(
+                    selectedIndex = selectedIndex,
+                    selected = selected,
+                    firstSelectedIndex = success.episodes.indexOfFirst { it.id in mutableSelection },
+                    lastSelectedIndex = success.episodes.indexOfLast { it.id in mutableSelection },
+                )
+            }
+
+            success.copy(selection = mutableSelection.toImmutableSet())
+        }
+    }
+
+    fun toggleAllSelection(selected: Boolean) {
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            success.episodes.forEach { selectedEpisodeIds.addOrRemove(it.id, selected) }
+            val selection = if (selected) {
+                success.episodes.map(AnimeEpisode::id).toSet().toImmutableSet()
+            } else {
+                emptySet<Long>().toImmutableSet()
+            }
+            success.copy(selection = selection)
+        }
+
+        selectionState.reset()
+    }
+
+    fun invertSelection() {
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            val inverted = success.episodes.mapNotNull { episode ->
+                val nextSelected = episode.id !in success.selection
+                selectedEpisodeIds.addOrRemove(episode.id, nextSelected)
+                episode.id.takeIf { nextSelected }
+            }.toSet().toImmutableSet()
+            success.copy(selection = inverted)
+        }
+
+        selectionState.reset()
+    }
+
+    fun clearSelection() {
+        selectedEpisodeIds.clear()
+        selectionState.reset()
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            success.copy(selection = emptySet<Long>().toImmutableSet())
+        }
+    }
+
+    fun markSelectedEpisodesWatched(watched: Boolean) {
+        val currentState = successState ?: return
+        val selectedIds = currentState.selection
+        if (selectedIds.isEmpty()) return
+
+        screenModelScope.launchNonCancellable {
+            val episodeUpdates = currentState.episodes
+                .filter { episode ->
+                    episode.id in selectedIds && when (watched) {
+                        true -> !episode.completed || !episode.watched
+                        false -> episode.completed || episode.watched
+                    }
+                }
+                .map { episode ->
+                    AnimeEpisodeUpdate(
+                        id = episode.id,
+                        watched = watched,
+                        completed = watched,
+                    )
+                }
+            if (episodeUpdates.isNotEmpty()) {
+                animeEpisodeRepository.updateAll(episodeUpdates)
+            }
+
+            currentState.playbackStateByEpisodeId.values
+                .filter { it.episodeId in selectedIds }
+                .forEach { playbackState ->
+                    animePlaybackStateRepository.upsert(
+                        playbackState.copy(
+                            positionMs = if (watched) playbackState.positionMs else 0L,
+                            completed = watched,
+                        ),
+                    )
+                }
+
+            clearSelection()
         }
     }
 
@@ -185,6 +316,42 @@ class AnimeScreenModel(
         }
     }
 
+    fun showEditDisplayNameDialog() {
+        val currentAnime = successState?.anime ?: return
+        if (!currentAnime.favorite) return
+
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            success.copy(dialog = Dialog.EditDisplayName(currentAnime.displayName.orEmpty()))
+        }
+    }
+
+    fun showCoverDialog() {
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            success.copy(dialog = Dialog.FullCover)
+        }
+    }
+
+    fun updateDisplayName(displayName: String) {
+        val currentAnime = successState?.anime ?: return
+        screenModelScope.launchIO {
+            val updated = animeRepository.update(
+                AnimeTitleUpdate(
+                    id = currentAnime.id,
+                    displayName = displayName.trim().ifBlank { null },
+                ),
+            )
+            if (!updated) {
+                screenModelScope.launch {
+                    snackbarHostState.showSnackbar(context.stringResource(MR.strings.unknown_error))
+                }
+                return@launchIO
+            }
+            dismissDialog()
+        }
+    }
+
     fun setCategories(categoryIds: List<Long>) {
         val currentAnime = successState?.anime ?: return
         screenModelScope.launchIO {
@@ -208,8 +375,14 @@ class AnimeScreenModel(
     }
 
     sealed interface Dialog {
+        data object FullCover : Dialog
+
         data class ChangeCategory(
             val initialSelection: ImmutableList<CheckboxState.State<Category>>,
+        ) : Dialog
+
+        data class EditDisplayName(
+            val initialValue: String,
         ) : Dialog
     }
 
@@ -225,11 +398,16 @@ class AnimeScreenModel(
             val episodes: ImmutableList<AnimeEpisode>,
             val playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
             val primaryEpisodeId: Long?,
+            val selection: kotlinx.collections.immutable.ImmutableSet<Long>,
             val categories: ImmutableList<Category>,
             val isRefreshing: Boolean,
             val dialog: Dialog? = null,
         ) : State {
             val sourceAvailable: Boolean = sourceName != null
+
+            val isSelectionMode: Boolean = selection.isNotEmpty()
+
+            val selectedCount: Int = selection.size
 
             val primaryEpisode: AnimeEpisode?
                 get() = episodes.firstOrNull { it.id == primaryEpisodeId }

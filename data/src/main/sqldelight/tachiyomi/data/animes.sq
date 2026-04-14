@@ -9,8 +9,17 @@ CREATE TABLE animes(
     url TEXT NOT NULL,
     title TEXT NOT NULL,
     display_name TEXT,
+    original_title TEXT,
+    country TEXT,
+    studio TEXT,
+    producer TEXT,
+    director TEXT,
+    writer TEXT,
+    year TEXT,
+    duration TEXT,
     description TEXT,
     genre TEXT AS List<String>,
+    status INTEGER NOT NULL DEFAULT 0,
     thumbnail_url TEXT,
     favorite INTEGER AS Boolean NOT NULL,
     initialized INTEGER AS Boolean NOT NULL,
@@ -83,8 +92,8 @@ DELETE FROM animes
 WHERE profile_id = :profileId;
 
 insert:
-INSERT INTO animes(profile_id, source, url, title, display_name, description, genre, thumbnail_url, favorite, initialized, last_update, next_update, date_added, last_modified_at, version, notes)
-VALUES (:profileId, :source, :url, :title, :displayName, :description, :genre, :thumbnailUrl, :favorite, :initialized, :lastUpdate, :nextUpdate, :dateAdded, 0, :version, :notes);
+INSERT INTO animes(profile_id, source, url, title, display_name, original_title, country, studio, producer, director, writer, year, duration, description, genre, status, thumbnail_url, favorite, initialized, last_update, next_update, date_added, last_modified_at, version, notes)
+VALUES (:profileId, :source, :url, :title, :displayName, :originalTitle, :country, :studio, :producer, :director, :writer, :year, :duration, :description, :genre, :status, :thumbnailUrl, :favorite, :initialized, :lastUpdate, :nextUpdate, :dateAdded, 0, :version, :notes);
 
 update:
 UPDATE animes SET
@@ -92,8 +101,17 @@ UPDATE animes SET
     url = coalesce(:url, url),
     title = coalesce(:title, title),
     display_name = coalesce(:displayName, display_name),
+    original_title = coalesce(:originalTitle, original_title),
+    country = coalesce(:country, country),
+    studio = coalesce(:studio, studio),
+    producer = coalesce(:producer, producer),
+    director = coalesce(:director, director),
+    writer = coalesce(:writer, writer),
+    year = coalesce(:year, year),
+    duration = coalesce(:duration, duration),
     description = coalesce(:description, description),
     genre = coalesce(:genre, genre),
+    status = coalesce(:status, status),
     thumbnail_url = coalesce(:thumbnailUrl, thumbnail_url),
     favorite = coalesce(:favorite, favorite),
     initialized = coalesce(:initialized, initialized),
@@ -110,11 +128,13 @@ SELECT last_insert_rowid();
 
 insertNetworkAnime {
     INSERT INTO animes(
-        profile_id, source, url, title, display_name, description, genre, thumbnail_url,
+        profile_id, source, url, title, display_name, original_title, country, studio, producer, director,
+        writer, year, duration, description, genre, status, thumbnail_url,
         favorite, initialized, last_update, next_update, date_added, last_modified_at, version, notes
     )
     SELECT
-        :profileId, :source, :url, :title, NULL, :description, :genre, :thumbnailUrl,
+        :profileId, :source, :url, :title, NULL, :originalTitle, :country, :studio, :producer, :director,
+        :writer, :year, :duration, :description, :genre, :status, :thumbnailUrl,
         :favorite, :initialized, :lastUpdate, :nextUpdate, :dateAdded, 0, :version, :notes
     WHERE NOT EXISTS(
         SELECT 0 FROM animes
@@ -127,8 +147,17 @@ insertNetworkAnime {
     SET
         title = CASE WHEN :updateTitle THEN :title ELSE title END,
         thumbnail_url = CASE WHEN :updateCover THEN :thumbnailUrl ELSE thumbnail_url END,
+        original_title = CASE WHEN :updateDetails THEN :originalTitle ELSE original_title END,
+        country = CASE WHEN :updateDetails THEN :country ELSE country END,
+        studio = CASE WHEN :updateDetails THEN :studio ELSE studio END,
+        producer = CASE WHEN :updateDetails THEN :producer ELSE producer END,
+        director = CASE WHEN :updateDetails THEN :director ELSE director END,
+        writer = CASE WHEN :updateDetails THEN :writer ELSE writer END,
+        year = CASE WHEN :updateDetails THEN :year ELSE year END,
+        duration = CASE WHEN :updateDetails THEN :duration ELSE duration END,
         description = CASE WHEN :updateDetails THEN :description ELSE description END,
         genre = CASE WHEN :updateDetails THEN :genre ELSE genre END,
+        status = CASE WHEN :updateDetails THEN :status ELSE status END,
         initialized = :updateDetails
     WHERE profile_id = :profileId
     AND source = :source

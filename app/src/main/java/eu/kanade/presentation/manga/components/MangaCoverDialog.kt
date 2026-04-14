@@ -49,7 +49,6 @@ import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.manga.EditCoverAction
 import eu.kanade.tachiyomi.ui.reader.viewer.ReaderPageImageView
 import kotlinx.collections.immutable.persistentListOf
-import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
@@ -57,7 +56,7 @@ import tachiyomi.presentation.core.util.clickableNoIndication
 
 @Composable
 fun MangaCoverDialog(
-    manga: Manga,
+    coverData: Any?,
     isCustomCover: Boolean,
     snackbarHostState: SnackbarHostState,
     onShareClick: () -> Unit,
@@ -167,7 +166,7 @@ fun MangaCoverDialog(
                     },
                     update = { view ->
                         val request = ImageRequest.Builder(view.context)
-                            .data(manga)
+                            .data(coverData)
                             .size(Size.ORIGINAL)
                             .memoryCachePolicy(CachePolicy.DISABLED)
                             .target { image ->

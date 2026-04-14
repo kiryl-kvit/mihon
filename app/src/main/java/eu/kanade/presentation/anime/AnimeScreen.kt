@@ -1,5 +1,6 @@
 package eu.kanade.presentation.anime
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.graphics.res.animatedVectorResource
@@ -10,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,6 +35,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -41,12 +44,17 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -83,27 +91,42 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.domain.anime.model.toMangaCover
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.AppBarTitle
+import eu.kanade.presentation.manga.components.MangaBottomActionMenu
 import eu.kanade.presentation.manga.components.DotSeparatorText
-import eu.kanade.presentation.manga.components.MangaNotesDisplay
+import eu.kanade.presentation.manga.components.DISALLOWED_MARKDOWN_TYPES
+import eu.kanade.presentation.manga.components.MARKDOWN_INLINE_IMAGE_TAG
 import eu.kanade.presentation.components.relativeDateText
 import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.manga.components.MarkdownRender
+import eu.kanade.presentation.manga.components.getMarkdownLinkStyle
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.presentation.util.toDurationString
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.source.model.SAnime
 import eu.kanade.tachiyomi.ui.anime.AnimeScreenModel
 import eu.kanade.tachiyomi.util.system.copyToClipboard
+import com.mikepenz.markdown.model.markdownAnnotator
+import com.mikepenz.markdown.model.markdownAnnotatorConfig
 import kotlinx.collections.immutable.persistentListOf
+import org.intellij.markdown.MarkdownElementTypes
+import org.intellij.markdown.MarkdownTokenTypes
+import org.intellij.markdown.ast.findChildOfType
+import com.mikepenz.markdown.utils.getUnescapedTextInNode
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
@@ -121,6 +144,8 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clickableNoIndication
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import tachiyomi.presentation.core.util.shouldExpandFAB
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -132,9 +157,18 @@ fun AnimeScreen(
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditDisplayNameClicked: (() -> Unit)?,
+    onShareClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
+    onSearch: (String, Boolean) -> Unit,
+    onTagSearch: (String) -> Unit,
+    onCoverClicked: () -> Unit,
     onEpisodeClick: (Long) -> Unit,
+    onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
+    onAllEpisodesSelected: (Boolean) -> Unit,
+    onInvertSelection: () -> Unit,
+    onMarkSelectedWatched: (Boolean) -> Unit,
 ) {
     if (isTabletUi()) {
         AnimeScreenLargeImpl(
@@ -144,9 +178,18 @@ fun AnimeScreen(
             onRefresh = onRefresh,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onEditCategoryClicked = onEditCategoryClicked,
+            onEditDisplayNameClicked = onEditDisplayNameClicked,
+            onShareClicked = onShareClicked,
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
+            onSearch = onSearch,
+            onTagSearch = onTagSearch,
+            onCoverClicked = onCoverClicked,
             onEpisodeClick = onEpisodeClick,
+            onEpisodeSelected = onEpisodeSelected,
+            onAllEpisodesSelected = onAllEpisodesSelected,
+            onInvertSelection = onInvertSelection,
+            onMarkSelectedWatched = onMarkSelectedWatched,
         )
     } else {
         AnimeScreenSmallImpl(
@@ -156,9 +199,18 @@ fun AnimeScreen(
             onRefresh = onRefresh,
             onAddToLibraryClicked = onAddToLibraryClicked,
             onEditCategoryClicked = onEditCategoryClicked,
+            onEditDisplayNameClicked = onEditDisplayNameClicked,
+            onShareClicked = onShareClicked,
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
+            onSearch = onSearch,
+            onTagSearch = onTagSearch,
+            onCoverClicked = onCoverClicked,
             onEpisodeClick = onEpisodeClick,
+            onEpisodeSelected = onEpisodeSelected,
+            onAllEpisodesSelected = onAllEpisodesSelected,
+            onInvertSelection = onInvertSelection,
+            onMarkSelectedWatched = onMarkSelectedWatched,
         )
     }
 }
@@ -171,11 +223,24 @@ private fun AnimeScreenSmallImpl(
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditDisplayNameClicked: (() -> Unit)?,
+    onShareClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
+    onSearch: (String, Boolean) -> Unit,
+    onTagSearch: (String) -> Unit,
+    onCoverClicked: () -> Unit,
     onEpisodeClick: (Long) -> Unit,
+    onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
+    onAllEpisodesSelected: (Boolean) -> Unit,
+    onInvertSelection: () -> Unit,
+    onMarkSelectedWatched: (Boolean) -> Unit,
 ) {
     val episodeListState = rememberLazyListState()
+
+    BackHandler(enabled = state.isSelectionMode) {
+        onAllEpisodesSelected(false)
+    }
 
     Scaffold(
         topBar = {
@@ -198,14 +263,27 @@ private fun AnimeScreenSmallImpl(
                 navigateUp = navigateUp,
                 onRefresh = onRefresh,
                 onEditCategoryClicked = onEditCategoryClicked,
+                onEditDisplayNameClicked = onEditDisplayNameClicked,
+                onShareClicked = onShareClicked,
+                actionModeCounter = state.selectedCount,
+                onCancelActionMode = { onAllEpisodesSelected(false) },
+                onSelectAll = { onAllEpisodesSelected(true) },
+                onInvertSelection = onInvertSelection,
                 titleAlphaProvider = { titleAlpha },
                 backgroundAlphaProvider = { backgroundAlpha },
+            )
+        },
+        bottomBar = {
+            AnimeBottomActionMenu(
+                visible = state.isSelectionMode,
+                selectedEpisodes = state.episodes.filter { it.id in state.selection },
+                onMarkSelectedWatched = onMarkSelectedWatched,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             val primaryEpisode = state.primaryEpisode
-            if (primaryEpisode != null) {
+            if (primaryEpisode != null && !state.isSelectionMode) {
                 SmallExtendedFloatingActionButton(
                     text = {
                         Text(
@@ -234,7 +312,7 @@ private fun AnimeScreenSmallImpl(
 
         PullRefresh(
             refreshing = state.isRefreshing,
-            enabled = state.sourceAvailable,
+            enabled = state.sourceAvailable && !state.isSelectionMode,
             onRefresh = onRefresh,
             indicatorPadding = PaddingValues(top = topPadding),
         ) {
@@ -259,6 +337,8 @@ private fun AnimeScreenSmallImpl(
                             anime = state.anime,
                             sourceName = state.sourceName,
                             sourceAvailable = state.sourceAvailable,
+                            onSearch = onSearch,
+                            onCoverClick = onCoverClicked,
                         )
                     }
                     item {
@@ -275,8 +355,8 @@ private fun AnimeScreenSmallImpl(
                     item {
                         ExpandableAnimeDescription(
                             description = state.anime.description,
-                            notes = state.anime.notes,
                             tags = state.anime.genre.orEmpty(),
+                            onTagSearch = onTagSearch,
                         )
                     }
                     item {
@@ -288,9 +368,12 @@ private fun AnimeScreenSmallImpl(
                     }
                     episodeItems(
                         episodes = state.episodes,
+                        selectedEpisodeIds = state.selection,
+                        selectionMode = state.isSelectionMode,
                         playbackStateByEpisodeId = state.playbackStateByEpisodeId,
                         sourceAvailable = state.sourceAvailable,
                         onEpisodeClick = onEpisodeClick,
+                        onEpisodeSelected = onEpisodeSelected,
                     )
                 }
             }
@@ -306,13 +389,26 @@ private fun AnimeScreenLargeImpl(
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditDisplayNameClicked: (() -> Unit)?,
+    onShareClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
+    onSearch: (String, Boolean) -> Unit,
+    onTagSearch: (String) -> Unit,
+    onCoverClicked: () -> Unit,
     onEpisodeClick: (Long) -> Unit,
+    onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
+    onAllEpisodesSelected: (Boolean) -> Unit,
+    onInvertSelection: () -> Unit,
+    onMarkSelectedWatched: (Boolean) -> Unit,
 ) {
     val episodeListState = rememberLazyListState()
     val layoutDirection = LocalLayoutDirection.current
     val insetPadding = WindowInsets.systemBars.only(WindowInsetsSides.Horizontal).asPaddingValues()
+
+    BackHandler(enabled = state.isSelectionMode) {
+        onAllEpisodesSelected(false)
+    }
 
     Scaffold(
         topBar = {
@@ -321,14 +417,27 @@ private fun AnimeScreenLargeImpl(
                 navigateUp = navigateUp,
                 onRefresh = onRefresh,
                 onEditCategoryClicked = onEditCategoryClicked,
+                onEditDisplayNameClicked = onEditDisplayNameClicked,
+                onShareClicked = onShareClicked,
+                actionModeCounter = state.selectedCount,
+                onCancelActionMode = { onAllEpisodesSelected(false) },
+                onSelectAll = { onAllEpisodesSelected(true) },
+                onInvertSelection = onInvertSelection,
                 titleAlphaProvider = { 1f },
                 backgroundAlphaProvider = { 1f },
+            )
+        },
+        bottomBar = {
+            AnimeBottomActionMenu(
+                visible = state.isSelectionMode,
+                selectedEpisodes = state.episodes.filter { it.id in state.selection },
+                onMarkSelectedWatched = onMarkSelectedWatched,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
             val primaryEpisode = state.primaryEpisode
-            if (primaryEpisode != null) {
+            if (primaryEpisode != null && !state.isSelectionMode) {
                 SmallExtendedFloatingActionButton(
                     text = {
                         Text(
@@ -354,7 +463,7 @@ private fun AnimeScreenLargeImpl(
     ) { contentPadding ->
         PullRefresh(
             refreshing = state.isRefreshing,
-            enabled = state.sourceAvailable,
+            enabled = state.sourceAvailable && !state.isSelectionMode,
             onRefresh = onRefresh,
             indicatorPadding = PaddingValues(
                 start = insetPadding.calculateStartPadding(layoutDirection),
@@ -379,6 +488,8 @@ private fun AnimeScreenLargeImpl(
                             anime = state.anime,
                             sourceName = state.sourceName,
                             sourceAvailable = state.sourceAvailable,
+                            onSearch = onSearch,
+                            onCoverClick = onCoverClicked,
                         )
                         AnimeActionRow(
                             favorite = state.anime.favorite,
@@ -391,8 +502,8 @@ private fun AnimeScreenLargeImpl(
                         )
                         ExpandableAnimeDescription(
                             description = state.anime.description,
-                            notes = state.anime.notes,
                             tags = state.anime.genre.orEmpty(),
+                            onTagSearch = onTagSearch,
                         )
                     }
                 },
@@ -418,9 +529,12 @@ private fun AnimeScreenLargeImpl(
                             }
                             episodeItems(
                                 episodes = state.episodes,
+                                selectedEpisodeIds = state.selection,
+                                selectionMode = state.isSelectionMode,
                                 playbackStateByEpisodeId = state.playbackStateByEpisodeId,
                                 sourceAvailable = state.sourceAvailable,
                                 onEpisodeClick = onEpisodeClick,
+                                onEpisodeSelected = onEpisodeSelected,
                             )
                         }
                     }
@@ -436,40 +550,85 @@ private fun AnimeToolbar(
     navigateUp: () -> Unit,
     onRefresh: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
+    onEditDisplayNameClicked: (() -> Unit)?,
+    onShareClicked: (() -> Unit)?,
+    actionModeCounter: Int,
+    onCancelActionMode: () -> Unit,
+    onSelectAll: () -> Unit,
+    onInvertSelection: () -> Unit,
     titleAlphaProvider: () -> Float,
     backgroundAlphaProvider: () -> Float,
 ) {
     AppBar(
         titleContent = {
-            AppBarTitle(
-                title = title,
-                modifier = Modifier.alpha(titleAlphaProvider()),
-            )
+            if (actionModeCounter > 0) {
+                AppBarTitle(title = actionModeCounter.toString())
+            } else {
+                AppBarTitle(
+                    title = title,
+                    modifier = Modifier.alpha(titleAlphaProvider()),
+                )
+            }
         },
         backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = backgroundAlphaProvider()),
         navigateUp = navigateUp,
+        isActionMode = actionModeCounter > 0,
+        onCancelActionMode = onCancelActionMode,
         actions = {
-            AppBarActions(
-                actions = persistentListOf<AppBar.AppBarAction>().builder()
-                    .apply {
-                        add(
-                            AppBar.Action(
-                                title = stringResource(MR.strings.action_retry),
-                                icon = Icons.Outlined.Refresh,
-                                onClick = onRefresh,
-                            ),
-                        )
-                        if (onEditCategoryClicked != null) {
+            if (actionModeCounter > 0) {
+                AppBarActions(
+                    actions = persistentListOf<AppBar.AppBarAction>(
+                        AppBar.Action(
+                            title = stringResource(MR.strings.action_select_all),
+                            icon = Icons.Outlined.DoneAll,
+                            onClick = onSelectAll,
+                        ),
+                        AppBar.Action(
+                            title = stringResource(MR.strings.action_select_inverse),
+                            icon = Icons.Outlined.Sync,
+                            onClick = onInvertSelection,
+                        ),
+                    ),
+                )
+            } else {
+                AppBarActions(
+                    actions = persistentListOf<AppBar.AppBarAction>().builder()
+                        .apply {
                             add(
-                                AppBar.OverflowAction(
-                                    title = stringResource(MR.strings.action_edit_categories),
-                                    onClick = onEditCategoryClicked,
+                                AppBar.Action(
+                                    title = stringResource(MR.strings.action_retry),
+                                    icon = Icons.Outlined.Refresh,
+                                    onClick = onRefresh,
                                 ),
                             )
+                            if (onEditCategoryClicked != null) {
+                                add(
+                                    AppBar.OverflowAction(
+                                        title = stringResource(MR.strings.action_edit_categories),
+                                        onClick = onEditCategoryClicked,
+                                    ),
+                                )
+                            }
+                            if (onEditDisplayNameClicked != null) {
+                                add(
+                                    AppBar.OverflowAction(
+                                        title = stringResource(MR.strings.action_set_display_name),
+                                        onClick = onEditDisplayNameClicked,
+                                    ),
+                                )
+                            }
+                            if (onShareClicked != null) {
+                                add(
+                                    AppBar.OverflowAction(
+                                        title = stringResource(MR.strings.action_share),
+                                        onClick = onShareClicked,
+                                    ),
+                                )
+                            }
                         }
-                    }
-                    .build(),
-            )
+                        .build(),
+                )
+            }
         },
     )
 }
@@ -481,6 +640,8 @@ private fun AnimeInfoBox(
     anime: AnimeTitle,
     sourceName: String?,
     sourceAvailable: Boolean,
+    onSearch: (String, Boolean) -> Unit,
+    onCoverClick: () -> Unit,
 ) {
     Box {
         val backdropGradientColors = listOf(Color.Transparent, MaterialTheme.colorScheme.background)
@@ -509,6 +670,7 @@ private fun AnimeInfoBox(
                     modifier = Modifier.fillMaxWidth(0.65f),
                     data = anime.toMangaCover(),
                     contentDescription = anime.displayTitle,
+                    onClick = onCoverClick,
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 AnimeContentInfo(
@@ -516,6 +678,7 @@ private fun AnimeInfoBox(
                     sourceName = sourceName,
                     sourceAvailable = sourceAvailable,
                     textAlign = TextAlign.Center,
+                    onSearch = onSearch,
                 )
             }
         } else {
@@ -532,13 +695,15 @@ private fun AnimeInfoBox(
                         .align(Alignment.Top),
                     data = anime.toMangaCover(),
                     contentDescription = anime.displayTitle,
+                    onClick = onCoverClick,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     AnimeContentInfo(
                         anime = anime,
                         sourceName = sourceName,
                         sourceAvailable = sourceAvailable,
                         textAlign = TextAlign.Start,
+                        onSearch = onSearch,
                     )
                 }
             }
@@ -547,11 +712,12 @@ private fun AnimeInfoBox(
 }
 
 @Composable
-private fun AnimeContentInfo(
+private fun ColumnScope.AnimeContentInfo(
     anime: AnimeTitle,
     sourceName: String?,
     sourceAvailable: Boolean,
     textAlign: TextAlign,
+    onSearch: (String, Boolean) -> Unit,
 ) {
     val context = LocalContext.current
     val title = anime.displayTitle.ifBlank { stringResource(MR.strings.unknown_title) }
@@ -560,33 +726,46 @@ private fun AnimeContentInfo(
         style = MaterialTheme.typography.titleLarge,
         modifier = Modifier.clickableNoIndication(
             onLongClick = { if (title.isNotBlank()) context.copyToClipboard(title, title) },
-            onClick = {},
+            onClick = { if (title.isNotBlank()) onSearch(title, true) },
         ),
         textAlign = textAlign,
     )
 
-    Text(
-        text = sourceName ?: stringResource(MR.strings.source_not_installed, anime.source.toString()),
-        style = MaterialTheme.typography.bodySmall,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
+    val originalTitle = anime.originalTitle?.trim().takeUnless { it.isNullOrEmpty() || it == title }
+    if (originalTitle != null) {
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = originalTitle,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .secondaryItemAlpha()
+                .clickableNoIndication(
+                    onLongClick = { context.copyToClipboard(originalTitle, originalTitle) },
+                    onClick = { onSearch(originalTitle, true) },
+                ),
+            textAlign = textAlign,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+
+    AnimeCompactMetadataLine(
+        text = animeCreditsLine(anime),
         textAlign = textAlign,
-        color = if (sourceAvailable) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
     )
 
-    anime.genre
-        ?.takeIf { it.isNotEmpty() }
-        ?.joinToString(" • ")
-        ?.let { genres ->
-            Text(
-                text = genres,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.secondaryItemAlpha(),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = textAlign,
-            )
-        }
+    AnimeStatusAndSourceRow(
+        anime = anime,
+        sourceName = sourceName,
+        sourceAvailable = sourceAvailable,
+        textAlign = textAlign,
+        onSearch = onSearch,
+    )
+
+    AnimeCompactMetadataLine(
+        text = animeFactsLine(anime),
+        textAlign = textAlign,
+    )
 }
 
 @Composable
@@ -635,6 +814,165 @@ private fun AnimeActionRow(
 }
 
 @Composable
+private fun ColumnScope.AnimeStatusAndSourceRow(
+    anime: AnimeTitle,
+    sourceName: String?,
+    sourceAvailable: Boolean,
+    textAlign: TextAlign,
+    onSearch: (String, Boolean) -> Unit,
+) {
+    val context = LocalContext.current
+    val sourceText = sourceName ?: stringResource(MR.strings.source_not_installed, anime.source.toString())
+    val isSourceError = !sourceAvailable
+    val statusText = anime.status.toAnimeStatusText()
+
+    if (statusText == null && sourceText.isBlank()) return
+
+    Row(
+        modifier = Modifier.secondaryItemAlpha(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        statusText?.let { status ->
+            Icon(
+                imageVector = anime.status.toAnimeStatusIcon(),
+                contentDescription = null,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .size(16.dp),
+            )
+            ProvideTextStyle(MaterialTheme.typography.bodyMedium) {
+                Text(
+                    text = status,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                    textAlign = textAlign,
+                )
+                DotSeparatorText()
+                if (isSourceError) {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(16.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Text(
+                    text = sourceText,
+                    modifier = Modifier.clickableNoIndication(
+                        onLongClick = {
+                            if (sourceText.isNotBlank()) {
+                                context.copyToClipboard(sourceText, sourceText)
+                            }
+                        },
+                        onClick = { onSearch(sourceText, false) },
+                    ),
+                    color = if (isSourceError) MaterialTheme.colorScheme.error else LocalContentColor.current,
+                    overflow = TextOverflow.Ellipsis,
+                    maxLines = 1,
+                )
+            }
+        } ?: run {
+            if (isSourceError) {
+                Icon(
+                    imageVector = Icons.Filled.Warning,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .padding(end = 4.dp)
+                        .size(16.dp),
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(
+                text = sourceText,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.clickableNoIndication(
+                    onLongClick = {
+                        if (sourceText.isNotBlank()) {
+                            context.copyToClipboard(sourceText, sourceText)
+                        }
+                    },
+                    onClick = { onSearch(sourceText, false) },
+                ),
+                textAlign = textAlign,
+                color = if (isSourceError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ColumnScope.AnimeCompactMetadataLine(
+    text: String?,
+    textAlign: TextAlign,
+) {
+    if (text.isNullOrBlank()) return
+
+    Spacer(modifier = Modifier.height(2.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.secondaryItemAlpha(),
+        textAlign = textAlign,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+@Composable
+private fun animeCreditsLine(anime: AnimeTitle): String? {
+    val studioLabel = stringResource(MR.strings.studio)
+    val directorLabel = stringResource(MR.strings.director)
+    val writerLabel = stringResource(MR.strings.writer)
+    val producerLabel = stringResource(MR.strings.producer)
+
+    return listOfNotNull(
+        anime.studio?.trim()?.takeIf { it.isNotEmpty() }?.let { "$studioLabel: $it" },
+        anime.director?.trim()?.takeIf { it.isNotEmpty() }?.let { "$directorLabel: $it" },
+        anime.writer?.trim()?.takeIf { it.isNotEmpty() }?.let { "$writerLabel: $it" },
+        anime.producer?.trim()?.takeIf { it.isNotEmpty() }?.let { "$producerLabel: $it" },
+    )
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(" • ")
+}
+
+private fun animeFactsLine(anime: AnimeTitle): String? {
+    return listOfNotNull(
+        anime.country?.trim()?.takeIf { it.isNotEmpty() },
+        anime.year?.trim()?.takeIf { it.isNotEmpty() },
+        anime.duration?.trim()?.takeIf { it.isNotEmpty() },
+    )
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(" • ")
+}
+
+
+@Composable
+private fun Long.toAnimeStatusText(): String? {
+    return when (this) {
+        SAnime.ONGOING.toLong() -> stringResource(MR.strings.ongoing)
+        SAnime.COMPLETED.toLong() -> stringResource(MR.strings.completed)
+        SAnime.CANCELLED.toLong() -> stringResource(MR.strings.cancelled)
+        SAnime.ON_HIATUS.toLong() -> stringResource(MR.strings.on_hiatus)
+        SAnime.UNKNOWN.toLong() -> null
+        else -> stringResource(MR.strings.unknown_status)
+    }
+}
+
+private fun Long.toAnimeStatusIcon(): ImageVector {
+    return when (this) {
+        SAnime.ONGOING.toLong() -> Icons.Outlined.Schedule
+        SAnime.COMPLETED.toLong() -> Icons.Outlined.DoneAll
+        SAnime.CANCELLED.toLong() -> Icons.Outlined.Close
+        SAnime.ON_HIATUS.toLong() -> Icons.Outlined.Pause
+        else -> Icons.Outlined.Block
+    }
+}
+
+@Composable
 private fun RowScope.AnimeActionButton(
     title: String,
     icon: ImageVector,
@@ -670,8 +1008,8 @@ private fun RowScope.AnimeActionButton(
 @Composable
 private fun ExpandableAnimeDescription(
     description: String?,
-    notes: String,
     tags: List<String>,
+    onTagSearch: (String) -> Unit,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val resolvedDescription = description.takeUnless { it.isNullOrBlank() }
@@ -680,7 +1018,6 @@ private fun ExpandableAnimeDescription(
     Column {
         AnimeSummary(
             description = resolvedDescription,
-            notes = notes,
             expanded = expanded,
             modifier = Modifier
                 .padding(top = 8.dp)
@@ -692,15 +1029,44 @@ private fun ExpandableAnimeDescription(
             Box(
                 modifier = Modifier
                     .padding(top = 8.dp)
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 12.dp)
+                    .animateContentSize()
+                    .fillMaxWidth(),
             ) {
+                var showMenu by remember { mutableStateOf(false) }
+                var selectedTag by remember { mutableStateOf("") }
+                val context = LocalContext.current
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(text = stringResource(MR.strings.action_search)) },
+                        onClick = {
+                            onTagSearch(selectedTag)
+                            showMenu = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text = stringResource(MR.strings.action_copy_to_clipboard)) },
+                        onClick = {
+                            if (selectedTag.isNotBlank()) {
+                                context.copyToClipboard(selectedTag, selectedTag)
+                            }
+                            showMenu = false
+                        },
+                    )
+                }
                 if (expanded) {
                     FlowRow(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
                     ) {
                         tags.forEach { tag ->
-                            AnimeTagChip(tag)
+                            AnimeTagChip(tag) {
+                                selectedTag = tag
+                                showMenu = true
+                            }
                         }
                     }
                 } else {
@@ -709,7 +1075,10 @@ private fun ExpandableAnimeDescription(
                         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
                     ) {
                         items(tags) { tag ->
-                            AnimeTagChip(tag)
+                            AnimeTagChip(tag) {
+                                selectedTag = tag
+                                showMenu = true
+                            }
                         }
                     }
                 }
@@ -721,10 +1090,11 @@ private fun ExpandableAnimeDescription(
 @Composable
 private fun AnimeSummary(
     description: String,
-    notes: String,
     expanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val preferences = remember { Injekt.get<UiPreferences>() }
+    val loadImages = remember { preferences.imagesInDescription.get() }
     val animProgress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
         label = "anime-summary",
@@ -736,8 +1106,7 @@ private fun AnimeSummary(
         contents = listOf(
             {
                 Text(
-                    // Shows at least 3 lines if no notes; 6 when notes are present.
-                    text = if (notes.isBlank()) "\n\n" else "\n\n\n\n\n",
+                    text = "\n\n",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -747,24 +1116,15 @@ private fun AnimeSummary(
                         infoHeight = size.height
                     },
                 ) {
-                    if (notes.isNotBlank()) {
-                        MangaNotesDisplay(
-                            content = notes,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(
-                                top = if (expanded) 0.dp else 12.dp,
-                                bottom = if (expanded) 16.dp else 12.dp,
-                            ),
-                        )
-                    }
-
                     SelectionContainer {
                         MarkdownRender(
                             content = description,
                             modifier = Modifier.secondaryItemAlpha(),
-                            loadImages = false,
+                            annotator = animeDescriptionAnnotator(
+                                loadImages = loadImages,
+                                linkStyle = getMarkdownLinkStyle().toSpanStyle(),
+                            ),
+                            loadImages = loadImages,
                         )
                     }
                 }
@@ -806,11 +1166,56 @@ private fun AnimeSummary(
 }
 
 @Composable
-private fun AnimeTagChip(text: String) {
+private fun animeDescriptionAnnotator(loadImages: Boolean, linkStyle: SpanStyle) = remember(loadImages, linkStyle) {
+    markdownAnnotator(
+        annotate = { content, child ->
+            if (!loadImages && child.type == MarkdownElementTypes.IMAGE) {
+                val inlineLink = child.findChildOfType(MarkdownElementTypes.INLINE_LINK)
+
+                val url = inlineLink?.findChildOfType(MarkdownElementTypes.LINK_DESTINATION)
+                    ?.getUnescapedTextInNode(content)
+                    ?: inlineLink?.findChildOfType(MarkdownElementTypes.AUTOLINK)
+                        ?.findChildOfType(MarkdownTokenTypes.AUTOLINK)
+                        ?.getUnescapedTextInNode(content)
+                    ?: return@markdownAnnotator false
+
+                val textNode = inlineLink?.findChildOfType(MarkdownElementTypes.LINK_TITLE)
+                    ?: inlineLink?.findChildOfType(MarkdownElementTypes.LINK_TEXT)
+                val altText = textNode?.findChildOfType(MarkdownTokenTypes.TEXT)
+                    ?.getUnescapedTextInNode(content).orEmpty()
+
+                withLink(LinkAnnotation.Url(url = url)) {
+                    pushStyle(linkStyle)
+                    appendInlineContent(MARKDOWN_INLINE_IMAGE_TAG)
+                    append(altText)
+                    pop()
+                }
+
+                return@markdownAnnotator true
+            }
+
+            if (child.type in DISALLOWED_MARKDOWN_TYPES) {
+                append(content.substring(child.startOffset, child.endOffset))
+                return@markdownAnnotator true
+            }
+
+            false
+        },
+        config = markdownAnnotatorConfig(
+            eolAsNewLine = true,
+        ),
+    )
+}
+
+@Composable
+private fun AnimeTagChip(
+    text: String,
+    onClick: () -> Unit,
+) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
         SuggestionChip(
             modifier = Modifier.padding(vertical = 4.dp),
-            onClick = {},
+            onClick = onClick,
             label = { Text(text = text, style = MaterialTheme.typography.bodySmall) },
         )
     }
@@ -847,9 +1252,12 @@ private fun EpisodeHeader(
 
 private fun LazyListScope.episodeItems(
     episodes: List<AnimeEpisode>,
+    selectedEpisodeIds: Set<Long>,
+    selectionMode: Boolean,
     playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
     sourceAvailable: Boolean,
     onEpisodeClick: (Long) -> Unit,
+    onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
 ) {
     if (episodes.isEmpty()) {
         item {
@@ -869,9 +1277,20 @@ private fun LazyListScope.episodeItems(
     ) { episode ->
         AnimeEpisodeListItem(
             episode = episode,
+            selected = episode.id in selectedEpisodeIds,
+            selectionMode = selectionMode,
             playbackState = playbackStateByEpisodeId[episode.id],
             sourceAvailable = sourceAvailable,
-            onClick = { onEpisodeClick(episode.id) },
+            onClick = {
+                if (selectionMode) {
+                    onEpisodeSelected(episode, episode.id !in selectedEpisodeIds, false)
+                } else {
+                    onEpisodeClick(episode.id)
+                }
+            },
+            onLongClick = {
+                onEpisodeSelected(episode, true, true)
+            },
         )
     }
 }
@@ -879,9 +1298,12 @@ private fun LazyListScope.episodeItems(
 @Composable
 private fun AnimeEpisodeListItem(
     episode: AnimeEpisode,
+    selected: Boolean,
+    selectionMode: Boolean,
     playbackState: AnimePlaybackState?,
     sourceAvailable: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     val context = LocalContext.current
     val progress = playbackState.progressFraction()
@@ -904,7 +1326,17 @@ private fun AnimeEpisodeListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = sourceAvailable, onClick = onClick)
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                } else {
+                    Color.Transparent
+                },
+            )
+            .clickableNoIndication(
+                onLongClick = onLongClick,
+                onClick = onClick,
+            )
             .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
     ) {
         Column(
@@ -969,21 +1401,42 @@ private fun AnimeEpisodeListItem(
             }
         }
 
-        Icon(
-            imageVector = Icons.Filled.PlayArrow,
-            contentDescription = stringResource(
-                if (playbackState?.positionMs?.let { it > 0L } == true) {
-                    MR.strings.action_resume
-                } else {
-                    MR.strings.action_start
-                },
-            ),
-            modifier = Modifier.padding(start = 4.dp),
-            tint = if (sourceAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (!selectionMode) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = stringResource(
+                    if (playbackState?.positionMs?.let { it > 0L } == true) {
+                        MR.strings.action_resume
+                    } else {
+                        MR.strings.action_start
+                    },
+                ),
+                modifier = Modifier.padding(start = 4.dp),
+                tint = if (sourceAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 
     HorizontalDivider()
+}
+
+@Composable
+private fun AnimeBottomActionMenu(
+    visible: Boolean,
+    selectedEpisodes: List<AnimeEpisode>,
+    onMarkSelectedWatched: (Boolean) -> Unit,
+) {
+    MangaBottomActionMenu(
+        visible = visible,
+        onMarkAsReadClicked = {
+            onMarkSelectedWatched(true)
+        }.takeIf { selectedEpisodes.any { !it.completed || !it.watched } },
+        onMarkAsUnreadClicked = {
+            onMarkSelectedWatched(false)
+        }.takeIf { selectedEpisodes.any { it.completed || it.watched } },
+        markAsReadLabel = MR.strings.action_mark_as_watched,
+        markAsUnreadLabel = MR.strings.action_mark_as_unwatched,
+    )
 }
 
 private fun AnimePlaybackState?.progressFraction(): Float? {

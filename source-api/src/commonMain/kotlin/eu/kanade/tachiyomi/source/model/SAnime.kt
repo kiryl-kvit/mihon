@@ -10,6 +10,22 @@ interface SAnime : Serializable {
 
     var title: String
 
+    var original_title: String?
+
+    var country: String?
+
+    var studio: String?
+
+    var producer: String?
+
+    var director: String?
+
+    var writer: String?
+
+    var year: String?
+
+    var duration: String?
+
     var description: String?
 
     var genre: String?
@@ -30,6 +46,14 @@ interface SAnime : Serializable {
     fun copy() = create().also {
         it.url = url
         it.title = title
+        it.original_title = original_title
+        it.country = country
+        it.studio = studio
+        it.producer = producer
+        it.director = director
+        it.writer = writer
+        it.year = year
+        it.duration = duration
         it.description = description
         it.genre = genre
         it.status = status

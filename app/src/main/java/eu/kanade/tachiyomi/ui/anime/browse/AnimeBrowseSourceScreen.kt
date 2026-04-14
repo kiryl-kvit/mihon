@@ -24,6 +24,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,9 @@ import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.anime.AnimeBrowseSourceContent
 import eu.kanade.tachiyomi.ui.browse.source.browse.SourceFilterDialog
 import eu.kanade.tachiyomi.ui.anime.AnimeScreen
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.collections.immutable.persistentListOf
 import mihon.presentation.core.util.collectAsLazyPagingItems
 import tachiyomi.i18n.MR
@@ -59,6 +63,8 @@ data class AnimeBrowseSourceScreen(
     val sourceId: Long,
     private val listingQuery: String?,
 ) : Screen() {
+
+    suspend fun search(query: String) = queryEvent.send(SearchType.Text(query))
 
     @Composable
     override fun Content() {
@@ -203,6 +209,23 @@ data class AnimeBrowseSourceScreen(
             }
             null -> Unit
         }
+
+        LaunchedEffect(Unit) {
+            queryEvent.receiveAsFlow()
+                .collectLatest {
+                    when (it) {
+                        is SearchType.Text -> screenModel.search(it.txt)
+                    }
+                }
+        }
+    }
+
+    companion object {
+        private val queryEvent = Channel<SearchType>()
+    }
+
+    sealed class SearchType(val txt: String) {
+        class Text(txt: String) : SearchType(txt)
     }
 }
 

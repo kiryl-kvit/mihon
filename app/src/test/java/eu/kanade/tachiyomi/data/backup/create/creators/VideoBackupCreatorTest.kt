@@ -57,8 +57,17 @@ class AnimeBackupCreatorTest {
             source = 10L,
             url = "/video",
             title = "Video",
+            originalTitle = "Original Video",
+            country = "Japan",
+            studio = "Studio A",
+            producer = "Producer A",
+            director = "Director A",
+            writer = "Writer A",
+            year = "2026",
+            duration = "24 min.",
             favorite = true,
             initialized = true,
+            status = 1L,
         )
         val episode = AnimeEpisode.create().copy(
             id = 200L,
@@ -112,6 +121,15 @@ class AnimeBackupCreatorTest {
         )
 
         backup.size shouldBe 1
+        backup.single().originalTitle shouldBe video.originalTitle
+        backup.single().country shouldBe video.country
+        backup.single().studio shouldBe video.studio
+        backup.single().producer shouldBe video.producer
+        backup.single().director shouldBe video.director
+        backup.single().writer shouldBe video.writer
+        backup.single().year shouldBe video.year
+        backup.single().duration shouldBe video.duration
+        backup.single().status shouldBe video.status
         backup.single().playbackPreferences?.dubKey shouldBe playbackPreferences.dubKey
         backup.single().playbackPreferences?.streamKey shouldBe playbackPreferences.streamKey
         backup.single().playbackPreferences?.sourceQualityKey shouldBe playbackPreferences.sourceQualityKey

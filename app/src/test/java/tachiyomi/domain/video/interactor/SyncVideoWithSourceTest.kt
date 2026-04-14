@@ -53,8 +53,17 @@ class SyncAnimeWithSourceTest {
             details = SAnime.create().also {
                 it.url = localVideo.url
                 it.title = "New title"
+                it.original_title = "Original title"
+                it.country = "Japan"
+                it.studio = "Studio A"
+                it.producer = "Producer A"
+                it.director = "Director A"
+                it.writer = "Writer A"
+                it.year = "2026"
+                it.duration = "24 min."
                 it.description = "New description"
                 it.genre = "Action, Drama"
+                it.status = SAnime.ONGOING
                 it.thumbnail_url = "https://cdn.example.com/video.jpg"
                 it.initialized = true
             },
@@ -91,8 +100,17 @@ class SyncAnimeWithSourceTest {
         videoRepository.updates shouldContain AnimeTitleUpdate(
             id = localVideo.id,
             title = "New title",
+            originalTitle = "Original title",
+            country = "Japan",
+            studio = "Studio A",
+            producer = "Producer A",
+            director = "Director A",
+            writer = "Writer A",
+            year = "2026",
+            duration = "24 min.",
             description = "New description",
             genre = listOf("Action", "Drama"),
+            status = SAnime.ONGOING.toLong(),
             thumbnailUrl = "https://cdn.example.com/video.jpg",
             initialized = true,
         )

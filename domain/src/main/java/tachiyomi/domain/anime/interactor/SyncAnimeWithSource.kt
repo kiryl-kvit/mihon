@@ -28,8 +28,17 @@ class SyncAnimeWithSource(
         val animeUpdate = AnimeTitleUpdate(
             id = anime.id,
             title = networkAnime.title.takeIf { it.isNotBlank() && it != anime.title },
+            originalTitle = networkAnime.original_title.takeIf { !it.isNullOrBlank() && it != anime.originalTitle },
+            country = networkAnime.country.takeIf { !it.isNullOrBlank() && it != anime.country },
+            studio = networkAnime.studio.takeIf { !it.isNullOrBlank() && it != anime.studio },
+            producer = networkAnime.producer.takeIf { !it.isNullOrBlank() && it != anime.producer },
+            director = networkAnime.director.takeIf { !it.isNullOrBlank() && it != anime.director },
+            writer = networkAnime.writer.takeIf { !it.isNullOrBlank() && it != anime.writer },
+            year = networkAnime.year.takeIf { !it.isNullOrBlank() && it != anime.year },
+            duration = networkAnime.duration.takeIf { !it.isNullOrBlank() && it != anime.duration },
             description = networkAnime.description.takeIf { !it.isNullOrBlank() && it != anime.description },
             genre = networkAnime.getGenres().takeIf { !it.isNullOrEmpty() && it != anime.genre },
+            status = networkAnime.status.toLong().takeIf { it != anime.status },
             thumbnailUrl = networkAnime.thumbnail_url.takeIf { !it.isNullOrBlank() && it != anime.thumbnailUrl },
             initialized = true.takeIf { !anime.initialized },
         )
