@@ -79,6 +79,18 @@ class SyncAnimeWithSource(
         val episodesToUpdate = mutableListOf<AnimeEpisodeUpdate>()
         val matchedEpisodeIds = mutableSetOf<Long>()
         val remainingEpisodes = representativeEpisodes.toMutableList()
+        var maxSeenUploadDate = 0L
+
+        fun resolveDateUpload(sourceDateUpload: Long, existingDateUpload: Long? = null): Long {
+            return when {
+                sourceDateUpload != 0L -> {
+                    maxSeenUploadDate = maxOf(maxSeenUploadDate, sourceDateUpload)
+                    sourceDateUpload
+                }
+                existingDateUpload != null && existingDateUpload != 0L -> existingDateUpload
+                else -> if (maxSeenUploadDate == 0L) now else maxSeenUploadDate
+            }
+        }
 
         fun matchEpisode(
             sourceEpisode: IndexedSourceEpisode,
@@ -96,6 +108,7 @@ class SyncAnimeWithSource(
         }
 
         sourceEpisodes.forEach { sourceEpisode ->
+            val sourceDateUpload = sourceEpisode.episode.date_upload
             val existingEpisode = matchEpisode(sourceEpisode) { it.url == sourceEpisode.episode.url }
                 ?: matchEpisode(sourceEpisode) {
                     it.name == sourceEpisode.resolvedName && it.episodeNumber == sourceEpisode.episodeNumber
@@ -110,10 +123,13 @@ class SyncAnimeWithSource(
                 }
 
             if (existingEpisode == null) {
-                episodesToInsert += sourceEpisode.episode.toDomainEpisode(
+                val episodeToInsert = sourceEpisode.episode.toDomainEpisode(
                     animeId = anime.id,
                     sourceOrder = sourceEpisode.sourceOrder,
                     dateFetch = now,
+                )
+                episodesToInsert += episodeToInsert.copy(
+                    dateUpload = resolveDateUpload(sourceDateUpload = sourceDateUpload),
                 )
                 return@forEach
             }
@@ -121,6 +137,12 @@ class SyncAnimeWithSource(
             matchedEpisodeIds += existingEpisode.id
 
             val updatedEpisode = existingEpisode.copyFrom(sourceEpisode.episode, sourceEpisode.sourceOrder)
+                .copy(
+                    dateUpload = resolveDateUpload(
+                        sourceDateUpload = sourceDateUpload,
+                        existingDateUpload = existingEpisode.dateUpload,
+                    ),
+                )
             val episodeUpdate = AnimeEpisodeUpdate(
                 id = existingEpisode.id,
                 url = updatedEpisode.url.takeIf { it != existingEpisode.url },

@@ -208,7 +208,7 @@ class SyncAnimeWithSourceTest {
             now = { 20_000L },
         )(localVideo) shouldBe SyncAnimeWithSource.SyncResult(
             insertedEpisodes = 0,
-            updatedEpisodes = 2,
+            updatedEpisodes = 1,
             removedEpisodes = 2,
             hasMetadataChanges = false,
         )
@@ -223,14 +223,213 @@ class SyncAnimeWithSourceTest {
             AnimeEpisodeUpdate(
                 id = staleEpisode1.id,
                 url = duplicateEpisode1.url,
-                dateUpload = 0L,
-            ),
-            AnimeEpisodeUpdate(
-                id = duplicateEpisode2.id,
-                dateUpload = 0L,
             ),
         )
         episodeRepository.removals.flatten().sorted() shouldContainExactly listOf(11L, 20L)
+    }
+
+    @Test
+    fun `sync assigns fallback upload dates to new episodes when source dates are missing`() = runTest {
+        val localVideo = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            url = "/animes/1",
+            title = "Video",
+            initialized = true,
+        )
+        val source = FakeAnimeSource(
+            details = SAnime.create().also {
+                it.url = localVideo.url
+                it.title = localVideo.title
+            },
+            episodes = listOf(
+                SEpisode.create().also {
+                    it.url = "/animes/1/episodes/1"
+                    it.name = "Episode 1"
+                    it.date_upload = 123L
+                    it.episode_number = 1f
+                },
+                SEpisode.create().also {
+                    it.url = "/animes/1/episodes/2"
+                    it.name = "Episode 2"
+                    it.date_upload = 0L
+                    it.episode_number = 2f
+                },
+                SEpisode.create().also {
+                    it.url = "/animes/1/episodes/3"
+                    it.name = "Episode 3"
+                    it.date_upload = 0L
+                    it.episode_number = 3f
+                },
+            ),
+        )
+        val videoRepository = FakeAnimeRepository(localVideo)
+        val episodeRepository = FakeAnimeEpisodeRepository(emptyList())
+
+        SyncAnimeWithSource(
+            animeRepository = videoRepository,
+            animeEpisodeRepository = episodeRepository,
+            animeSourceManager = FakeAnimeSourceManager(source),
+            now = { 10_000L },
+        )(localVideo) shouldBe SyncAnimeWithSource.SyncResult(
+            insertedEpisodes = 3,
+            updatedEpisodes = 0,
+            removedEpisodes = 0,
+            hasMetadataChanges = false,
+        )
+
+        episodeRepository.inserts shouldContainExactly listOf(
+            AnimeEpisode.create().copy(
+                animeId = localVideo.id,
+                url = "/animes/1/episodes/1",
+                name = "Episode 1",
+                dateFetch = 10_000L,
+                sourceOrder = 0L,
+                dateUpload = 123L,
+                episodeNumber = 1.0,
+            ),
+            AnimeEpisode.create().copy(
+                animeId = localVideo.id,
+                url = "/animes/1/episodes/2",
+                name = "Episode 2",
+                dateFetch = 10_000L,
+                sourceOrder = 1L,
+                dateUpload = 123L,
+                episodeNumber = 2.0,
+            ),
+            AnimeEpisode.create().copy(
+                animeId = localVideo.id,
+                url = "/animes/1/episodes/3",
+                name = "Episode 3",
+                dateFetch = 10_000L,
+                sourceOrder = 2L,
+                dateUpload = 123L,
+                episodeNumber = 3.0,
+            ),
+        )
+    }
+
+    @Test
+    fun `sync keeps existing upload date when source omits it`() = runTest {
+        val localVideo = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            url = "/animes/1",
+            title = "Video",
+            initialized = true,
+        )
+        val existingEpisode = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = localVideo.id,
+            url = "/animes/1/episodes/1",
+            name = "Episode 1",
+            dateUpload = 123L,
+            episodeNumber = 1.0,
+            sourceOrder = 0L,
+        )
+        val source = FakeAnimeSource(
+            details = SAnime.create().also {
+                it.url = localVideo.url
+                it.title = localVideo.title
+            },
+            episodes = listOf(
+                SEpisode.create().also {
+                    it.url = existingEpisode.url
+                    it.name = "Episode 1 updated"
+                    it.date_upload = 0L
+                    it.episode_number = 1f
+                },
+            ),
+        )
+        val videoRepository = FakeAnimeRepository(localVideo)
+        val episodeRepository = FakeAnimeEpisodeRepository(listOf(existingEpisode))
+
+        SyncAnimeWithSource(
+            animeRepository = videoRepository,
+            animeEpisodeRepository = episodeRepository,
+            animeSourceManager = FakeAnimeSourceManager(source),
+            now = { 10_000L },
+        )(localVideo) shouldBe SyncAnimeWithSource.SyncResult(
+            insertedEpisodes = 0,
+            updatedEpisodes = 1,
+            removedEpisodes = 0,
+            hasMetadataChanges = false,
+        )
+
+        episodeRepository.updates.single() shouldBe AnimeEpisodeUpdate(
+            id = existingEpisode.id,
+            name = "Episode 1 updated",
+        )
+    }
+
+    @Test
+    fun `sync backfills fallback upload date for existing episodes missing it`() = runTest {
+        val localVideo = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            url = "/animes/1",
+            title = "Video",
+            initialized = true,
+        )
+        val existingEpisodes = listOf(
+            AnimeEpisode.create().copy(
+                id = 10L,
+                animeId = localVideo.id,
+                url = "/animes/1/episodes/1",
+                name = "Episode 1",
+                dateUpload = 123L,
+                episodeNumber = 1.0,
+                sourceOrder = 0L,
+            ),
+            AnimeEpisode.create().copy(
+                id = 11L,
+                animeId = localVideo.id,
+                url = "/animes/1/episodes/2",
+                name = "Episode 2",
+                dateUpload = 0L,
+                episodeNumber = 2.0,
+                sourceOrder = 1L,
+            ),
+        )
+        val source = FakeAnimeSource(
+            details = SAnime.create().also {
+                it.url = localVideo.url
+                it.title = localVideo.title
+            },
+            episodes = listOf(
+                SEpisode.create().also {
+                    it.url = "/animes/1/episodes/1"
+                    it.name = "Episode 1"
+                    it.date_upload = 123L
+                    it.episode_number = 1f
+                },
+                SEpisode.create().also {
+                    it.url = "/animes/1/episodes/2"
+                    it.name = "Episode 2"
+                    it.date_upload = 0L
+                    it.episode_number = 2f
+                },
+            ),
+        )
+        val videoRepository = FakeAnimeRepository(localVideo)
+        val episodeRepository = FakeAnimeEpisodeRepository(existingEpisodes)
+
+        SyncAnimeWithSource(
+            animeRepository = videoRepository,
+            animeEpisodeRepository = episodeRepository,
+            animeSourceManager = FakeAnimeSourceManager(source),
+            now = { 10_000L },
+        )(localVideo) shouldBe SyncAnimeWithSource.SyncResult(
+            insertedEpisodes = 0,
+            updatedEpisodes = 1,
+            removedEpisodes = 0,
+            hasMetadataChanges = false,
+        )
+
+        episodeRepository.updates.single() shouldBe AnimeEpisodeUpdate(
+            id = 11L,
+            dateUpload = 123L,
+        )
     }
 
     private class FakeAnimeRepository(
