@@ -208,7 +208,9 @@ class VideoPlayerActivity : BaseActivity() {
                         }
                     }
                 }
-                var controlsVisible by remember(current.episodeId, current.streamUrl) { mutableStateOf(false) }
+                // Keep controller visibility state stable so the PlayerView listener stays in sync
+                // when the current stream changes after applying dub or quality selections.
+                var controlsVisible by remember { mutableStateOf(false) }
                 var startupOverlayVisible by remember(current.episodeId, current.streamUrl) { mutableStateOf(player == null) }
                 var settingsVisible by remember(current.episodeId, current.streamUrl) { mutableStateOf(false) }
                 val currentPlayer = remember(current.episodeId, current.streamUrl) {
@@ -261,10 +263,6 @@ class VideoPlayerActivity : BaseActivity() {
                             viewModel.playNextEpisode()
                         },
                     )
-                }
-
-                LaunchedEffect(current.episodeId, current.streamUrl) {
-                    controlsVisible = false
                 }
 
                 LaunchedEffect(current.episodeId, current.streamUrl) {
