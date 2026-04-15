@@ -35,6 +35,8 @@ data class BackupAnime(
     @ProtoNumber(28) var year: String? = null,
     @ProtoNumber(29) var duration: String? = null,
     @ProtoNumber(30) var status: Long = 0,
+    @ProtoNumber(31) var episodeFlags: Long = 0,
+    @ProtoNumber(32) var coverLastModified: Long = 0,
 ) {
     fun getAnimeImpl(): AnimeTitle {
         return AnimeTitle.create().copy(
@@ -56,6 +58,8 @@ data class BackupAnime(
             favorite = this@BackupAnime.favorite,
             source = this@BackupAnime.source,
             dateAdded = this@BackupAnime.dateAdded,
+            episodeFlags = this@BackupAnime.episodeFlags,
+            coverLastModified = this@BackupAnime.coverLastModified,
             initialized = this@BackupAnime.initialized,
             lastUpdate = this@BackupAnime.lastUpdate,
             lastModifiedAt = this@BackupAnime.lastModifiedAt,

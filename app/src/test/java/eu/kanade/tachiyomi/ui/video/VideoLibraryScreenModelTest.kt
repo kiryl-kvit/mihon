@@ -1344,6 +1344,7 @@ class AnimeLibraryScreenModelTest {
         override suspend fun getFavorites(): List<AnimeTitle> = favorites
         override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(favorites)
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = favorites
+        override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = true
         override suspend fun update(update: AnimeTitleUpdate): Boolean {
             updates += update
             return true

@@ -1,5 +1,6 @@
 package eu.kanade.domain.anime.model
 
+import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.anime.model.AnimeTitle
 
@@ -9,6 +10,10 @@ fun AnimeTitle.toMangaCover(): MangaCover {
         sourceId = source,
         isMangaFavorite = favorite,
         url = thumbnailUrl,
-        lastModified = lastModifiedAt,
+        lastModified = coverLastModified,
     )
+}
+
+fun AnimeTitle.episodesFiltered(): Boolean {
+    return unwatchedFilter != TriState.DISABLED || startedFilter != TriState.DISABLED
 }

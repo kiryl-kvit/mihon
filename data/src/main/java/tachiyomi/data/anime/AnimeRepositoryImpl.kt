@@ -76,6 +76,17 @@ class AnimeRepositoryImpl(
         }
     }
 
+    override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean {
+        return handler.await {
+            animesQueries.updateDisplayName(
+                displayName = displayName,
+                animeId = animeId,
+                profileId = profileProvider.activeProfileId,
+            )
+            true
+        }
+    }
+
     override suspend fun update(update: AnimeTitleUpdate): Boolean {
         return try {
             partialUpdate(update)
@@ -120,6 +131,8 @@ class AnimeRepositoryImpl(
                     initialized = it.initialized,
                     lastUpdate = it.lastUpdate,
                     dateAdded = it.dateAdded,
+                    episodeFlags = it.episodeFlags,
+                    coverLastModified = it.coverLastModified,
                     version = it.version,
                     notes = it.notes,
                     updateTitle = it.title.isNotBlank(),
@@ -165,6 +178,8 @@ class AnimeRepositoryImpl(
                     initialized = value.initialized,
                     lastUpdate = value.lastUpdate,
                     dateAdded = value.dateAdded,
+                    episodeFlags = value.episodeFlags,
+                    coverLastModified = value.coverLastModified,
                     animeId = value.id,
                     version = value.version,
                     notes = value.notes,

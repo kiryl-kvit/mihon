@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.AndroidPreferenceStore
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
@@ -103,6 +104,55 @@ class ProfileAwareLibraryPreferencesTest {
         values.last() shouldBe true
 
         job.cancel()
+    }
+
+    @Test
+    fun `default episode settings stay isolated per profile`() {
+        val fixture = createFixture()
+
+        with(fixture.libraryPreferences) {
+            filterEpisodeByUnwatched.set(AnimeTitle.EPISODE_SHOW_UNWATCHED)
+            filterEpisodeByStarted.set(AnimeTitle.EPISODE_SHOW_STARTED)
+            sortEpisodeBySourceOrNumber.set(AnimeTitle.EPISODE_SORTING_ALPHABET)
+            displayEpisodeByNameOrNumber.set(AnimeTitle.EPISODE_DISPLAY_NUMBER)
+            sortEpisodeByAscendingOrDescending.set(AnimeTitle.EPISODE_SORT_ASC)
+        }
+
+        fixture.activeProfileId.value = 2L
+
+        with(fixture.libraryPreferences) {
+            filterEpisodeByUnwatched.get() shouldBe AnimeTitle.SHOW_ALL
+            filterEpisodeByStarted.get() shouldBe AnimeTitle.SHOW_ALL
+            sortEpisodeBySourceOrNumber.get() shouldBe AnimeTitle.EPISODE_SORTING_SOURCE
+            displayEpisodeByNameOrNumber.get() shouldBe AnimeTitle.EPISODE_DISPLAY_NAME
+            sortEpisodeByAscendingOrDescending.get() shouldBe AnimeTitle.EPISODE_SORT_DESC
+
+            filterEpisodeByUnwatched.set(AnimeTitle.EPISODE_SHOW_WATCHED)
+            filterEpisodeByStarted.set(AnimeTitle.EPISODE_SHOW_NOT_STARTED)
+            sortEpisodeBySourceOrNumber.set(AnimeTitle.EPISODE_SORTING_UPLOAD_DATE)
+            displayEpisodeByNameOrNumber.set(AnimeTitle.EPISODE_DISPLAY_NAME)
+            sortEpisodeByAscendingOrDescending.set(AnimeTitle.EPISODE_SORT_DESC)
+        }
+
+        fixture.activeProfileId.value = 1L
+
+        with(fixture.libraryPreferences) {
+            filterEpisodeByUnwatched.get() shouldBe AnimeTitle.EPISODE_SHOW_UNWATCHED
+            filterEpisodeByStarted.get() shouldBe AnimeTitle.EPISODE_SHOW_STARTED
+            sortEpisodeBySourceOrNumber.get() shouldBe AnimeTitle.EPISODE_SORTING_ALPHABET
+            displayEpisodeByNameOrNumber.get() shouldBe AnimeTitle.EPISODE_DISPLAY_NUMBER
+            sortEpisodeByAscendingOrDescending.get() shouldBe AnimeTitle.EPISODE_SORT_ASC
+        }
+
+        fixture.activeProfileId.value = 2L
+
+        with(fixture.libraryPreferences) {
+            filterEpisodeByUnwatched.get() shouldBe AnimeTitle.EPISODE_SHOW_WATCHED
+            filterEpisodeByStarted.get() shouldBe AnimeTitle.EPISODE_SHOW_NOT_STARTED
+            sortEpisodeBySourceOrNumber.get() shouldBe AnimeTitle.EPISODE_SORTING_UPLOAD_DATE
+            displayEpisodeByNameOrNumber.get() shouldBe AnimeTitle.EPISODE_DISPLAY_NAME
+            sortEpisodeByAscendingOrDescending.get() shouldBe AnimeTitle.EPISODE_SORT_DESC
+        }
     }
 
     @Test

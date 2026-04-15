@@ -73,6 +73,8 @@ class AnimeRestorer(
                         initialized = dbAnime.initialized || anime.initialized,
                         lastUpdate = anime.lastUpdate,
                         dateAdded = anime.dateAdded,
+                        episodeFlags = anime.episodeFlags,
+                        coverLastModified = anime.coverLastModified,
                         version = maxOf(dbAnime.version, anime.version),
                         notes = anime.notes,
                     ),

@@ -131,6 +131,8 @@ import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
 import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
+import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.GetAnimeUpdates
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
@@ -236,6 +238,8 @@ class DomainModule : InjektModule {
         addSingletonFactory<AnimePlaybackStateRepository> { AnimePlaybackStateRepositoryImpl(get(), get()) }
         addSingletonFactory<AnimeUpdatesRepository> { AnimeUpdatesRepositoryImpl(get(), get()) }
         addFactory { GetAnime(get()) }
+        addFactory { SetAnimeEpisodeFlags(get()) }
+        addFactory { SetAnimeDefaultEpisodeFlags(get(), get()) }
         addFactory { GetAnimeUpdates(get(), get()) }
         addFactory { NetworkToLocalAnime(get()) }
         addFactory { SyncAnimeWithSource(get(), get(), get()) }

@@ -25,6 +25,8 @@ CREATE TABLE animes(
     initialized INTEGER AS Boolean NOT NULL,
     last_update INTEGER,
     date_added INTEGER NOT NULL,
+    episode_flags INTEGER NOT NULL DEFAULT 0,
+    cover_last_modified INTEGER NOT NULL DEFAULT 0,
     last_modified_at INTEGER NOT NULL DEFAULT 0,
     favorite_modified_at INTEGER,
     version INTEGER NOT NULL DEFAULT 0,
@@ -91,8 +93,8 @@ DELETE FROM animes
 WHERE profile_id = :profileId;
 
 insert:
-INSERT INTO animes(profile_id, source, url, title, display_name, original_title, country, studio, producer, director, writer, year, duration, description, genre, status, thumbnail_url, favorite, initialized, last_update, date_added, last_modified_at, version, notes)
-VALUES (:profileId, :source, :url, :title, :displayName, :originalTitle, :country, :studio, :producer, :director, :writer, :year, :duration, :description, :genre, :status, :thumbnailUrl, :favorite, :initialized, :lastUpdate, :dateAdded, 0, :version, :notes);
+INSERT INTO animes(profile_id, source, url, title, display_name, original_title, country, studio, producer, director, writer, year, duration, description, genre, status, thumbnail_url, favorite, initialized, last_update, date_added, episode_flags, cover_last_modified, last_modified_at, version, notes)
+VALUES (:profileId, :source, :url, :title, :displayName, :originalTitle, :country, :studio, :producer, :director, :writer, :year, :duration, :description, :genre, :status, :thumbnailUrl, :favorite, :initialized, :lastUpdate, :dateAdded, :episodeFlags, :coverLastModified, 0, :version, :notes);
 
 update:
 UPDATE animes SET
@@ -116,8 +118,16 @@ UPDATE animes SET
     initialized = coalesce(:initialized, initialized),
     last_update = coalesce(:lastUpdate, last_update),
     date_added = coalesce(:dateAdded, date_added),
+    episode_flags = coalesce(:episodeFlags, episode_flags),
+    cover_last_modified = coalesce(:coverLastModified, cover_last_modified),
     version = coalesce(:version, version),
     notes = coalesce(:notes, notes)
+WHERE _id = :animeId
+AND profile_id = :profileId;
+
+updateDisplayName:
+UPDATE animes SET
+    display_name = :displayName
 WHERE _id = :animeId
 AND profile_id = :profileId;
 
@@ -128,12 +138,12 @@ insertNetworkAnime {
     INSERT INTO animes(
         profile_id, source, url, title, display_name, original_title, country, studio, producer, director,
         writer, year, duration, description, genre, status, thumbnail_url,
-        favorite, initialized, last_update, date_added, last_modified_at, version, notes
+        favorite, initialized, last_update, date_added, episode_flags, cover_last_modified, last_modified_at, version, notes
     )
     SELECT
         :profileId, :source, :url, :title, NULL, :originalTitle, :country, :studio, :producer, :director,
         :writer, :year, :duration, :description, :genre, :status, :thumbnailUrl,
-        :favorite, :initialized, :lastUpdate, :dateAdded, 0, :version, :notes
+        :favorite, :initialized, :lastUpdate, :dateAdded, :episodeFlags, :coverLastModified, 0, :version, :notes
     WHERE NOT EXISTS(
         SELECT 0 FROM animes
         WHERE profile_id = :profileId

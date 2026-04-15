@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.ui.anime
 import android.content.Context
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
+import eu.kanade.domain.anime.model.episodesFiltered
 import eu.kanade.core.util.addOrRemove
 import eu.kanade.tachiyomi.source.AnimeScheduleSource
 import eu.kanade.presentation.updates.UpdatesSelectionState
@@ -29,6 +30,8 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
+import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
@@ -38,6 +41,8 @@ import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -58,6 +63,9 @@ class AnimeScreenModel(
     private val getCategories: GetCategories = Injekt.get(),
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val setAnimeEpisodeFlags: SetAnimeEpisodeFlags = Injekt.get(),
+    private val setAnimeDefaultEpisodeFlags: SetAnimeDefaultEpisodeFlags = Injekt.get(),
+    private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val syncAnimeWithSource: SyncAnimeWithSource = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) : StateScreenModel<AnimeScreenModel.State>(State.Loading) {
@@ -88,8 +96,10 @@ class AnimeScreenModel(
                 getAnimeCategories.subscribe(animeId),
             ) { anime, episodes, playbackStates, categories ->
                 val currentSuccess = successState
-                val sortedEpisodes = episodes.sortedBy { it.sourceOrder }
                 val playbackStateByEpisodeId = playbackStates.associateBy { it.episodeId }
+                val displayedEpisodes = episodes
+                    .filterEpisodes(anime, playbackStateByEpisodeId)
+                    .sortEpisodes(anime)
                 val source = animeSourceManager.get(anime.source)
                 val hasScheduleSupport = source is AnimeScheduleSource
                 val schedule = if (hasScheduleSupport) {
@@ -105,10 +115,10 @@ class AnimeScreenModel(
                 State.Success(
                     anime = anime,
                     sourceName = animeSourceManager.get(anime.source)?.name,
-                    episodes = sortedEpisodes.toImmutableList(),
+                    episodes = displayedEpisodes.toImmutableList(),
                     playbackStateByEpisodeId = playbackStateByEpisodeId,
-                    primaryEpisodeId = selectPrimaryEpisodeId(sortedEpisodes, playbackStateByEpisodeId),
-                    selection = sortedEpisodes.asSequence()
+                    primaryEpisodeId = selectPrimaryEpisodeId(displayedEpisodes, playbackStateByEpisodeId),
+                    selection = displayedEpisodes.asSequence()
                         .map(AnimeEpisode::id)
                         .filter(selectedEpisodeIds::contains)
                         .toSet()
@@ -127,6 +137,9 @@ class AnimeScreenModel(
                 .collectLatest {
                     mutableState.value = it
                     if (it is State.Success) {
+                        if (!it.anime.favorite && it.anime.episodeFlags == 0L) {
+                            setAnimeDefaultEpisodeFlags.await(it.anime)
+                        }
                         prefetchScheduleIfNeeded(it)
                     }
                 }
@@ -172,6 +185,9 @@ class AnimeScreenModel(
         }
         screenModelScope.launchIO {
             val favorite = !currentAnime.favorite
+            if (favorite) {
+                setAnimeDefaultEpisodeFlags.await(currentAnime)
+            }
             val updated = animeRepository.update(
                 AnimeTitleUpdate(
                     id = currentAnime.id,
@@ -187,6 +203,69 @@ class AnimeScreenModel(
                     snackbarHostState.showSnackbar(context.stringResource(MR.strings.unknown_error))
                 }
             }
+        }
+    }
+
+    fun setUnwatchedFilter(state: tachiyomi.core.common.preference.TriState) {
+        val anime = successState?.anime ?: return
+
+        val flag = when (state) {
+            tachiyomi.core.common.preference.TriState.DISABLED -> AnimeTitle.SHOW_ALL
+            tachiyomi.core.common.preference.TriState.ENABLED_IS -> AnimeTitle.EPISODE_SHOW_UNWATCHED
+            tachiyomi.core.common.preference.TriState.ENABLED_NOT -> AnimeTitle.EPISODE_SHOW_WATCHED
+        }
+        screenModelScope.launchNonCancellable {
+            setAnimeEpisodeFlags.awaitSetUnwatchedFilter(anime, flag)
+        }
+    }
+
+    fun setStartedFilter(state: tachiyomi.core.common.preference.TriState) {
+        val anime = successState?.anime ?: return
+
+        val flag = when (state) {
+            tachiyomi.core.common.preference.TriState.DISABLED -> AnimeTitle.SHOW_ALL
+            tachiyomi.core.common.preference.TriState.ENABLED_IS -> AnimeTitle.EPISODE_SHOW_STARTED
+            tachiyomi.core.common.preference.TriState.ENABLED_NOT -> AnimeTitle.EPISODE_SHOW_NOT_STARTED
+        }
+        screenModelScope.launchNonCancellable {
+            setAnimeEpisodeFlags.awaitSetStartedFilter(anime, flag)
+        }
+    }
+
+    fun setDisplayMode(mode: Long) {
+        val anime = successState?.anime ?: return
+
+        screenModelScope.launchNonCancellable {
+            setAnimeEpisodeFlags.awaitSetDisplayMode(anime, mode)
+        }
+    }
+
+    fun setSorting(sort: Long) {
+        val anime = successState?.anime ?: return
+
+        screenModelScope.launchNonCancellable {
+            setAnimeEpisodeFlags.awaitSetSortingModeOrFlipOrder(anime, sort)
+        }
+    }
+
+    fun setCurrentSettingsAsDefault(applyToExisting: Boolean) {
+        val anime = successState?.anime ?: return
+        screenModelScope.launchNonCancellable {
+            libraryPreferences.setEpisodeSettingsDefault(anime)
+            if (applyToExisting) {
+                animeRepository.getFavorites()
+                    .forEach { favoriteAnime ->
+                        setAnimeDefaultEpisodeFlags.await(favoriteAnime)
+                    }
+            }
+            snackbarHostState.showSnackbar(message = context.stringResource(MR.strings.episode_settings_updated))
+        }
+    }
+
+    fun resetToDefaultSettings() {
+        val anime = successState?.anime ?: return
+        screenModelScope.launchNonCancellable {
+            setAnimeDefaultEpisodeFlags.await(anime)
         }
     }
 
@@ -356,6 +435,15 @@ class AnimeScreenModel(
         }
     }
 
+    fun showSettingsDialog() {
+        val currentAnime = successState?.anime ?: return
+
+        mutableState.update { currentState ->
+            val success = currentState as? State.Success ?: return@update currentState
+            success.copy(dialog = Dialog.SettingsSheet)
+        }
+    }
+
     fun showCoverDialog() {
         mutableState.update { currentState ->
             val success = currentState as? State.Success ?: return@update currentState
@@ -433,11 +521,9 @@ class AnimeScreenModel(
     fun updateDisplayName(displayName: String) {
         val currentAnime = successState?.anime ?: return
         screenModelScope.launchIO {
-            val updated = animeRepository.update(
-                AnimeTitleUpdate(
-                    id = currentAnime.id,
-                    displayName = displayName.trim().ifBlank { null },
-                ),
+            val updated = animeRepository.updateDisplayName(
+                animeId = currentAnime.id,
+                displayName = displayName.trim().ifBlank { null },
             )
             if (!updated) {
                 screenModelScope.launch {
@@ -476,6 +562,8 @@ class AnimeScreenModel(
 
         data object Schedule : Dialog
 
+        data object SettingsSheet : Dialog
+
         data class ChangeCategory(
             val initialSelection: ImmutableList<CheckboxState.State<Category>>,
         ) : Dialog
@@ -509,6 +597,8 @@ class AnimeScreenModel(
             val isSelectionMode: Boolean = selection.isNotEmpty()
 
             val selectedCount: Int = selection.size
+
+            val filterActive: Boolean = anime.episodesFiltered()
 
             val showScheduleButton: Boolean
                 get() = when (schedule) {
@@ -597,6 +687,46 @@ class AnimeScreenModel(
                 null -> airLocalDate >= today
             }
         }
+    }
+}
+
+private fun List<AnimeEpisode>.filterEpisodes(
+    anime: AnimeTitle,
+    playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
+): List<AnimeEpisode> {
+    val unwatchedFilter = anime.unwatchedFilter
+    val startedFilter = anime.startedFilter
+
+    return asSequence()
+        .filter { episode ->
+            applyFilter(unwatchedFilter) { !episode.completed }
+        }
+        .filter { episode ->
+            applyFilter(startedFilter) {
+                val playbackState = playbackStateByEpisodeId[episode.id]
+                playbackState?.let { !it.completed && it.positionMs > 0L && it.durationMs > 0L } == true ||
+                    episode.watched || episode.completed
+            }
+        }
+        .toList()
+}
+
+private fun List<AnimeEpisode>.sortEpisodes(anime: AnimeTitle): List<AnimeEpisode> {
+    val ascending = !anime.sortDescending()
+    val comparator = when (anime.sorting) {
+        AnimeTitle.EPISODE_SORTING_NUMBER -> compareBy<AnimeEpisode> {
+            it.episodeNumber.takeIf { number -> number >= 0.0 } ?: Double.MAX_VALUE
+        }.thenBy { it.sourceOrder }
+        AnimeTitle.EPISODE_SORTING_UPLOAD_DATE -> compareBy<AnimeEpisode> {
+            it.dateUpload.takeIf { date -> date > 0L } ?: Long.MAX_VALUE
+        }.thenBy { it.sourceOrder }
+        AnimeTitle.EPISODE_SORTING_ALPHABET -> compareBy<AnimeEpisode>({ it.name.ifBlank { it.url } }, { it.sourceOrder })
+        else -> compareBy<AnimeEpisode> { it.sourceOrder }
+    }
+    return if (ascending) {
+        sortedWith(comparator)
+    } else {
+        sortedWith(comparator.reversed())
     }
 }
 

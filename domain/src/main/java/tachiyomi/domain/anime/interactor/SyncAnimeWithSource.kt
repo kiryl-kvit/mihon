@@ -24,6 +24,12 @@ class SyncAnimeWithSource(
     suspend operator fun invoke(anime: AnimeTitle): SyncResult {
         val source = animeSourceManager.get(anime.source) ?: throw SourceNotInstalledException()
         val networkAnime = source.getAnimeDetails(anime.toSAnime())
+        val thumbnailUrl = networkAnime.thumbnail_url?.takeIf { it.isNotEmpty() }
+        val coverLastModified = when {
+            thumbnailUrl == null -> null
+            anime.thumbnailUrl == thumbnailUrl && anime.coverLastModified != 0L -> null
+            else -> now()
+        }
 
         val animeUpdate = AnimeTitleUpdate(
             id = anime.id,
@@ -39,7 +45,8 @@ class SyncAnimeWithSource(
             description = networkAnime.description.takeIf { !it.isNullOrBlank() && it != anime.description },
             genre = networkAnime.getGenres().takeIf { !it.isNullOrEmpty() && it != anime.genre },
             status = networkAnime.status.toLong().takeIf { it != anime.status },
-            thumbnailUrl = networkAnime.thumbnail_url.takeIf { !it.isNullOrBlank() && it != anime.thumbnailUrl },
+            thumbnailUrl = thumbnailUrl.takeIf { it != anime.thumbnailUrl },
+            coverLastModified = coverLastModified,
             initialized = true.takeIf { !anime.initialized },
         )
         if (animeUpdate != AnimeTitleUpdate(id = anime.id) && !animeRepository.update(animeUpdate)) {

@@ -49,6 +49,7 @@ import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
@@ -102,6 +103,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.domain.anime.model.toMangaCover
+import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
@@ -170,6 +172,7 @@ fun AnimeScreen(
     onTagSearch: (String) -> Unit,
     onScheduleClicked: (() -> Unit)?,
     onCoverClicked: () -> Unit,
+    onFilterClicked: (() -> Unit)?,
     onEpisodeClick: (Long) -> Unit,
     onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
     onAllEpisodesSelected: (Boolean) -> Unit,
@@ -192,6 +195,7 @@ fun AnimeScreen(
             onTagSearch = onTagSearch,
             onScheduleClicked = onScheduleClicked,
             onCoverClicked = onCoverClicked,
+            onFilterClicked = onFilterClicked,
             onEpisodeClick = onEpisodeClick,
             onEpisodeSelected = onEpisodeSelected,
             onAllEpisodesSelected = onAllEpisodesSelected,
@@ -214,6 +218,7 @@ fun AnimeScreen(
             onTagSearch = onTagSearch,
             onScheduleClicked = onScheduleClicked,
             onCoverClicked = onCoverClicked,
+            onFilterClicked = onFilterClicked,
             onEpisodeClick = onEpisodeClick,
             onEpisodeSelected = onEpisodeSelected,
             onAllEpisodesSelected = onAllEpisodesSelected,
@@ -239,6 +244,7 @@ private fun AnimeScreenSmallImpl(
     onTagSearch: (String) -> Unit,
     onScheduleClicked: (() -> Unit)?,
     onCoverClicked: () -> Unit,
+    onFilterClicked: (() -> Unit)?,
     onEpisodeClick: (Long) -> Unit,
     onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
     onAllEpisodesSelected: (Boolean) -> Unit,
@@ -271,6 +277,8 @@ private fun AnimeScreenSmallImpl(
                 title = state.anime.displayTitle,
                 navigateUp = navigateUp,
                 onRefresh = onRefresh,
+                hasFilters = state.filterActive,
+                onFilterClicked = onFilterClicked,
                 onEditCategoryClicked = onEditCategoryClicked,
                 onEditDisplayNameClicked = onEditDisplayNameClicked,
                 onShareClicked = onShareClicked,
@@ -373,11 +381,14 @@ private fun AnimeScreenSmallImpl(
                     item {
                         EpisodeHeader(
                             episodeCount = state.episodes.size,
+                            enabled = !state.isSelectionMode && onFilterClicked != null,
                             sourceAvailable = state.sourceAvailable,
                             sourceName = state.sourceName,
+                            onClick = { onFilterClicked?.invoke() },
                         )
                     }
                     episodeItems(
+                        anime = state.anime,
                         episodes = state.episodes,
                         selectedEpisodeIds = state.selection,
                         selectionMode = state.isSelectionMode,
@@ -408,6 +419,7 @@ private fun AnimeScreenLargeImpl(
     onTagSearch: (String) -> Unit,
     onScheduleClicked: (() -> Unit)?,
     onCoverClicked: () -> Unit,
+    onFilterClicked: (() -> Unit)?,
     onEpisodeClick: (Long) -> Unit,
     onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
     onAllEpisodesSelected: (Boolean) -> Unit,
@@ -428,6 +440,8 @@ private fun AnimeScreenLargeImpl(
                 title = state.anime.displayTitle,
                 navigateUp = navigateUp,
                 onRefresh = onRefresh,
+                hasFilters = state.filterActive,
+                onFilterClicked = onFilterClicked,
                 onEditCategoryClicked = onEditCategoryClicked,
                 onEditDisplayNameClicked = onEditDisplayNameClicked,
                 onShareClicked = onShareClicked,
@@ -537,11 +551,14 @@ private fun AnimeScreenLargeImpl(
                             item {
                                 EpisodeHeader(
                                     episodeCount = state.episodes.size,
+                                    enabled = !state.isSelectionMode && onFilterClicked != null,
                                     sourceAvailable = state.sourceAvailable,
                                     sourceName = state.sourceName,
+                                    onClick = { onFilterClicked?.invoke() },
                                 )
                             }
                             episodeItems(
+                                anime = state.anime,
                                 episodes = state.episodes,
                                 selectedEpisodeIds = state.selection,
                                 selectionMode = state.isSelectionMode,
@@ -563,6 +580,8 @@ private fun AnimeToolbar(
     title: String,
     navigateUp: () -> Unit,
     onRefresh: () -> Unit,
+    hasFilters: Boolean,
+    onFilterClicked: (() -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onShareClicked: (() -> Unit)?,
@@ -573,6 +592,7 @@ private fun AnimeToolbar(
     titleAlphaProvider: () -> Float,
     backgroundAlphaProvider: () -> Float,
 ) {
+    val filterTint = if (hasFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current
     AppBar(
         titleContent = {
             if (actionModeCounter > 0) {
@@ -615,6 +635,16 @@ private fun AnimeToolbar(
                                     onClick = onRefresh,
                                 ),
                             )
+                            if (onFilterClicked != null) {
+                                add(
+                                    AppBar.Action(
+                                        title = stringResource(MR.strings.action_filter),
+                                        icon = Icons.Outlined.FilterList,
+                                        iconTint = filterTint,
+                                        onClick = onFilterClicked,
+                                    ),
+                                )
+                            }
                             if (onEditCategoryClicked != null) {
                                 add(
                                     AppBar.OverflowAction(
@@ -1261,12 +1291,15 @@ private fun AnimeTagChip(
 @Composable
 private fun EpisodeHeader(
     episodeCount: Int,
+    enabled: Boolean,
     sourceAvailable: Boolean,
     sourceName: String?,
+    onClick: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
     ) {
@@ -1288,6 +1321,7 @@ private fun EpisodeHeader(
 }
 
 private fun LazyListScope.episodeItems(
+    anime: AnimeTitle,
     episodes: List<AnimeEpisode>,
     selectedEpisodeIds: Set<Long>,
     selectionMode: Boolean,
@@ -1313,6 +1347,7 @@ private fun LazyListScope.episodeItems(
         key = { it.id },
     ) { episode ->
         AnimeEpisodeListItem(
+            anime = anime,
             episode = episode,
             selected = episode.id in selectedEpisodeIds,
             selectionMode = selectionMode,
@@ -1334,6 +1369,7 @@ private fun LazyListScope.episodeItems(
 
 @Composable
 private fun AnimeEpisodeListItem(
+    anime: AnimeTitle,
     episode: AnimeEpisode,
     selected: Boolean,
     selectionMode: Boolean,
@@ -1395,7 +1431,7 @@ private fun AnimeEpisodeListItem(
                     )
                 }
                 Text(
-                    text = episode.name.ifBlank { episode.url },
+                    text = episode.displayTitle(anime),
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1455,6 +1491,18 @@ private fun AnimeEpisodeListItem(
     }
 
     HorizontalDivider()
+}
+
+@Composable
+private fun AnimeEpisode.displayTitle(anime: AnimeTitle): String {
+    return if (anime.displayMode == AnimeTitle.EPISODE_DISPLAY_NUMBER) {
+        val number = episodeNumber.takeIf { it >= 0.0 }
+            ?.let(::formatChapterNumber)
+            ?: url
+        stringResource(MR.strings.display_mode_chapter, number)
+    } else {
+        name.ifBlank { url }
+    }
 }
 
 @Composable

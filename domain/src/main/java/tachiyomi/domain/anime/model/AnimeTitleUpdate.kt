@@ -22,6 +22,8 @@ data class AnimeTitleUpdate(
     val initialized: Boolean? = null,
     val lastUpdate: Long? = null,
     val dateAdded: Long? = null,
+    val episodeFlags: Long? = null,
+    val coverLastModified: Long? = null,
     val version: Long? = null,
     val notes: String? = null,
 )

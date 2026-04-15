@@ -20,6 +20,8 @@ interface AnimeRepository {
 
     suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle>
 
+    suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean
+
     suspend fun update(update: AnimeTitleUpdate): Boolean
 
     suspend fun updateAll(animeUpdates: List<AnimeTitleUpdate>): Boolean

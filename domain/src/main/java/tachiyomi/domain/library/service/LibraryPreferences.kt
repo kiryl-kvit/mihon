@@ -197,6 +197,31 @@ class LibraryPreferences(
         Manga.CHAPTER_SORT_DESC,
     )
 
+    val filterEpisodeByUnwatched: Preference<Long> = preferenceStore.getLong(
+        "default_episode_filter_by_unwatched",
+        tachiyomi.domain.anime.model.AnimeTitle.SHOW_ALL,
+    )
+
+    val filterEpisodeByStarted: Preference<Long> = preferenceStore.getLong(
+        "default_episode_filter_by_started",
+        tachiyomi.domain.anime.model.AnimeTitle.SHOW_ALL,
+    )
+
+    val sortEpisodeBySourceOrNumber: Preference<Long> = preferenceStore.getLong(
+        "default_episode_sort_by_source_or_number",
+        tachiyomi.domain.anime.model.AnimeTitle.EPISODE_SORTING_SOURCE,
+    )
+
+    val displayEpisodeByNameOrNumber: Preference<Long> = preferenceStore.getLong(
+        "default_episode_display_by_name_or_number",
+        tachiyomi.domain.anime.model.AnimeTitle.EPISODE_DISPLAY_NAME,
+    )
+
+    val sortEpisodeByAscendingOrDescending: Preference<Long> = preferenceStore.getLong(
+        "default_episode_sort_by_ascending_or_descending",
+        tachiyomi.domain.anime.model.AnimeTitle.EPISODE_SORT_DESC,
+    )
+
     fun setChapterSettingsDefault(manga: Manga) {
         filterChapterByRead.set(manga.unreadFilterRaw)
         filterChapterByDownloaded.set(manga.downloadedFilterRaw)
@@ -205,6 +230,20 @@ class LibraryPreferences(
         displayChapterByNameOrNumber.set(manga.displayMode)
         sortChapterByAscendingOrDescending.set(
             if (manga.sortDescending()) Manga.CHAPTER_SORT_DESC else Manga.CHAPTER_SORT_ASC,
+        )
+    }
+
+    fun setEpisodeSettingsDefault(anime: tachiyomi.domain.anime.model.AnimeTitle) {
+        filterEpisodeByUnwatched.set(anime.unwatchedFilterRaw)
+        filterEpisodeByStarted.set(anime.startedFilterRaw)
+        sortEpisodeBySourceOrNumber.set(anime.sorting)
+        displayEpisodeByNameOrNumber.set(anime.displayMode)
+        sortEpisodeByAscendingOrDescending.set(
+            if (anime.sortDescending()) {
+                tachiyomi.domain.anime.model.AnimeTitle.EPISODE_SORT_DESC
+            } else {
+                tachiyomi.domain.anime.model.AnimeTitle.EPISODE_SORT_ASC
+            },
         )
     }
 

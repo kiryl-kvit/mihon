@@ -29,6 +29,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
+import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.anime.repository.AnimeRepository
@@ -98,8 +100,13 @@ class AnimeBrowseSourceScreenModelTest {
         model.onAnimeLongClick(anime) shouldBe true
 
         eventually(2.seconds) {
-            animeRepository.updates shouldContainExactly listOf(
-                AnimeTitleUpdate(id = anime.id, favorite = true, dateAdded = animeRepository.updates.single().dateAdded),
+            animeRepository.updates.size shouldBe 2
+            animeRepository.updates.first().id shouldBe anime.id
+            animeRepository.updates.first().episodeFlags shouldBe 0L
+            animeRepository.updates.last() shouldBe AnimeTitleUpdate(
+                id = anime.id,
+                favorite = true,
+                dateAdded = animeRepository.updates.last().dateAdded,
             )
             animeRepository.categoryUpdates shouldContainExactly listOf(anime.id to listOf(1L))
             model.state.value.dialog shouldBe null
@@ -143,6 +150,7 @@ class AnimeBrowseSourceScreenModelTest {
         val sourcePreferences = SourcePreferences(InMemoryPreferenceStore(), testJson)
         val getIncognitoState = mockk<GetIncognitoState>()
         every { getIncognitoState.await(any()) } returns false
+        val setAnimeEpisodeFlags = SetAnimeEpisodeFlags(animeRepository)
         return AnimeBrowseSourceScreenModel(
             sourceId = anime.source,
             listingQuery = null,
@@ -155,6 +163,7 @@ class AnimeBrowseSourceScreenModelTest {
             getAnimeCategories = GetAnimeCategories(categoryRepository),
             setAnimeCategories = SetAnimeCategories(animeRepository),
             animeRepository = animeRepository,
+            setAnimeDefaultEpisodeFlags = SetAnimeDefaultEpisodeFlags(libraryPreferences, setAnimeEpisodeFlags),
             getIncognitoState = getIncognitoState,
         )
     }
@@ -185,6 +194,7 @@ class AnimeBrowseSourceScreenModelTest {
         override suspend fun getFavorites(): List<AnimeTitle> = anime.filter { it.favorite }
         override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(anime.filter { it.favorite })
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = anime
+        override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = true
         override suspend fun update(update: AnimeTitleUpdate): Boolean {
             updates += update
             return true

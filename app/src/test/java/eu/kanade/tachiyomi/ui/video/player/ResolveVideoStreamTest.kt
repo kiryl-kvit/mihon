@@ -193,6 +193,8 @@ class ResolveVideoStreamTest {
 
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = error("Not used")
 
+        override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = error("Not used")
+
         override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = error("Not used")
 
         override suspend fun updateAll(videoUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = error("Not used")

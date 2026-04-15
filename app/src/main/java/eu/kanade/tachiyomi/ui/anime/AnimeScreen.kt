@@ -16,6 +16,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.core.util.ifAnimeSourcesLoaded
+import eu.kanade.presentation.anime.EpisodeSettingsDialog
 import eu.kanade.presentation.anime.AnimeScreen
 import eu.kanade.presentation.anime.AnimeScheduleSheet
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
@@ -105,6 +106,7 @@ data class AnimeScreen(
                     },
                     onScheduleClicked = screenModel::showScheduleDialog.takeIf { current.showScheduleButton },
                     onCoverClicked = screenModel::showCoverDialog,
+                    onFilterClicked = screenModel::showSettingsDialog,
                     onEpisodeClick = { episodeId -> context.startAnimeEpisode(current.anime.id, episodeId) },
                     onEpisodeSelected = screenModel::toggleSelection,
                     onAllEpisodesSelected = screenModel::toggleAllSelection,
@@ -135,6 +137,18 @@ data class AnimeScreen(
                             schedule = current.schedule,
                             onRetry = screenModel::retryLoadSchedule,
                             onDismissRequest = screenModel::dismissDialog,
+                        )
+                    }
+                    AnimeScreenModel.Dialog.SettingsSheet -> {
+                        EpisodeSettingsDialog(
+                            onDismissRequest = screenModel::dismissDialog,
+                            anime = current.anime,
+                            onUnwatchedFilterChanged = screenModel::setUnwatchedFilter,
+                            onStartedFilterChanged = screenModel::setStartedFilter,
+                            onSortModeChanged = screenModel::setSorting,
+                            onDisplayModeChanged = screenModel::setDisplayMode,
+                            onSetAsDefault = screenModel::setCurrentSettingsAsDefault,
+                            onResetToDefault = screenModel::resetToDefaultSettings,
                         )
                     }
                     is AnimeScreenModel.Dialog.ChangeCategory -> {

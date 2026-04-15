@@ -34,6 +34,7 @@ import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.anime.repository.AnimeRepository
@@ -56,6 +57,7 @@ class AnimeBrowseSourceScreenModel(
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
     private val animeRepository: AnimeRepository = Injekt.get(),
+    private val setAnimeDefaultEpisodeFlags: SetAnimeDefaultEpisodeFlags = Injekt.get(),
     private val getIncognitoState: GetIncognitoState = Injekt.get(),
 ) : StateScreenModel<AnimeBrowseSourceScreenModel.State>(State(Listing.valueOf(listingQuery))) {
 
@@ -165,6 +167,9 @@ class AnimeBrowseSourceScreenModel(
     fun changeAnimeFavorite(anime: AnimeTitle) {
         screenModelScope.launchIO {
             val favorite = !anime.favorite
+            if (favorite) {
+                setAnimeDefaultEpisodeFlags.await(anime)
+            }
             animeRepository.update(
                 AnimeTitleUpdate(
                     id = anime.id,
@@ -222,6 +227,9 @@ class AnimeBrowseSourceScreenModel(
     }
 
     private suspend fun updateFavorite(anime: AnimeTitle, favorite: Boolean) {
+        if (favorite) {
+            setAnimeDefaultEpisodeFlags.await(anime)
+        }
         animeRepository.update(
             AnimeTitleUpdate(
                 id = anime.id,

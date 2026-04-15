@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.AnimesPage
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -112,6 +113,7 @@ class SyncAnimeWithSourceTest {
             genre = listOf("Action", "Drama"),
             status = SAnime.ONGOING.toLong(),
             thumbnailUrl = "https://cdn.example.com/video.jpg",
+            coverLastModified = 10_000L,
             initialized = true,
         )
         videoRepository.updates.last() shouldBe AnimeTitleUpdate(
@@ -226,6 +228,40 @@ class SyncAnimeWithSourceTest {
             ),
         )
         episodeRepository.removals.flatten().sorted() shouldContainExactly listOf(11L, 20L)
+    }
+
+    @Test
+    fun `sync keeps existing cover version when thumbnail url is unchanged`() = runTest {
+        val localVideo = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            url = "/animes/1",
+            title = "Video",
+            initialized = true,
+            thumbnailUrl = "https://cdn.example.com/video.jpg",
+            coverLastModified = 5_000L,
+        )
+        val source = FakeAnimeSource(
+            details = SAnime.create().also {
+                it.url = localVideo.url
+                it.title = localVideo.title
+                it.thumbnail_url = localVideo.thumbnailUrl
+                it.initialized = true
+            },
+            episodes = emptyList(),
+        )
+        val videoRepository = FakeAnimeRepository(localVideo)
+        val episodeRepository = FakeAnimeEpisodeRepository(emptyList())
+
+        SyncAnimeWithSource(
+            animeRepository = videoRepository,
+            animeEpisodeRepository = episodeRepository,
+            animeSourceManager = FakeAnimeSourceManager(source),
+            now = { 10_000L },
+        )(localVideo)
+
+        videoRepository.updates shouldContain AnimeTitleUpdate(id = localVideo.id, lastUpdate = 10_000L)
+        videoRepository.updates.none { it.coverLastModified != null } shouldBe true
     }
 
     @Test
@@ -450,6 +486,8 @@ class SyncAnimeWithSourceTest {
         override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(emptyList())
 
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = error("Not used")
+
+        override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = error("Not used")
 
         override suspend fun update(update: AnimeTitleUpdate): Boolean {
             updates += update
