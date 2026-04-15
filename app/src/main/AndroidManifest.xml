@@ -154,7 +154,6 @@
             android:configChanges="keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="false"
             android:launchMode="singleTask"
-            android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.Tachiyomi" />
 
         <activity

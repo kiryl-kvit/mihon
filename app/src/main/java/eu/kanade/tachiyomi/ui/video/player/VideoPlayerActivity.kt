@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Browser
 import android.view.ViewGroup
+import androidx.annotation.OptIn
 import androidx.activity.viewModels
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -53,14 +54,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.network.NetworkHelper
@@ -171,6 +173,7 @@ class VideoPlayerActivity : BaseActivity() {
     }
 
     @Composable
+    @OptIn(markerClass = [UnstableApi::class])
     private fun VideoPlayerScreen(
         state: VideoPlayerViewModel.State,
         animeId: Long,
@@ -292,10 +295,10 @@ class VideoPlayerActivity : BaseActivity() {
                                 player = controllerPlayer
                                 setKeepContentOnPlayerReset(true)
                                 useController = true
-                                controllerAutoShow = true
+                                setControllerAutoShow(true)
                                 setShowPreviousButton(true)
                                 setShowNextButton(true)
-                                setControllerVisibilityListener(PlayerControlView.VisibilityListener { visibility ->
+                                setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
                                     controlsVisible = visibility == View.VISIBLE
                                 })
                                 setShutterBackgroundColor(android.graphics.Color.BLACK)
@@ -708,7 +711,7 @@ class VideoPlayerActivity : BaseActivity() {
     }
 
     private fun openInExternalPlayer(stream: eu.kanade.tachiyomi.source.model.VideoStream) {
-        val uri = android.net.Uri.parse(stream.request.url)
+        val uri = stream.request.url.toUri()
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, stream.mimeType ?: stream.type.toExternalMimeType())
             putExtra(
@@ -754,6 +757,7 @@ private fun eu.kanade.tachiyomi.source.model.VideoStreamType.toExternalMimeType(
     }
 }
 
+@OptIn(markerClass = [UnstableApi::class])
 private class EpisodeNavigationPlayer(
     player: Player,
     private val hasPreviousEpisode: Boolean,
@@ -779,11 +783,9 @@ private class EpisodeNavigationPlayer(
         return when (command) {
             Player.COMMAND_SEEK_TO_PREVIOUS,
             Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
-            Player.COMMAND_SEEK_TO_PREVIOUS_WINDOW,
             -> hasPreviousEpisode
             Player.COMMAND_SEEK_TO_NEXT,
             Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
-            Player.COMMAND_SEEK_TO_NEXT_WINDOW,
             -> hasNextEpisode
             else -> super.isCommandAvailable(command)
         }
