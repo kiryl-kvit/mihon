@@ -10,7 +10,9 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -51,6 +53,9 @@ fun AnimeBrowseSourceContent(
     snackbarHostState: SnackbarHostState,
     contentPadding: PaddingValues,
     onAnimeClick: (AnimeTitle) -> Unit,
+    onAnimeLongClick: (AnimeTitle) -> Unit,
+    onWebViewClick: (() -> Unit)? = null,
+    onSettingsClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -85,13 +90,35 @@ fun AnimeBrowseSourceContent(
                 is LoadState.Error -> getErrorMessage(errorState)
                 else -> stringResource(MR.strings.no_results_found)
             },
-            actions = persistentListOf(
-                EmptyScreenAction(
-                    stringRes = MR.strings.action_retry,
-                    icon = Icons.Outlined.Refresh,
-                    onClick = animeList::refresh,
-                ),
-            ),
+            actions = persistentListOf<EmptyScreenAction>().builder()
+                .apply {
+                    add(
+                        EmptyScreenAction(
+                            stringRes = MR.strings.action_retry,
+                            icon = Icons.Outlined.Refresh,
+                            onClick = animeList::refresh,
+                        ),
+                    )
+                    onWebViewClick?.let {
+                        add(
+                            EmptyScreenAction(
+                                stringRes = MR.strings.action_open_in_web_view,
+                                icon = Icons.Outlined.Public,
+                                onClick = it,
+                            ),
+                        )
+                    }
+                    onSettingsClick?.let {
+                        add(
+                            EmptyScreenAction(
+                                stringRes = MR.strings.action_settings,
+                                icon = Icons.Outlined.Settings,
+                                onClick = it,
+                            ),
+                        )
+                    }
+                }
+                .build(),
         )
         return
     }
@@ -102,17 +129,20 @@ fun AnimeBrowseSourceContent(
             columns = columns,
             contentPadding = contentPadding,
             onAnimeClick = onAnimeClick,
+            onAnimeLongClick = onAnimeLongClick,
         )
         LibraryDisplayMode.List -> AnimeBrowseList(
             animeList = animeList,
             contentPadding = contentPadding,
             onAnimeClick = onAnimeClick,
+            onAnimeLongClick = onAnimeLongClick,
         )
         LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> AnimeBrowseCompactGrid(
             animeList = animeList,
             columns = columns,
             contentPadding = contentPadding,
             onAnimeClick = onAnimeClick,
+            onAnimeLongClick = onAnimeLongClick,
         )
     }
 }
@@ -122,6 +152,7 @@ private fun AnimeBrowseList(
     animeList: LazyPagingItems<StateFlow<AnimeTitle>>,
     contentPadding: PaddingValues,
     onAnimeClick: (AnimeTitle) -> Unit,
+    onAnimeLongClick: (AnimeTitle) -> Unit,
 ) {
     LazyColumn(contentPadding = contentPadding + PaddingValues(vertical = 8.dp)) {
         item {
@@ -140,7 +171,7 @@ private fun AnimeBrowseList(
                 coverData = anime.toMangaCover(),
                 coverAlpha = if (anime.favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f,
                 badge = { InLibraryBadge(enabled = anime.favorite) },
-                onLongClick = { onAnimeClick(anime) },
+                onLongClick = { onAnimeLongClick(anime) },
                 onClick = { onAnimeClick(anime) },
             )
         }
@@ -159,6 +190,7 @@ private fun AnimeBrowseComfortableGrid(
     columns: GridCells,
     contentPadding: PaddingValues,
     onAnimeClick: (AnimeTitle) -> Unit,
+    onAnimeLongClick: (AnimeTitle) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = columns,
@@ -182,7 +214,7 @@ private fun AnimeBrowseComfortableGrid(
                 coverData = anime.toMangaCover(),
                 coverAlpha = if (anime.favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f,
                 coverBadgeStart = { InLibraryBadge(enabled = anime.favorite) },
-                onLongClick = { onAnimeClick(anime) },
+                onLongClick = { onAnimeLongClick(anime) },
                 onClick = { onAnimeClick(anime) },
             )
         }
@@ -201,6 +233,7 @@ private fun AnimeBrowseCompactGrid(
     columns: GridCells,
     contentPadding: PaddingValues,
     onAnimeClick: (AnimeTitle) -> Unit,
+    onAnimeLongClick: (AnimeTitle) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = columns,
@@ -224,7 +257,7 @@ private fun AnimeBrowseCompactGrid(
                 coverData = anime.toMangaCover(),
                 coverAlpha = if (anime.favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f,
                 coverBadgeStart = { InLibraryBadge(enabled = anime.favorite) },
-                onLongClick = { onAnimeClick(anime) },
+                onLongClick = { onAnimeLongClick(anime) },
                 onClick = { onAnimeClick(anime) },
             )
         }

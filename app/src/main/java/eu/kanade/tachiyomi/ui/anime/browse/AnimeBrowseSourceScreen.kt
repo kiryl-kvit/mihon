@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.NewReleases
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -29,9 +30,12 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalHapticFeedback
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
@@ -42,17 +46,24 @@ import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.RadioMenuItem
 import eu.kanade.presentation.components.SearchToolbar
+import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.anime.AnimeBrowseSourceContent
+import eu.kanade.tachiyomi.source.ConfigurableAnimeSource
+import eu.kanade.tachiyomi.source.online.AnimeHttpSource
 import eu.kanade.tachiyomi.ui.browse.source.browse.SourceFilterDialog
 import eu.kanade.tachiyomi.ui.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.category.CategoryScreen
+import eu.kanade.tachiyomi.ui.webview.WebViewScreen
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.collections.immutable.persistentListOf
 import mihon.presentation.core.util.collectAsLazyPagingItems
-import tachiyomi.i18n.MR
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
@@ -103,6 +114,24 @@ data class AnimeBrowseSourceScreen(
         }
 
         val snackbarHostState = remember { SnackbarHostState() }
+        val scope = rememberCoroutineScope()
+        val haptic = LocalHapticFeedback.current
+        val httpSource = source as? AnimeHttpSource
+        val configurableSource = source as? ConfigurableAnimeSource
+        val onWebViewClick = httpSource?.let {
+            {
+                navigator.push(
+                    WebViewScreen(
+                        url = it.baseUrl,
+                        initialTitle = it.name,
+                        headers = it.headers.toMultimap().mapValues { values -> values.value.firstOrNull().orEmpty() },
+                    ),
+                )
+            }
+        }
+        val onSettingsClick = configurableSource?.let {
+            { navigator.push(AnimeSourcePreferencesScreen(sourceId, source.name)) }
+        }
 
         Scaffold(
             topBar = {
@@ -116,6 +145,8 @@ data class AnimeBrowseSourceScreen(
                         displayMode = screenModel.displayMode,
                         onDisplayModeChange = { screenModel.displayMode = it },
                         navigateUp = navigateUp,
+                        onWebViewClick = onWebViewClick,
+                        onSettingsClick = onSettingsClick,
                         onSearch = screenModel::search,
                     )
 
@@ -184,15 +215,20 @@ data class AnimeBrowseSourceScreen(
                 displayMode = screenModel.displayMode,
                 snackbarHostState = snackbarHostState,
                 contentPadding = paddingValues,
-                onAnimeClick = { anime ->
-                    if (anime.id > 0L) {
-                        navigator.push(AnimeScreen(anime.id))
+                onAnimeClick = { anime -> navigator.push(AnimeScreen(anime.id)) },
+                onAnimeLongClick = { anime ->
+                    scope.launch {
+                        if (screenModel.onAnimeLongClick(anime)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
                     }
                 },
+                onWebViewClick = onWebViewClick,
+                onSettingsClick = onSettingsClick,
             )
         }
 
-        when (state.dialog) {
+        when (val dialog = state.dialog) {
             AnimeBrowseSourceScreenModel.Dialog.Filter -> {
                 SourceFilterDialog(
                     onDismissRequest = screenModel::dismissDialog,
@@ -205,6 +241,23 @@ data class AnimeBrowseSourceScreen(
                     canDeletePreset = { false },
                     onFilter = { screenModel.search(filters = state.filters) },
                     onUpdate = screenModel::setFilters,
+                )
+            }
+            is AnimeBrowseSourceScreenModel.Dialog.ChangeAnimeCategory -> {
+                ChangeCategoryDialog(
+                    initialSelection = dialog.initialSelection,
+                    onDismissRequest = screenModel::dismissDialog,
+                    onEditCategories = { navigator.push(CategoryScreen()) },
+                    onConfirm = { include, _ ->
+                        screenModel.changeAnimeFavorite(dialog.anime)
+                        screenModel.moveAnimeToCategories(dialog.anime, include)
+                    },
+                )
+            }
+            is AnimeBrowseSourceScreenModel.Dialog.RemoveAnime -> {
+                RemoveAnimeDialog(
+                    onDismissRequest = screenModel::dismissDialog,
+                    onConfirm = { screenModel.changeAnimeFavorite(dialog.anime) },
                 )
             }
             null -> Unit
@@ -237,6 +290,8 @@ private fun AnimeBrowseSourceToolbar(
     displayMode: LibraryDisplayMode,
     onDisplayModeChange: (LibraryDisplayMode) -> Unit,
     navigateUp: () -> Unit,
+    onWebViewClick: (() -> Unit)?,
+    onSettingsClick: (() -> Unit)?,
     onSearch: (String) -> Unit,
 ) {
     var selectingDisplayMode by remember { mutableStateOf(false) }
@@ -250,17 +305,37 @@ private fun AnimeBrowseSourceToolbar(
         onClickCloseSearch = navigateUp,
         actions = {
             AppBarActions(
-                actions = persistentListOf(
-                    AppBar.Action(
-                        title = stringResource(MR.strings.action_display_mode),
-                        icon = if (displayMode == LibraryDisplayMode.List) {
-                            AutoMirrored.Filled.ViewList
-                        } else {
-                            Icons.Filled.ViewModule
-                        },
-                        onClick = { selectingDisplayMode = true },
-                    ),
-                ),
+                actions = persistentListOf<AppBar.AppBarAction>().builder()
+                    .apply {
+                        add(
+                            AppBar.Action(
+                                title = stringResource(MR.strings.action_display_mode),
+                                icon = if (displayMode == LibraryDisplayMode.List) {
+                                    AutoMirrored.Filled.ViewList
+                                } else {
+                                    Icons.Filled.ViewModule
+                                },
+                                onClick = { selectingDisplayMode = true },
+                            ),
+                        )
+                        onWebViewClick?.let {
+                            add(
+                                AppBar.OverflowAction(
+                                    title = stringResource(MR.strings.action_open_in_web_view),
+                                    onClick = it,
+                                ),
+                            )
+                        }
+                        onSettingsClick?.let {
+                            add(
+                                AppBar.OverflowAction(
+                                    title = stringResource(MR.strings.action_settings),
+                                    onClick = it,
+                                ),
+                            )
+                        }
+                    }
+                    .build(),
             )
 
             DropdownMenu(
@@ -289,6 +364,37 @@ private fun AnimeBrowseSourceToolbar(
                     onDisplayModeChange(LibraryDisplayMode.List)
                 }
             }
+        },
+    )
+}
+
+@Composable
+private fun RemoveAnimeDialog(
+    onDismissRequest: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(text = stringResource(MR.strings.action_cancel))
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onDismissRequest()
+                    onConfirm()
+                },
+            ) {
+                Text(text = stringResource(MR.strings.action_remove))
+            }
+        },
+        title = {
+            Text(text = stringResource(MR.strings.action_remove))
+        },
+        text = {
+            Text(text = stringResource(MR.strings.remove_from_library))
         },
     )
 }

@@ -19,13 +19,24 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import tachiyomi.core.common.preference.CheckboxState
+import tachiyomi.core.common.preference.mapAsCheckboxState
+import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.category.interactor.GetAnimeCategories
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.interactor.SetAnimeCategories
+import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.source.interactor.GetRemoteAnime
 import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.domain.anime.interactor.GetAnime
@@ -41,6 +52,10 @@ class AnimeBrowseSourceScreenModel(
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val getRemoteAnime: GetRemoteAnime = Injekt.get(),
     private val getAnime: GetAnime = Injekt.get(),
+    private val getCategories: GetCategories = Injekt.get(),
+    private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
+    private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val animeRepository: AnimeRepository = Injekt.get(),
     private val getIncognitoState: GetIncognitoState = Injekt.get(),
 ) : StateScreenModel<AnimeBrowseSourceScreenModel.State>(State(Listing.valueOf(listingQuery))) {
 
@@ -122,12 +137,117 @@ class AnimeBrowseSourceScreenModel(
         mutableState.update { it.copy(dialog = Dialog.Filter) }
     }
 
+    fun onAnimeLibraryAction(anime: AnimeTitle) {
+        screenModelScope.launchIO {
+            handleAnimeLibraryAction(anime)
+        }
+    }
+
+    suspend fun onAnimeLongClick(anime: AnimeTitle): Boolean {
+        handleAnimeLibraryAction(anime)
+        return true
+    }
+
     fun dismissDialog() {
         mutableState.update { it.copy(dialog = null) }
     }
 
     fun setToolbarQuery(query: String?) {
         mutableState.update { it.copy(toolbarQuery = query) }
+    }
+
+    fun addFavorite(anime: AnimeTitle) {
+        screenModelScope.launchIO {
+            addFavoriteInternal(anime)
+        }
+    }
+
+    fun changeAnimeFavorite(anime: AnimeTitle) {
+        screenModelScope.launchIO {
+            val favorite = !anime.favorite
+            animeRepository.update(
+                AnimeTitleUpdate(
+                    id = anime.id,
+                    favorite = favorite,
+                    dateAdded = if (favorite) {
+                        System.currentTimeMillis()
+                    } else {
+                        0L
+                    },
+                ),
+            )
+        }
+    }
+
+    fun moveAnimeToCategories(anime: AnimeTitle, categoryIds: List<Long>) {
+        screenModelScope.launchIO {
+            setAnimeCategories.await(anime.id, categoryIds)
+        }
+    }
+
+    private suspend fun handleAnimeLibraryAction(anime: AnimeTitle) {
+        if (anime.favorite) {
+            setDialog(Dialog.RemoveAnime(anime))
+        } else {
+            addFavoriteInternal(anime)
+        }
+    }
+
+    private suspend fun addFavoriteInternal(anime: AnimeTitle) {
+        val categories = getCategories()
+        val defaultCategoryId = libraryPreferences.defaultCategory.get().toLong()
+        val defaultCategory = categories.find { it.id == defaultCategoryId }
+
+        when {
+            defaultCategory != null -> {
+                setAnimeCategories.await(anime.id, listOf(defaultCategory.id))
+                updateFavorite(anime, true)
+            }
+            defaultCategoryId == 0L || categories.isEmpty() -> {
+                setAnimeCategories.await(anime.id, emptyList())
+                updateFavorite(anime, true)
+            }
+            else -> {
+                val preselectedIds = getAnimeCategories.await(anime.id).map { it.id }
+                setDialog(
+                    Dialog.ChangeAnimeCategory(
+                        anime = anime,
+                        initialSelection = categories
+                            .mapAsCheckboxState { it.id in preselectedIds }
+                            .toImmutableList(),
+                    ),
+                )
+            }
+        }
+    }
+
+    private suspend fun updateFavorite(anime: AnimeTitle, favorite: Boolean) {
+        animeRepository.update(
+            AnimeTitleUpdate(
+                id = anime.id,
+                favorite = favorite,
+                dateAdded = if (favorite) {
+                    System.currentTimeMillis()
+                } else {
+                    0L
+                },
+            ),
+        )
+    }
+
+    private suspend fun getCategories(): List<Category> {
+        return getCategories.subscribe()
+            .firstOrNull()
+            ?.filterNot { it.isSystemCategory }
+            .orEmpty()
+    }
+
+    private fun moveAnimeToCategories(anime: AnimeTitle, vararg categories: Category) {
+        moveAnimeToCategories(anime, categories.filter { it.id != 0L }.map { it.id })
+    }
+
+    private fun setDialog(dialog: Dialog?) {
+        mutableState.update { it.copy(dialog = dialog) }
     }
 
     sealed class Listing(open val query: String?, open val filters: FilterList) {
@@ -151,6 +271,13 @@ class AnimeBrowseSourceScreenModel(
 
     sealed interface Dialog {
         data object Filter : Dialog
+
+        data class RemoveAnime(val anime: AnimeTitle) : Dialog
+
+        data class ChangeAnimeCategory(
+            val anime: AnimeTitle,
+            val initialSelection: kotlinx.collections.immutable.ImmutableList<CheckboxState<Category>>,
+        ) : Dialog
     }
 
     @Immutable
