@@ -12,11 +12,14 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.presentation.util.formattedMessage
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -30,10 +33,14 @@ import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
@@ -41,6 +48,8 @@ import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.anime.service.groupedByMergedMember
+import tachiyomi.domain.anime.service.sortedForMergedDisplay
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
@@ -56,6 +65,7 @@ import mihon.domain.anime.model.toSAnime
 class AnimeScreenModel(
     private val context: Context,
     private val animeId: Long,
+    private val bypassMerge: Boolean = false,
     private val animeRepository: AnimeRepository = Injekt.get(),
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
     private val animePlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
@@ -63,6 +73,9 @@ class AnimeScreenModel(
     private val getCategories: GetCategories = Injekt.get(),
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val getAnimeWithEpisodes: GetAnimeWithEpisodes = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = Injekt.get(),
+    private val updateMergedAnime: UpdateMergedAnime = Injekt.get(),
     private val setAnimeEpisodeFlags: SetAnimeEpisodeFlags = Injekt.get(),
     private val setAnimeDefaultEpisodeFlags: SetAnimeDefaultEpisodeFlags = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
@@ -82,6 +95,16 @@ class AnimeScreenModel(
     private val successState: State.Success?
         get() = state.value as? State.Success
 
+    private inline fun updateSuccessState(transform: (State.Success) -> State.Success) {
+        mutableState.update { currentState ->
+            when (currentState) {
+                State.Loading -> currentState
+                is State.Error -> currentState
+                is State.Success -> transform(currentState)
+            }
+        }
+    }
+
     init {
         observeAnime()
         refresh(initial = true)
@@ -90,46 +113,32 @@ class AnimeScreenModel(
     private fun observeAnime() {
         screenModelScope.launchIO {
             combine(
-                animeRepository.getAnimeByIdAsFlow(animeId),
-                animeEpisodeRepository.getEpisodesByAnimeIdAsFlow(animeId),
-                animePlaybackStateRepository.getByAnimeIdAsFlow(animeId),
-                getAnimeCategories.subscribe(animeId),
-            ) { anime, episodes, playbackStates, categories ->
-                val currentSuccess = successState
-                val playbackStateByEpisodeId = playbackStates.associateBy { it.episodeId }
-                val displayedEpisodes = episodes
-                    .filterEpisodes(anime, playbackStateByEpisodeId)
-                    .sortEpisodes(anime)
-                val source = animeSourceManager.get(anime.source)
-                val hasScheduleSupport = source is AnimeScheduleSource
-                val schedule = if (hasScheduleSupport) {
-                    when (val currentSchedule = currentSuccess?.schedule) {
-                        null,
-                        ScheduleState.Unavailable,
-                        -> ScheduleState.NotLoaded
-                        else -> currentSchedule
-                    }
+                getAnimeWithEpisodes.subscribe(animeId, bypassMerge = bypassMerge),
+                if (bypassMerge) {
+                    flowOf(emptyList())
                 } else {
-                    ScheduleState.Unavailable
-                }
-                State.Success(
-                    anime = anime,
-                    sourceName = animeSourceManager.get(anime.source)?.name,
-                    episodes = displayedEpisodes.toImmutableList(),
-                    playbackStateByEpisodeId = playbackStateByEpisodeId,
-                    primaryEpisodeId = selectPrimaryEpisodeId(displayedEpisodes, playbackStateByEpisodeId),
-                    selection = displayedEpisodes.asSequence()
-                        .map(AnimeEpisode::id)
-                        .filter(selectedEpisodeIds::contains)
-                        .toSet()
-                        .toImmutableSet(),
-                    categories = categories.filterNot { it.isSystemCategory }.toImmutableList(),
-                    hasScheduleSupport = hasScheduleSupport,
-                    schedule = schedule,
-                    isRefreshing = currentSuccess?.isRefreshing ?: false,
-                    dialog = currentSuccess?.dialog,
-                )
+                    getMergedAnime.subscribeGroupByAnimeId(animeId)
+                },
+            ) { (anime, episodes), merges ->
+                Triple(anime, episodes, merges.sortedBy(AnimeMerge::position))
             }
+                .flatMapLatest { (anime, episodes, merges) ->
+                    val memberIds = merges.map(AnimeMerge::animeId).ifEmpty { listOf(anime.id) }
+                    combine(
+                        mergedMemberAnimeFlow(memberIds),
+                        mergedPlaybackStatesFlow(memberIds),
+                        mergedCategoriesFlow(memberIds),
+                    ) { memberAnimes, playbackStates, categories ->
+                        buildSuccessState(
+                            anime = anime,
+                            episodes = episodes,
+                            memberIds = memberIds,
+                            memberAnimes = memberAnimes,
+                            playbackStates = playbackStates,
+                            categories = categories,
+                        )
+                    }
+                }
                 .catch { e ->
                     logcat(LogPriority.ERROR, e)
                     mutableState.value = State.Error(with(context) { e.formattedMessage })
@@ -149,19 +158,30 @@ class AnimeScreenModel(
     fun refresh(initial: Boolean = false) {
         screenModelScope.launchIO {
             val currentAnime = successState?.anime ?: runCatching {
-                animeRepository.getAnimeById(animeId)
+                getAnimeWithEpisodes.awaitAnime(animeId)
             }.getOrElse {
                 mutableState.value = State.Error(with(context) { it.formattedMessage })
                 return@launchIO
             }
 
-            if (animeSourceManager.get(currentAnime.source) == null) {
-                return@launchIO
-            }
+            val membersToRefresh = getMergeMembers().ifEmpty { listOf(currentAnime) }
 
             setRefreshing(true)
             try {
-                syncAnimeWithSource(currentAnime)
+                var failure: Throwable? = null
+                membersToRefresh.forEach { memberAnime ->
+                    runCatching {
+                        if (animeSourceManager.get(memberAnime.source) != null) {
+                            syncAnimeWithSource(memberAnime)
+                        }
+                    }.onFailure { throwable ->
+                        logcat(LogPriority.ERROR, throwable)
+                        if (failure == null) {
+                            failure = throwable
+                        }
+                    }
+                }
+                failure?.let { throw it }
                 if (!initial) {
                     loadSchedule(force = true)
                 }
@@ -179,9 +199,14 @@ class AnimeScreenModel(
     }
 
     fun toggleFavorite() {
-        val currentAnime = successState?.anime ?: return
-        if (currentAnime.favorite && successState?.isSelectionMode == true) {
+        val currentState = successState ?: return
+        val currentAnime = currentState.anime
+        if (currentAnime.favorite && currentState.isSelectionMode) {
             clearSelection()
+        }
+        if (currentState.isMerged && currentAnime.favorite) {
+            showRemoveMergedAnimeDialog()
+            return
         }
         screenModelScope.launchIO {
             val favorite = !currentAnime.favorite
@@ -207,44 +232,44 @@ class AnimeScreenModel(
     }
 
     fun setUnwatchedFilter(state: tachiyomi.core.common.preference.TriState) {
-        val anime = successState?.anime ?: return
-
         val flag = when (state) {
             tachiyomi.core.common.preference.TriState.DISABLED -> AnimeTitle.SHOW_ALL
             tachiyomi.core.common.preference.TriState.ENABLED_IS -> AnimeTitle.EPISODE_SHOW_UNWATCHED
             tachiyomi.core.common.preference.TriState.ENABLED_NOT -> AnimeTitle.EPISODE_SHOW_WATCHED
         }
         screenModelScope.launchNonCancellable {
-            setAnimeEpisodeFlags.awaitSetUnwatchedFilter(anime, flag)
+            updateMergedMemberAnime { memberAnime ->
+                setAnimeEpisodeFlags.awaitSetUnwatchedFilter(memberAnime, flag)
+            }
         }
     }
 
     fun setStartedFilter(state: tachiyomi.core.common.preference.TriState) {
-        val anime = successState?.anime ?: return
-
         val flag = when (state) {
             tachiyomi.core.common.preference.TriState.DISABLED -> AnimeTitle.SHOW_ALL
             tachiyomi.core.common.preference.TriState.ENABLED_IS -> AnimeTitle.EPISODE_SHOW_STARTED
             tachiyomi.core.common.preference.TriState.ENABLED_NOT -> AnimeTitle.EPISODE_SHOW_NOT_STARTED
         }
         screenModelScope.launchNonCancellable {
-            setAnimeEpisodeFlags.awaitSetStartedFilter(anime, flag)
+            updateMergedMemberAnime { memberAnime ->
+                setAnimeEpisodeFlags.awaitSetStartedFilter(memberAnime, flag)
+            }
         }
     }
 
     fun setDisplayMode(mode: Long) {
-        val anime = successState?.anime ?: return
-
         screenModelScope.launchNonCancellable {
-            setAnimeEpisodeFlags.awaitSetDisplayMode(anime, mode)
+            updateMergedMemberAnime { memberAnime ->
+                setAnimeEpisodeFlags.awaitSetDisplayMode(memberAnime, mode)
+            }
         }
     }
 
     fun setSorting(sort: Long) {
-        val anime = successState?.anime ?: return
-
         screenModelScope.launchNonCancellable {
-            setAnimeEpisodeFlags.awaitSetSortingModeOrFlipOrder(anime, sort)
+            updateMergedMemberAnime { memberAnime ->
+                setAnimeEpisodeFlags.awaitSetSortingModeOrFlipOrder(memberAnime, sort)
+            }
         }
     }
 
@@ -263,9 +288,10 @@ class AnimeScreenModel(
     }
 
     fun resetToDefaultSettings() {
-        val anime = successState?.anime ?: return
         screenModelScope.launchNonCancellable {
-            setAnimeDefaultEpisodeFlags.await(anime)
+            updateMergedMemberAnime { memberAnime ->
+                setAnimeDefaultEpisodeFlags.await(memberAnime)
+            }
         }
     }
 
@@ -409,19 +435,17 @@ class AnimeScreenModel(
         if (!currentAnime.favorite) return
 
         screenModelScope.launchIO {
-            val selectedCategoryIds = getAnimeCategories.await(currentAnime.id)
-                .filterNot { it.isSystemCategory }
-                .map { it.id }
+            val selectedCategoryIds = getMergedMemberIds()
+                .flatMap { memberId -> getAnimeCategories.await(memberId) }
+                .filterNot(Category::isSystemCategory)
+                .map(Category::id)
                 .toSet()
             val availableCategories = getCategories.await()
                 .filterNot { it.isSystemCategory }
                 .mapAsCheckboxState { it.id in selectedCategoryIds }
                 .toImmutableList()
 
-            mutableState.update { currentState ->
-                val success = currentState as? State.Success ?: return@update currentState
-                success.copy(dialog = Dialog.ChangeCategory(availableCategories))
-            }
+            updateSuccessState { it.copy(dialog = Dialog.ChangeCategory(availableCategories)) }
         }
     }
 
@@ -429,36 +453,23 @@ class AnimeScreenModel(
         val currentAnime = successState?.anime ?: return
         if (!currentAnime.favorite) return
 
-        mutableState.update { currentState ->
-            val success = currentState as? State.Success ?: return@update currentState
-            success.copy(dialog = Dialog.EditDisplayName(currentAnime.displayName.orEmpty()))
-        }
+        updateSuccessState { it.copy(dialog = Dialog.EditDisplayName(currentAnime.displayName.orEmpty())) }
     }
 
     fun showSettingsDialog() {
-        val currentAnime = successState?.anime ?: return
-
-        mutableState.update { currentState ->
-            val success = currentState as? State.Success ?: return@update currentState
-            success.copy(dialog = Dialog.SettingsSheet)
-        }
+        successState ?: return
+        updateSuccessState { it.copy(dialog = Dialog.SettingsSheet) }
     }
 
     fun showCoverDialog() {
-        mutableState.update { currentState ->
-            val success = currentState as? State.Success ?: return@update currentState
-            success.copy(dialog = Dialog.FullCover)
-        }
+        updateSuccessState { it.copy(dialog = Dialog.FullCover) }
     }
 
     fun showScheduleDialog() {
         val currentState = successState ?: return
         if (!currentState.showScheduleButton) return
 
-        mutableState.update { currentState ->
-            val success = currentState as? State.Success ?: return@update currentState
-            success.copy(dialog = Dialog.Schedule)
-        }
+        updateSuccessState { it.copy(dialog = Dialog.Schedule) }
     }
 
     fun retryLoadSchedule() {
@@ -536,25 +547,20 @@ class AnimeScreenModel(
     }
 
     fun setCategories(categoryIds: List<Long>) {
-        val currentAnime = successState?.anime ?: return
         screenModelScope.launchIO {
-            setAnimeCategories.await(currentAnime.id, categoryIds)
+            getMergedMemberIds().forEach { memberId ->
+                setAnimeCategories.await(memberId, categoryIds)
+            }
             dismissDialog()
         }
     }
 
     fun dismissDialog() {
-        mutableState.update { currentState ->
-            val success = currentState as? State.Success ?: return@update currentState
-            success.copy(dialog = null)
-        }
+        updateSuccessState { it.copy(dialog = null) }
     }
 
     private fun setRefreshing(isRefreshing: Boolean) {
-        mutableState.update { currentState ->
-            val success = currentState as? State.Success ?: return@update currentState
-            success.copy(isRefreshing = isRefreshing)
-        }
+        updateSuccessState { it.copy(isRefreshing = isRefreshing) }
     }
 
     sealed interface Dialog {
@@ -568,10 +574,27 @@ class AnimeScreenModel(
             val initialSelection: ImmutableList<CheckboxState.State<Category>>,
         ) : Dialog
 
+        data class ManageMerge(
+            val targetId: Long,
+            val members: ImmutableList<MergeMember>,
+            val removableIds: ImmutableList<Long> = persistentListOf(),
+        ) : Dialog
+
+        data class RemoveMergedAnime(
+            val members: ImmutableList<AnimeTitle>,
+        ) : Dialog
+
         data class EditDisplayName(
             val initialValue: String,
         ) : Dialog
     }
+
+    @Immutable
+    data class MergeMember(
+        val id: Long,
+        val anime: AnimeTitle,
+        val subtitle: String,
+    )
 
     sealed interface State {
         data object Loading : State
@@ -582,6 +605,9 @@ class AnimeScreenModel(
         data class Success(
             val anime: AnimeTitle,
             val sourceName: String?,
+            val memberIds: ImmutableList<Long>,
+            val memberTitleById: Map<Long, String>,
+            val mergedMemberTitles: ImmutableList<String>,
             val episodes: ImmutableList<AnimeEpisode>,
             val playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
             val primaryEpisodeId: Long?,
@@ -592,7 +618,11 @@ class AnimeScreenModel(
             val isRefreshing: Boolean,
             val dialog: Dialog? = null,
         ) : State {
-            val sourceAvailable: Boolean = sourceName != null
+            val isMerged: Boolean
+                get() = memberIds.size > 1
+
+            val sourceAvailable: Boolean
+                get() = sourceName != null || isMerged
 
             val isSelectionMode: Boolean = selection.isNotEmpty()
 
@@ -614,6 +644,23 @@ class AnimeScreenModel(
 
             val primaryEpisode: AnimeEpisode?
                 get() = episodes.firstOrNull { it.id == primaryEpisodeId }
+
+            val episodeListItems: List<AnimeEpisodeListEntry>
+                get() = if (!isMerged) {
+                    episodes.map(AnimeEpisodeListEntry::Item)
+                } else {
+                    buildList {
+                        episodes.groupedByMergedMember(memberIds).forEach { (memberId, memberEpisodes) ->
+                            add(
+                                AnimeEpisodeListEntry.MemberHeader(
+                                    animeId = memberId,
+                                    title = memberTitleById[memberId].orEmpty().ifBlank { anime.displayTitle },
+                                ),
+                            )
+                            addAll(memberEpisodes.map(AnimeEpisodeListEntry::Item))
+                        }
+                    }
+                }
 
             val scheduleSummary: ScheduleSummary
                 get() = when (val schedule = schedule) {
@@ -688,6 +735,268 @@ class AnimeScreenModel(
             }
         }
     }
+
+    fun showManageMergeDialog() {
+        val currentState = successState ?: return
+        if (!currentState.isMerged) return
+
+        screenModelScope.launchIO {
+            val targetId = getVisibleAnimeId(currentState.anime.id)
+            val members = getMergeMembers().map { memberAnime ->
+                MergeMember(
+                    id = memberAnime.id,
+                    anime = memberAnime,
+                    subtitle = buildMergeSubtitle(memberAnime),
+                )
+            }
+                .toImmutableList()
+            updateSuccessState {
+                it.copy(dialog = Dialog.ManageMerge(targetId = targetId, members = members))
+            }
+        }
+    }
+
+    fun removeMergedMembers(animeIds: List<Long>) {
+        val currentState = successState ?: return
+        val dialog = currentState.dialog as? Dialog.ManageMerge
+        screenModelScope.launchIO {
+            if (animeIds.isEmpty()) return@launchIO
+            if (dialog != null) {
+                saveManageMerge(dialog, animeIds)
+            } else {
+                updateMergedAnime.awaitRemoveMembers(getVisibleAnimeId(currentState.anime.id), animeIds)
+            }
+            dismissDialog()
+        }
+    }
+
+    fun reorderMergeMembers(fromIndex: Int, toIndex: Int) {
+        updateSuccessState { currentState ->
+            val dialog = currentState.dialog as? Dialog.ManageMerge ?: return@updateSuccessState currentState
+            if (fromIndex !in dialog.members.indices || toIndex !in dialog.members.indices) {
+                return@updateSuccessState currentState
+            }
+
+            val reordered = dialog.members.toMutableList().apply {
+                val item = removeAt(fromIndex)
+                add(toIndex, item)
+            }
+            val reorderedRemovalIds = reordered.mapNotNull { member ->
+                member.id.takeIf { it in dialog.removableIds }
+            }.toImmutableList()
+
+            currentState.copy(dialog = dialog.copy(members = reordered.toImmutableList(), removableIds = reorderedRemovalIds))
+        }
+    }
+
+    fun toggleMergedMemberRemoval(animeId: Long) {
+        updateSuccessState { currentState ->
+            val dialog = currentState.dialog as? Dialog.ManageMerge ?: return@updateSuccessState currentState
+            if (animeId == dialog.targetId || dialog.members.none { it.id == animeId }) {
+                return@updateSuccessState currentState
+            }
+
+            val updatedIds = dialog.removableIds.toMutableList().apply {
+                if (animeId in this) {
+                    remove(animeId)
+                } else {
+                    add(animeId)
+                }
+            }.toImmutableList()
+
+            currentState.copy(dialog = dialog.copy(removableIds = updatedIds))
+        }
+    }
+
+    fun saveMergeOrder() {
+        val dialog = successState?.dialog as? Dialog.ManageMerge ?: return
+        screenModelScope.launchIO {
+            saveManageMerge(dialog, dialog.removableIds)
+            dismissDialog()
+        }
+    }
+
+    fun unmergeAll() {
+        val currentState = successState ?: return
+        screenModelScope.launchIO {
+            updateMergedAnime.awaitDeleteGroup(getVisibleAnimeId(currentState.anime.id))
+            dismissDialog()
+        }
+    }
+
+    fun removeMergedAnime(animes: List<AnimeTitle>) {
+        val currentState = successState ?: return
+        screenModelScope.launchIO {
+            updateMergedAnime.awaitDeleteGroup(getVisibleAnimeId(currentState.anime.id))
+            animes.forEach { anime ->
+                animeRepository.update(
+                    AnimeTitleUpdate(
+                        id = anime.id,
+                        favorite = false,
+                        dateAdded = 0L,
+                    ),
+                )
+            }
+            dismissDialog()
+        }
+    }
+
+    suspend fun getVisibleAnimeId(animeId: Long): Long {
+        if (bypassMerge) return animeId
+        return getMergedAnime.awaitVisibleTargetId(animeId)
+    }
+
+    private fun showRemoveMergedAnimeDialog() {
+        val currentState = successState ?: return
+        if (!currentState.isMerged) return
+
+        screenModelScope.launchIO {
+            val members = getMergeMembers().toImmutableList()
+            updateSuccessState {
+                it.copy(dialog = Dialog.RemoveMergedAnime(members))
+            }
+        }
+    }
+
+    private suspend fun buildSuccessState(
+        anime: AnimeTitle,
+        episodes: List<AnimeEpisode>,
+        memberIds: List<Long>,
+        memberAnimes: List<AnimeTitle>,
+        playbackStates: List<AnimePlaybackState>,
+        categories: List<Category>,
+    ): State.Success {
+        val currentSuccess = successState
+        val playbackStateByEpisodeId = playbackStates.associateBy(AnimePlaybackState::episodeId)
+        val displayedEpisodes = episodes
+            .filterEpisodes(anime, playbackStateByEpisodeId)
+            .sortEpisodes(anime, memberIds)
+        val source = animeSourceManager.get(anime.source)
+        val hasScheduleSupport = source is AnimeScheduleSource
+        val schedule = if (hasScheduleSupport) {
+            when (val currentSchedule = currentSuccess?.schedule) {
+                null,
+                ScheduleState.Unavailable,
+                -> ScheduleState.NotLoaded
+                else -> currentSchedule
+            }
+        } else {
+            ScheduleState.Unavailable
+        }
+
+        return State.Success(
+            anime = anime,
+            sourceName = getSourceName(anime, memberIds),
+            memberIds = memberIds.toImmutableList(),
+            memberTitleById = memberAnimes.associate { it.id to it.displayTitle },
+            mergedMemberTitles = memberAnimes.map(AnimeTitle::displayTitle)
+                .filter { it.isNotBlank() }
+                .distinct()
+                .toImmutableList(),
+            episodes = displayedEpisodes.toImmutableList(),
+            playbackStateByEpisodeId = playbackStateByEpisodeId,
+            primaryEpisodeId = selectPrimaryEpisodeId(displayedEpisodes, playbackStateByEpisodeId),
+            selection = displayedEpisodes.asSequence()
+                .map(AnimeEpisode::id)
+                .filter(selectedEpisodeIds::contains)
+                .toSet()
+                .toImmutableSet(),
+            categories = categories.toImmutableList(),
+            hasScheduleSupport = hasScheduleSupport,
+            schedule = schedule,
+            isRefreshing = currentSuccess?.isRefreshing ?: false,
+            dialog = currentSuccess?.dialog,
+        )
+    }
+
+    private suspend fun mergedMemberAnimeFlow(memberIds: List<Long>) =
+        combine(memberIds.map { memberId -> animeRepository.getAnimeByIdAsFlow(memberId) }) { animes ->
+            animes.map { it as AnimeTitle }
+        }
+
+    private fun mergedPlaybackStatesFlow(memberIds: List<Long>) =
+        combine(memberIds.map(animePlaybackStateRepository::getByAnimeIdAsFlow)) { playbackStates ->
+            playbackStates.flatMap { it as List<AnimePlaybackState> }
+        }
+
+    private fun mergedCategoriesFlow(memberIds: List<Long>) =
+        combine(memberIds.map(getAnimeCategories::subscribe)) { categories ->
+            categories.flatMap { it as List<Category> }
+                .filterNot(Category::isSystemCategory)
+                .distinctBy(Category::id)
+                .sortedBy(Category::order)
+        }
+
+    private suspend fun saveManageMerge(dialog: Dialog.ManageMerge, animeIdsToRemove: Collection<Long>) {
+        val animeIdsToRemoveSet = animeIdsToRemove.toSet()
+        val remainingIds = dialog.members.map(MergeMember::id)
+            .filterNot(animeIdsToRemoveSet::contains)
+        val targetId = remainingIds.firstOrNull { it == dialog.targetId } ?: remainingIds.firstOrNull()
+
+        if (targetId != null && remainingIds.size > 1) {
+            updateMergedAnime.awaitMerge(targetId, remainingIds)
+        } else {
+            updateMergedAnime.awaitDeleteGroup(dialog.targetId)
+        }
+    }
+
+    private suspend fun getMergedMemberIds(): List<Long> {
+        if (bypassMerge) return listOf(animeId)
+        return getMergedAnime.awaitGroupByAnimeId(animeId)
+            .sortedBy(AnimeMerge::position)
+            .map(AnimeMerge::animeId)
+            .ifEmpty { listOf(animeId) }
+    }
+
+    private suspend fun getMergeMembers(): List<AnimeTitle> {
+        return getMergedMemberIds().mapNotNull { memberId -> getAnimeOrNull(memberId) }
+    }
+
+    private suspend fun updateMergedMemberAnime(block: suspend (AnimeTitle) -> Unit) {
+        getMergeMembers().forEach { memberAnime ->
+            block(memberAnime)
+        }
+    }
+
+    private suspend fun getAnimeOrNull(id: Long): AnimeTitle? {
+        return runCatching { animeRepository.getAnimeById(id) }.getOrNull()
+    }
+
+    private fun getSourceName(anime: AnimeTitle, memberIds: List<Long>): String? {
+        return if (memberIds.size > 1) {
+            context.stringResource(MR.strings.multi_lang)
+        } else {
+            animeSourceManager.get(anime.source)?.name
+        }
+    }
+
+    private fun buildMergeSubtitle(anime: AnimeTitle): String {
+        val sourceName = animeSourceManager.get(anime.source)?.name
+            ?: context.stringResource(MR.strings.source_not_installed, anime.source.toString())
+        val creator = listOf(anime.director, anime.studio, anime.producer, anime.writer)
+            .firstOrNull { !it.isNullOrBlank() }
+        return buildString {
+            append(sourceName)
+            if (!creator.isNullOrBlank() && !creator.equals(sourceName, ignoreCase = true)) {
+                append(" • ")
+                append(creator)
+            }
+        }
+    }
+}
+
+@Immutable
+sealed class AnimeEpisodeListEntry {
+    @Immutable
+    data class MemberHeader(
+        val animeId: Long,
+        val title: String,
+    ) : AnimeEpisodeListEntry()
+
+    @Immutable
+    data class Item(
+        val episode: AnimeEpisode,
+    ) : AnimeEpisodeListEntry()
 }
 
 private fun List<AnimeEpisode>.filterEpisodes(
@@ -711,7 +1020,14 @@ private fun List<AnimeEpisode>.filterEpisodes(
         .toList()
 }
 
-private fun List<AnimeEpisode>.sortEpisodes(anime: AnimeTitle): List<AnimeEpisode> {
+private fun List<AnimeEpisode>.sortEpisodes(
+    anime: AnimeTitle,
+    memberIds: List<Long> = map(AnimeEpisode::animeId).distinct(),
+): List<AnimeEpisode> {
+    if (memberIds.size > 1) {
+        return sortedForMergedDisplay(anime, memberIds)
+    }
+
     val ascending = !anime.sortDescending()
     val comparator = when (anime.sorting) {
         AnimeTitle.EPISODE_SORTING_NUMBER -> compareBy<AnimeEpisode> {

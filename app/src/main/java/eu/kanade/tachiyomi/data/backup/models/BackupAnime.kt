@@ -37,6 +37,9 @@ data class BackupAnime(
     @ProtoNumber(30) var status: Long = 0,
     @ProtoNumber(31) var episodeFlags: Long = 0,
     @ProtoNumber(32) var coverLastModified: Long = 0,
+    @ProtoNumber(33) var mergeTargetSource: Long? = null,
+    @ProtoNumber(34) var mergeTargetUrl: String? = null,
+    @ProtoNumber(35) var mergePosition: Int? = null,
 ) {
     fun getAnimeImpl(): AnimeTitle {
         return AnimeTitle.create().copy(

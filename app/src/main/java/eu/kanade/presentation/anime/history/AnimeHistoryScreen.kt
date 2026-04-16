@@ -92,7 +92,7 @@ fun AnimeHistoryScreen(
             else -> AnimeHistoryScreenContent(
                 history = list,
                 contentPadding = contentPadding,
-                onClickCover = { onClickCover(it.history.animeId) },
+                onClickCover = { onClickCover(it.visibleAnimeId) },
                 onClickResume = { onClickResume(it.history.animeId, it.history.episodeId) },
                 onClickDelete = { onDialogChange(AnimeHistoryScreenModel.Dialog.Delete(it)) },
             )
@@ -149,6 +149,8 @@ private fun AnimeHistoryScreenContent(
                 }
                 is AnimeHistoryUiModel.Item -> {
                     AnimeHistoryItem(
+                        title = item.visibleTitle,
+                        coverData = item.visibleCoverData,
                         history = item.history,
                         onClickCover = { onClickCover(item) },
                         onClickResume = { onClickResume(item) },
@@ -162,6 +164,8 @@ private fun AnimeHistoryScreenContent(
 
 @Composable
 private fun AnimeHistoryItem(
+    title: String,
+    coverData: tachiyomi.domain.manga.model.MangaCover,
     history: tachiyomi.domain.anime.model.AnimeHistoryWithRelations,
     onClickCover: () -> Unit,
     onClickResume: () -> Unit,
@@ -177,7 +181,7 @@ private fun AnimeHistoryItem(
     ) {
         MangaCover.Book(
             modifier = Modifier.fillMaxHeight(),
-            data = history.coverData,
+            data = coverData,
             onClick = onClickCover,
         )
         Column(
@@ -186,7 +190,7 @@ private fun AnimeHistoryItem(
                 .padding(start = MaterialTheme.padding.medium, end = MaterialTheme.padding.small),
         ) {
             Text(
-                text = history.title,
+                text = title,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

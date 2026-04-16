@@ -6,6 +6,7 @@ interface VideoStreamResolver {
     suspend operator fun invoke(
         animeId: Long,
         episodeId: Long,
+        ownerAnimeId: Long = animeId,
         selection: VideoPlaybackSelection? = null,
     ): ResolveVideoStream.Result
 }

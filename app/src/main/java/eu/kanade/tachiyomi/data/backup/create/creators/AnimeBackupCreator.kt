@@ -14,6 +14,7 @@ import tachiyomi.data.anime.AnimePlaybackPreferencesMapper
 import tachiyomi.data.anime.AnimePlaybackStateMapper
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeHistory
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
@@ -31,6 +32,7 @@ class AnimeBackupCreator(
     private val handler: DatabaseHandler = Injekt.get(),
     private val profileProvider: ActiveProfileProvider = Injekt.get(),
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = Injekt.get(),
     private val animeRepository: AnimeRepository = Injekt.get(),
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
     private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
@@ -47,13 +49,15 @@ class AnimeBackupCreator(
         animes: List<AnimeTitle>,
         options: BackupOptions,
     ): List<BackupAnime> {
-        return animes.map { backupAnime(profileId, it, options) }
+        val allAnimeById = animeRepository.getAllAnimeByProfile(profileId).associateBy { it.id }
+        return animes.map { backupAnime(profileId, it, options, allAnimeById) }
     }
 
     private suspend fun backupAnime(
         profileId: Long,
         anime: AnimeTitle,
         options: BackupOptions,
+        allAnimeById: Map<Long, AnimeTitle>,
     ): BackupAnime {
         val animeObject = anime.toBackupAnime()
         getPlaybackPreferencesForBackup(profileId, anime.id)?.let { preferences ->
@@ -123,6 +127,18 @@ class AnimeBackupCreator(
                         watchedDuration = item.watchedDuration,
                     )
                 }
+            }
+        }
+
+        val mergeGroup = getMergedAnime.awaitGroupByAnimeId(anime.id)
+        if (mergeGroup.isNotEmpty()) {
+            val targetId = mergeGroup.first().targetId
+            val targetAnime = allAnimeById[targetId]
+            val position = mergeGroup.firstOrNull { it.animeId == anime.id }?.position?.toInt()
+            if (targetAnime != null && position != null) {
+                animeObject.mergeTargetSource = targetAnime.source
+                animeObject.mergeTargetUrl = targetAnime.url
+                animeObject.mergePosition = position
             }
         }
 

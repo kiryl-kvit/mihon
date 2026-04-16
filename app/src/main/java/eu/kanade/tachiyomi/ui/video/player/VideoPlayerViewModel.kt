@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
 import tachiyomi.domain.anime.model.PlayerQualityMode
@@ -36,6 +37,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
     private val resolveVideoStream: VideoStreamResolver = Injekt.get<ResolveVideoStream>(),
     private val animePlaybackPreferencesRepository: AnimePlaybackPreferencesRepository = Injekt.get(),
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
+    private val getAnimeWithEpisodes: GetAnimeWithEpisodes? = runCatching { Injekt.get<GetAnimeWithEpisodes>() }.getOrNull(),
     private val videoPlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
     private val videoHistoryRepository: AnimeHistoryRepository = Injekt.get(),
     private val resolveDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -50,19 +52,30 @@ class VideoPlayerViewModel @JvmOverloads constructor(
     private var initialized = false
     private var playbackSession: VideoPlaybackSession? = null
     private val persistMutex = Mutex()
-    private var animeId: Long = INVALID_ID
+    private var visibleAnimeId: Long = INVALID_ID
+    private var ownerAnimeId: Long = INVALID_ID
     private var episodeId: Long = INVALID_ID
+    private var bypassMerge: Boolean = false
     private var applySelectionJob: Job? = null
     private var previewSelectionJob: Job? = null
     private val selectionResultCache = LinkedHashMap<SelectionCacheKey, ResolveVideoStream.Result.Success>()
 
-    fun init(animeId: Long, episodeId: Long) {
+    fun init(
+        animeId: Long,
+        episodeId: Long,
+        ownerAnimeId: Long = animeId,
+        bypassMerge: Boolean = false,
+    ) {
         if (initialized) return
         initialized = true
-        this.animeId = animeId
+        this.visibleAnimeId = animeId
+        this.ownerAnimeId = ownerAnimeId
         this.episodeId = episodeId
+        this.bypassMerge = bypassMerge
         savedState[VIDEO_ID_KEY] = animeId
+        savedState[OWNER_VIDEO_ID_KEY] = ownerAnimeId
         savedState[EPISODE_ID_KEY] = episodeId
+        savedState[BYPASS_MERGE_KEY] = bypassMerge
 
         viewModelScope.launch {
             resolvePlayback(initial = true)
@@ -75,7 +88,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         applySelectionJob?.cancel()
         applySelectionJob = viewModelScope.launch {
             persistPlaybackPreferences(
-                animeId = current.animeId,
+                animeId = current.ownerAnimeId,
                 sourceSelection = selection,
                 adaptiveQuality = current.playback.currentAdaptiveQuality,
             )
@@ -137,7 +150,14 @@ class VideoPlayerViewModel @JvmOverloads constructor(
 
         previewSelectionJob = viewModelScope.launch {
             val result = try {
-                withContext(resolveDispatcher) { resolveVideoStream(current.animeId, current.episodeId, selection) }
+                withContext(resolveDispatcher) {
+                    resolveVideoStream(
+                        animeId = current.visibleAnimeId,
+                        episodeId = current.episodeId,
+                        ownerAnimeId = current.ownerAnimeId,
+                        selection = selection,
+                    )
+                }
             } catch (_: CancellationException) {
                 return@launch
             }
@@ -181,7 +201,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         )
         viewModelScope.launch {
             persistPlaybackPreferences(
-                animeId = current.animeId,
+                animeId = current.ownerAnimeId,
                 sourceSelection = current.playback.persistedSourceSelection,
                 adaptiveQuality = preference,
             )
@@ -248,7 +268,16 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             previousReady.copy(isSourceSwitching = true)
         }
 
-        mutableState.value = when (val result = withContext(resolveDispatcher) { resolveVideoStream(animeId, episodeId, selection) }) {
+        mutableState.value = when (
+            val result = withContext(resolveDispatcher) {
+                resolveVideoStream(
+                    animeId = visibleAnimeId,
+                    episodeId = episodeId,
+                    ownerAnimeId = ownerAnimeId,
+                    selection = selection,
+                )
+            }
+        ) {
             is ResolveVideoStream.Result.Success -> {
                 cacheSelectionResult(result.episode.id, result.playbackData.selection, result)
                 buildReadyState(
@@ -280,9 +309,16 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         }
     }
 
-    private suspend fun resolveEpisodeNavigation(animeId: Long, episodeId: Long): EpisodeNavigation {
-        val sortedEpisodes = animeEpisodeRepository.getEpisodesByAnimeId(animeId)
-            .sortedBy(AnimeEpisode::sourceOrder)
+    private suspend fun resolveEpisodeNavigation(
+        visibleAnimeId: Long,
+        episodeId: Long,
+    ): EpisodeNavigation {
+        val sortedEpisodes = getAnimeWithEpisodes?.awaitEpisodes(
+            id = visibleAnimeId,
+            bypassMerge = bypassMerge,
+        ) ?: animeEpisodeRepository.getEpisodesByAnimeId(
+            if (bypassMerge) visibleAnimeId else ownerAnimeId,
+        ).sortedBy(AnimeEpisode::sourceOrder)
         val currentIndex = sortedEpisodes.indexOfFirst { it.id == episodeId }
         if (currentIndex == -1) return EpisodeNavigation()
 
@@ -297,6 +333,8 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         applySelectionJob?.cancel()
         previewSelectionJob?.cancel()
         clearSelectionResultCache()
+        ownerAnimeId = animeEpisodeRepository.getEpisodeById(targetEpisodeId)?.animeId ?: ownerAnimeId
+        savedState[OWNER_VIDEO_ID_KEY] = ownerAnimeId
         savedState[EPISODE_ID_KEY] = targetEpisodeId
         episodeId = targetEpisodeId
         playbackSession = null
@@ -312,15 +350,19 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         val resumePositionMs = preservePositionMs
             ?: videoPlaybackStateRepository.getByEpisodeId(result.episode.id)?.positionMs
             ?: 0L
-        val navigation = resolveEpisodeNavigation(result.video.id, result.episode.id)
+        val navigation = resolveEpisodeNavigation(
+            visibleAnimeId = result.visibleAnime.id,
+            episodeId = result.episode.id,
+        )
         val playback = buildPlaybackUiState(result.playbackData, result.stream, result.savedPreferences)
             .copy(preview = preview)
         return State.Ready(
-            animeId = result.video.id,
+            visibleAnimeId = result.visibleAnime.id,
+            ownerAnimeId = result.ownerAnime.id,
             episodeId = result.episode.id,
             previousEpisodeId = navigation.previousEpisodeId,
             nextEpisodeId = navigation.nextEpisodeId,
-            videoTitle = result.video.displayTitle,
+            videoTitle = result.visibleAnime.displayTitle,
             episodeName = result.episode.name,
             streamLabel = playback.currentStreamLabel,
             streamUrl = playback.currentStream.request.url,
@@ -414,7 +456,8 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         data object Loading : State
 
         data class Ready(
-            val animeId: Long,
+            val visibleAnimeId: Long,
+            val ownerAnimeId: Long,
             val episodeId: Long,
             val previousEpisodeId: Long?,
             val nextEpisodeId: Long?,
@@ -455,7 +498,9 @@ class VideoPlayerViewModel @JvmOverloads constructor(
 
     companion object {
         private const val VIDEO_ID_KEY = "video_id"
+        private const val OWNER_VIDEO_ID_KEY = "owner_video_id"
         private const val EPISODE_ID_KEY = "episode_id"
+        private const val BYPASS_MERGE_KEY = "bypass_merge"
         private const val INVALID_ID = -1L
         private const val SELECTION_CACHE_LIMIT = 12
     }

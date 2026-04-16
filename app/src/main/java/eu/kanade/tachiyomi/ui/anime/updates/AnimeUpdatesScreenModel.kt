@@ -6,6 +6,7 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.addOrRemove
+import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.presentation.updates.UpdatesSelectionState
 import eu.kanade.presentation.updates.UpdatesUiModel
 import eu.kanade.presentation.updates.toUpdatesUiModels
@@ -34,11 +35,14 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.GetAnimeUpdates
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeUpdatesWithRelations
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
+import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
@@ -47,6 +51,8 @@ import uy.kohesive.injekt.api.get
 import java.time.ZonedDateTime
 
 class AnimeUpdatesScreenModel(
+    private val getAnime: GetAnime = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = Injekt.get(),
     private val getAnimeUpdates: GetAnimeUpdates = Injekt.get(),
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
     private val animePlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
@@ -87,12 +93,7 @@ class AnimeUpdatesScreenModel(
                     }
                 }
                 .collectLatest { updates ->
-                    val items = updates.map { update ->
-                        AnimeUpdatesItem(
-                            update = update,
-                            selected = update.episodeId in selectedEpisodeIds,
-                        )
-                    }.toPersistentList()
+                    val items = updates.toUpdateItems().toPersistentList()
 
                     mutableState.update {
                         it.copy(
@@ -239,6 +240,33 @@ class AnimeUpdatesScreenModel(
         libraryPreferences.newUpdatesCount.set(0)
     }
 
+    suspend fun getVisibleAnimeId(animeId: Long): Long {
+        return getMergedAnime.awaitVisibleTargetId(animeId)
+    }
+
+    private suspend fun List<AnimeUpdatesWithRelations>.toUpdateItems(): List<AnimeUpdatesItem> {
+        val visibleTargetCache = mutableMapOf<Long, Long>()
+        val visibleAnimeTitleCache = mutableMapOf<Long, Pair<String, MangaCover>?>()
+
+        return map { update ->
+            val visibleAnimeId = visibleTargetCache.getOrPut(update.animeId) {
+                getMergedAnime.awaitVisibleTargetId(update.animeId)
+            }
+            val visibleAnime = visibleAnimeTitleCache.getOrPut(visibleAnimeId) {
+                getAnime.await(visibleAnimeId)?.let { anime ->
+                    anime.displayTitle to anime.toMangaCover()
+                }
+            }
+            AnimeUpdatesItem(
+                update = update,
+                visibleAnimeId = visibleAnimeId,
+                visibleAnimeTitle = visibleAnime?.first ?: update.animeTitle,
+                visibleCoverData = visibleAnime?.second ?: update.coverData,
+                selected = update.episodeId in selectedEpisodeIds,
+            )
+        }
+    }
+
     private fun getUpdatesItemPreferenceFlow(): Flow<ItemPreferences> {
         return combine(
             updatesPreferences.filterUnread.changes(),
@@ -286,6 +314,9 @@ class AnimeUpdatesScreenModel(
 @Immutable
 data class AnimeUpdatesItem(
     val update: AnimeUpdatesWithRelations,
+    val visibleAnimeId: Long,
+    val visibleAnimeTitle: String,
+    val visibleCoverData: MangaCover,
     val selected: Boolean = false,
 )
 

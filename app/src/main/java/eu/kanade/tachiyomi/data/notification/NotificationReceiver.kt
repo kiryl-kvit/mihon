@@ -23,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.chapter.interactor.GetChapter
@@ -54,6 +55,7 @@ class NotificationReceiver : BroadcastReceiver() {
     private val downloadManager: DownloadManager by injectLazy()
     private val animeEpisodeRepository: AnimeEpisodeRepository by injectLazy()
     private val animePlaybackStateRepository: AnimePlaybackStateRepository by injectLazy()
+    private val getMergedAnime: GetMergedAnime by injectLazy()
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
@@ -90,6 +92,7 @@ class NotificationReceiver : BroadcastReceiver() {
                 openEpisode(
                     context,
                     intent.getLongExtra(EXTRA_ANIME_ID, -1),
+                    intent.getLongExtra(EXTRA_OWNER_ANIME_ID, intent.getLongExtra(EXTRA_ANIME_ID, -1)),
                     intent.getLongExtra(EXTRA_EPISODE_ID, -1),
                 )
             }
@@ -186,12 +189,17 @@ class NotificationReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun openEpisode(context: Context, animeId: Long, episodeId: Long) {
-        if (animeId <= -1 || episodeId <= -1) {
+    private fun openEpisode(context: Context, visibleAnimeId: Long, ownerAnimeId: Long, episodeId: Long) {
+        if (visibleAnimeId <= -1 || ownerAnimeId <= -1 || episodeId <= -1) {
             return
         }
 
-        val intent = VideoPlayerActivity.newIntent(context, animeId, episodeId).apply {
+        val intent = VideoPlayerActivity.newIntent(
+            context = context,
+            animeId = visibleAnimeId,
+            ownerAnimeId = ownerAnimeId,
+            episodeId = episodeId,
+        ).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         context.startActivity(intent)
@@ -334,6 +342,7 @@ class NotificationReceiver : BroadcastReceiver() {
         private const val EXTRA_NOTIFICATION_ID = "$ID.$NAME.NOTIFICATION_ID"
         private const val EXTRA_GROUP_ID = "$ID.$NAME.EXTRA_GROUP_ID"
         private const val EXTRA_ANIME_ID = "$ID.$NAME.EXTRA_ANIME_ID"
+        private const val EXTRA_OWNER_ANIME_ID = "$ID.$NAME.EXTRA_OWNER_ANIME_ID"
         private const val EXTRA_EPISODE_ID = "$ID.$NAME.EXTRA_EPISODE_ID"
         private const val EXTRA_EPISODE_IDS = "$ID.$NAME.EXTRA_EPISODE_IDS"
         private const val EXTRA_MANGA_ID = "$ID.$NAME.EXTRA_MANGA_ID"
@@ -488,10 +497,16 @@ class NotificationReceiver : BroadcastReceiver() {
             )
         }
 
-        internal fun openEpisodePendingActivity(context: Context, animeId: Long, episodeId: Long): PendingIntent {
+        internal fun openEpisodePendingActivity(
+            context: Context,
+            visibleAnimeId: Long,
+            ownerAnimeId: Long,
+            episodeId: Long,
+        ): PendingIntent {
             val newIntent = Intent(context, NotificationReceiver::class.java).apply {
                 action = ACTION_OPEN_EPISODE
-                putExtra(EXTRA_ANIME_ID, animeId)
+                putExtra(EXTRA_ANIME_ID, visibleAnimeId)
+                putExtra(EXTRA_OWNER_ANIME_ID, ownerAnimeId)
                 putExtra(EXTRA_EPISODE_ID, episodeId)
             }
             return PendingIntent.getBroadcast(

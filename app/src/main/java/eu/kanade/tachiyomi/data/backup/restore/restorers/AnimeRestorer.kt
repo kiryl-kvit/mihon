@@ -9,6 +9,7 @@ import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeHistoryUpdate
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
 import tachiyomi.domain.anime.model.AnimePlaybackState
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
@@ -23,11 +24,14 @@ class AnimeRestorer(
     private val profileProvider: ActiveProfileProvider = Injekt.get(),
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     private val animeRepository: AnimeRepository = Injekt.get(),
+    private val updateMergedAnime: UpdateMergedAnime = Injekt.get(),
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
     private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
     private val animePlaybackPreferencesRepository: AnimePlaybackPreferencesRepository = Injekt.get(),
     private val animePlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
 ) {
+
+    private val pendingMerges = linkedMapOf<Pair<Long, String>, PendingMergeGroup>()
 
     suspend fun sortByNew(backupAnimes: List<BackupAnime>): List<BackupAnime> {
         val urlsBySource = animeRepository.getAllAnimeByProfile(profileProvider.activeProfileId)
@@ -86,7 +90,37 @@ class AnimeRestorer(
             restoreEpisodes(restoredAnime.id, backupAnime)
             restoreHistory(restoredAnime.id, backupAnime)
             restorePlaybackPreferences(restoredAnime.id, backupAnime)
+            enqueueMerge(restoredAnime, backupAnime)
         }
+    }
+
+    suspend fun restorePendingMerges() {
+        pendingMerges.values.forEach { merge ->
+            val targetAnime = animeRepository.getAnimeByUrlAndSourceId(merge.targetUrl, merge.targetSource) ?: return@forEach
+            val orderedIds = merge.members
+                .let { members ->
+                    if (members.any { it.source == merge.targetSource && it.url == merge.targetUrl }) {
+                        members
+                    } else {
+                        members +
+                            PendingMergeMember(
+                                source = merge.targetSource,
+                                url = merge.targetUrl,
+                                position = Int.MIN_VALUE,
+                            )
+                    }
+                }
+                .sortedBy { it.position }
+                .mapNotNull { member ->
+                    animeRepository.getAnimeByUrlAndSourceId(member.url, member.source)?.id
+                }
+                .distinct()
+
+            if (targetAnime.id in orderedIds && orderedIds.size > 1) {
+                updateMergedAnime.awaitMerge(targetAnime.id, orderedIds)
+            }
+        }
+        pendingMerges.clear()
     }
 
     private suspend fun restoreCategories(
@@ -179,4 +213,37 @@ class AnimeRestorer(
             ),
         )
     }
+
+    private fun enqueueMerge(anime: tachiyomi.domain.anime.model.AnimeTitle, backupAnime: BackupAnime) {
+        val targetSource = backupAnime.mergeTargetSource ?: return
+        val targetUrl = backupAnime.mergeTargetUrl ?: return
+        val position = backupAnime.mergePosition ?: return
+
+        val key = targetSource to targetUrl
+        val group = pendingMerges.getOrPut(key) {
+            PendingMergeGroup(
+                targetSource = targetSource,
+                targetUrl = targetUrl,
+                members = mutableListOf(),
+            )
+        }
+        group.members.removeAll { it.source == anime.source && it.url == anime.url }
+        group.members.add(PendingMergeMember(source = anime.source, url = anime.url, position = position))
+        if (targetSource == anime.source && targetUrl == anime.url) {
+            group.members.removeAll { it.source == targetSource && it.url == targetUrl }
+            group.members.add(PendingMergeMember(source = targetSource, url = targetUrl, position = position))
+        }
+    }
+
+    private data class PendingMergeGroup(
+        val targetSource: Long,
+        val targetUrl: String,
+        val members: MutableList<PendingMergeMember>,
+    )
+
+    private data class PendingMergeMember(
+        val source: Long,
+        val url: String,
+        val position: Int,
+    )
 }

@@ -87,6 +87,7 @@ class ProfileDatabase(
             anime_historyQueries.removeAllHistory(profileId)
             anime_playback_stateQueries.deleteByProfile(profileId)
             animes_categoriesQueries.deleteByProfile(profileId)
+            merged_animesQueries.deleteByProfile(profileId)
             anime_episodesQueries.deleteByProfile(profileId)
             animesQueries.deleteByProfile(profileId)
             historyQueries.removeAllHistory(profileId)

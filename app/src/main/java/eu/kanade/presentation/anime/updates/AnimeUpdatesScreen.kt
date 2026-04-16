@@ -46,9 +46,9 @@ fun AnimeUpdatesScreen(
         ) { item ->
             ChapterUpdatesUiItem(
                 modifier = Modifier.animateItemFastScroll(),
-                title = item.update.animeTitle,
+                title = item.visibleAnimeTitle,
                 subtitle = item.update.episodeName,
-                coverData = item.update.coverData,
+                coverData = item.visibleCoverData,
                 selected = item.selected,
                 read = item.update.completed,
                 bookmark = false,

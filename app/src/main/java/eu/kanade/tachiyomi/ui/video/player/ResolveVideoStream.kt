@@ -31,14 +31,17 @@ class ResolveVideoStream(
     override suspend operator fun invoke(
         animeId: Long,
         episodeId: Long,
+        ownerAnimeId: Long,
         selection: VideoPlaybackSelection?,
     ): Result {
-        val video = runCatching { videoRepository.getAnimeById(animeId) }
+        val visibleAnime = runCatching { videoRepository.getAnimeById(animeId) }
+            .getOrElse { return Result.Error(Reason.VideoNotFound) }
+        val ownerAnime = runCatching { videoRepository.getAnimeById(ownerAnimeId) }
             .getOrElse { return Result.Error(Reason.VideoNotFound) }
         val episode = videoEpisodeRepository.getEpisodeById(episodeId)
             ?: return Result.Error(Reason.EpisodeNotFound)
 
-        if (episode.animeId != video.id) {
+        if (episode.animeId != ownerAnime.id) {
             return Result.Error(Reason.EpisodeMismatch)
         }
 
@@ -49,11 +52,11 @@ class ResolveVideoStream(
             return Result.Error(Reason.SourceLoadTimeout)
         }
 
-        val source = videoSourceManager.get(video.source)
+        val source = videoSourceManager.get(ownerAnime.source)
             ?: return Result.Error(Reason.SourceNotFound)
 
-        val savedPreferences = animePlaybackPreferencesRepository.getByAnimeId(video.id)
-            ?: defaultPlaybackPreferences(video.id)
+        val savedPreferences = animePlaybackPreferencesRepository.getByAnimeId(ownerAnime.id)
+            ?: defaultPlaybackPreferences(ownerAnime.id)
         val requestedSelection = selection ?: VideoPlaybackSelection(
             dubKey = savedPreferences.dubKey,
             streamKey = savedPreferences.streamKey,
@@ -81,7 +84,8 @@ class ResolveVideoStream(
         )
 
         return Result.Success(
-            video = video,
+            visibleAnime = visibleAnime,
+            ownerAnime = ownerAnime,
             episode = episode,
             playbackData = resolvedPlaybackData,
             stream = stream,
@@ -91,7 +95,8 @@ class ResolveVideoStream(
 
     sealed interface Result {
         data class Success(
-            val video: AnimeTitle,
+            val visibleAnime: AnimeTitle,
+            val ownerAnime: AnimeTitle,
             val episode: AnimeEpisode,
             val playbackData: VideoPlaybackData,
             val stream: VideoStream,

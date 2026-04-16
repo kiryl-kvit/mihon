@@ -49,9 +49,10 @@ class ResolveVideoStreamTest {
             ),
         )
 
-        val result = resolver(video.id, episode.id)
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
 
-        (result as ResolveVideoStream.Result.Success).video shouldBe video
+        (result as ResolveVideoStream.Result.Success).visibleAnime shouldBe video
+        result.ownerAnime shouldBe video
         result.episode shouldBe episode
         result.stream shouldBe firstStream
     }
@@ -72,7 +73,7 @@ class ResolveVideoStreamTest {
             sourceInitTimeoutMs = 1L,
         )
 
-        val result = resolver(video.id, episode.id)
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
 
         result shouldBe ResolveVideoStream.Result.Error(ResolveVideoStream.Reason.SourceLoadTimeout)
     }
@@ -95,7 +96,7 @@ class ResolveVideoStreamTest {
             streamFetchTimeoutMs = 1L,
         )
 
-        val result = resolver(video.id, episode.id)
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
 
         result shouldBe ResolveVideoStream.Result.Error(ResolveVideoStream.Reason.StreamFetchTimeout)
     }
@@ -112,7 +113,7 @@ class ResolveVideoStreamTest {
             videoSourceManager = FakeAnimeSourceManager(source = null),
         )
 
-        val result = resolver(video.id, episode.id)
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
 
         result shouldBe ResolveVideoStream.Result.Error(ResolveVideoStream.Reason.SourceNotFound)
     }
@@ -131,7 +132,7 @@ class ResolveVideoStreamTest {
             ),
         )
 
-        val result = resolver(video.id, episode.id)
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
 
         result shouldBe ResolveVideoStream.Result.Error(ResolveVideoStream.Reason.NoStreams)
     }
@@ -150,7 +151,7 @@ class ResolveVideoStreamTest {
             ),
         )
 
-        val result = resolver(video.id, episode.id)
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
 
         result shouldBe ResolveVideoStream.Result.Error(ResolveVideoStream.Reason.EpisodeMismatch)
     }

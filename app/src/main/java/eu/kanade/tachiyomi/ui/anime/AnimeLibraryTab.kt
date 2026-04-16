@@ -5,21 +5,38 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -37,6 +54,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -45,6 +63,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.core.preference.PreferenceMutableState
+import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.core.util.ifAnimeSourcesLoaded
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.TabbedDialog
@@ -55,6 +74,7 @@ import eu.kanade.presentation.library.components.LazyLibraryGrid
 import eu.kanade.presentation.library.components.LibraryPageEmptyScreen
 import eu.kanade.presentation.library.components.SharedLibraryContent
 import eu.kanade.presentation.library.components.LibraryToolbar
+import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.library.components.MangaCompactGridItem
 import eu.kanade.presentation.library.components.MangaListItem
@@ -74,6 +94,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import dev.icerock.moko.resources.StringResource
+import sh.calvin.reorderable.ReorderableCollectionItemScope
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
@@ -201,7 +224,7 @@ data object AnimeLibraryTab : Tab {
             bottomBar = {
                 LibraryBottomActionMenu(
                     visible = state.selectionMode,
-                    onMergeClicked = null,
+                    onMergeClicked = screenModel::openMergeDialog.takeIf { screenModel.canMergeSelection() },
                     onChangeCategoryClicked = screenModel::openChangeCategoryDialog,
                     onMarkAsReadClicked = { screenModel.markWatchedSelection(true) },
                     onMarkAsUnreadClicked = { screenModel.markWatchedSelection(false) },
@@ -248,11 +271,12 @@ data object AnimeLibraryTab : Tab {
                     getDisplayMode = screenModel::getDisplayMode,
                     getColumnsForOrientation = screenModel::getColumnsForOrientation,
                     onOpenAnime = { navigator.push(AnimeScreen(it)) },
-                    onOpenEpisode = { animeId, episodeId ->
+                    onOpenEpisode = { visibleAnimeId, ownerAnimeId, episodeId ->
                         context.startActivity(
                             VideoPlayerActivity.newIntent(
                                 context = context,
-                                animeId = animeId,
+                                animeId = visibleAnimeId,
+                                ownerAnimeId = ownerAnimeId,
                                 episodeId = episodeId,
                             ),
                         )
@@ -283,6 +307,15 @@ data object AnimeLibraryTab : Tab {
                         screenModel.clearSelection()
                         screenModel.setAnimeCategories(dialog.animeIds, include, exclude)
                     },
+                )
+            }
+            is AnimeLibraryScreenModel.Dialog.MergeAnime -> {
+                MergeLibraryAnimeDialog(
+                    dialog = dialog,
+                    onDismissRequest = screenModel::closeDialog,
+                    onMove = screenModel::reorderMergeSelection,
+                    onSelectTarget = screenModel::setMergeTarget,
+                    onConfirm = screenModel::confirmMergeSelection,
                 )
             }
             is AnimeLibraryScreenModel.Dialog.RemoveAnime -> {
@@ -330,6 +363,161 @@ data object AnimeLibraryTab : Tab {
 }
 
 @Composable
+private fun MergeLibraryAnimeDialog(
+    dialog: AnimeLibraryScreenModel.Dialog.MergeAnime,
+    onDismissRequest: () -> Unit,
+    onMove: (Int, Int) -> Unit,
+    onSelectTarget: (Long) -> Unit,
+    onConfirm: () -> Unit,
+) {
+    val listState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
+        val fromIndex = dialog.entries.indexOfFirst { it.id == from.key }
+        val toIndex = dialog.entries.indexOfFirst { it.id == to.key }
+        if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
+        onMove(fromIndex, toIndex)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text(text = stringResource(MR.strings.action_cancel))
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = dialog.entries.size >= 2,
+                onClick = onConfirm,
+            ) {
+                Text(text = stringResource(MR.strings.action_ok))
+            }
+        },
+        title = {
+            Text(text = stringResource(MR.strings.action_merge))
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = "Top to bottom = merged entry order",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(
+                        items = dialog.entries,
+                        key = { it.id },
+                    ) { entry ->
+                        ReorderableItem(reorderableState, entry.id, enabled = dialog.entries.size > 1) {
+                            MergeLibraryAnimeItem(
+                                entry = entry,
+                                isTarget = entry.id == dialog.targetId,
+                                targetLocked = dialog.targetLocked,
+                                onSelectTarget = onSelectTarget,
+                            )
+                        }
+                    }
+                }
+                if (dialog.targetLocked) {
+                    Row {
+                        Icon(
+                            imageVector = Icons.Outlined.Lock,
+                            contentDescription = null,
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = stringResource(MR.strings.merge_existing_target_locked))
+                    }
+                }
+            }
+        },
+    )
+}
+
+@Composable
+private fun ReorderableCollectionItemScope.MergeLibraryAnimeItem(
+    entry: AnimeLibraryScreenModel.MergeEntry,
+    isTarget: Boolean,
+    targetLocked: Boolean,
+    onSelectTarget: (Long) -> Unit,
+) {
+    ElevatedCard {
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = entry.title,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            supportingContent = {
+                Text(
+                    text = if (entry.isExistingMerge) {
+                        buildString {
+                            append(entry.subtitle)
+                            append(" • ")
+                            append(stringResource(MR.strings.merge_members_count, entry.memberAnimes.size))
+                        }
+                    } else {
+                        entry.subtitle
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            },
+            leadingContent = {
+                Box {
+                    MangaCover.Square(
+                        data = entry.anime.toMangaCover(),
+                        modifier = Modifier.size(48.dp),
+                    )
+                    if (targetLocked && isTarget) {
+                        Icon(
+                            imageVector = Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(2.dp),
+                        )
+                    }
+                }
+            },
+            trailingContent = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    if (!targetLocked) {
+                        RadioButton(
+                            selected = isTarget,
+                            onClick = { onSelectTarget(entry.id) },
+                        )
+                    } else if (isTarget) {
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Outlined.DragHandle,
+                        contentDescription = null,
+                        modifier = Modifier.draggableHandle(),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        )
+    }
+}
+
+@Composable
 private fun RemoveAnimeDialog(
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
@@ -371,7 +559,7 @@ private fun AnimeLibraryContent(
     getDisplayMode: () -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
     onOpenAnime: (Long) -> Unit,
-    onOpenEpisode: (Long, Long) -> Unit,
+    onOpenEpisode: (Long, Long, Long) -> Unit,
     onGlobalSearchClicked: () -> Unit,
 ) {
     SharedLibraryContent(
@@ -413,7 +601,7 @@ private fun AnimeLibraryPager(
     onToggleSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onToggleRangeSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onOpenAnime: (Long) -> Unit,
-    onOpenEpisode: (Long, Long) -> Unit,
+    onOpenEpisode: (Long, Long, Long) -> Unit,
     onGlobalSearchClicked: () -> Unit,
 ) {
     HorizontalPager(
@@ -505,7 +693,7 @@ private fun AnimeLibraryList(
     onToggleSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onToggleRangeSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onOpenAnime: (Long) -> Unit,
-    onOpenEpisode: (Long, Long) -> Unit,
+    onOpenEpisode: (Long, Long, Long) -> Unit,
 ) {
     ScrollbarLazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -543,7 +731,7 @@ private fun AnimeLibraryList(
                 onClickContinueReading = item.primaryEpisodeId?.takeIf {
                     item.showContinueWatching && item.unwatchedBadgeCount > 0
                 }?.let { episodeId ->
-                    { onOpenEpisode(item.animeId, episodeId) }
+                    { onOpenEpisode(item.animeId, item.primaryEpisodeAnimeId ?: item.animeId, episodeId) }
                 },
                 continueReadingProgress = item.progressFraction.takeIf { item.hasInProgress },
                 continueReadingContentDescription = MR.strings.action_resume_watching,
@@ -564,7 +752,7 @@ private fun AnimeLibraryComfortableGrid(
     onToggleSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onToggleRangeSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onOpenAnime: (Long) -> Unit,
-    onOpenEpisode: (Long, Long) -> Unit,
+    onOpenEpisode: (Long, Long, Long) -> Unit,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -601,7 +789,7 @@ private fun AnimeLibraryComfortableGrid(
                 onClickContinueReading = item.primaryEpisodeId?.takeIf {
                     item.showContinueWatching && item.unwatchedBadgeCount > 0
                 }?.let { episodeId ->
-                    { onOpenEpisode(item.animeId, episodeId) }
+                    { onOpenEpisode(item.animeId, item.primaryEpisodeAnimeId ?: item.animeId, episodeId) }
                 },
                 continueReadingProgress = item.progressFraction.takeIf { item.hasInProgress },
                 continueReadingContentDescription = MR.strings.action_resume_watching,
@@ -623,7 +811,7 @@ private fun AnimeLibraryCompactGrid(
     onToggleSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onToggleRangeSelection: (LibraryPage, AnimeLibraryScreenModel.AnimeLibraryItem) -> Unit,
     onOpenAnime: (Long) -> Unit,
-    onOpenEpisode: (Long, Long) -> Unit,
+    onOpenEpisode: (Long, Long, Long) -> Unit,
 ) {
     LazyLibraryGrid(
         modifier = Modifier.fillMaxSize(),
@@ -660,7 +848,7 @@ private fun AnimeLibraryCompactGrid(
                 onClickContinueReading = item.primaryEpisodeId?.takeIf {
                     item.showContinueWatching && item.unwatchedBadgeCount > 0
                 }?.let { episodeId ->
-                    { onOpenEpisode(item.animeId, episodeId) }
+                    { onOpenEpisode(item.animeId, item.primaryEpisodeAnimeId ?: item.animeId, episodeId) }
                 },
                 continueReadingProgress = item.progressFraction.takeIf { item.hasInProgress },
                 continueReadingContentDescription = MR.strings.action_resume_watching,

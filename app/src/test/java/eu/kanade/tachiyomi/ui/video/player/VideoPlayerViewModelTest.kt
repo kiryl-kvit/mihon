@@ -7,6 +7,8 @@ import eu.kanade.tachiyomi.source.model.VideoRequest
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoStreamType
 import io.kotest.matchers.shouldBe
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
@@ -20,6 +22,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
 import tachiyomi.domain.anime.model.AnimeHistory
 import tachiyomi.domain.anime.model.AnimeHistoryWithRelations
 import tachiyomi.domain.anime.model.AnimeHistoryUpdate
@@ -180,6 +183,89 @@ class VideoPlayerViewModelTest {
         state.episodeId shouldBe 20L
         state.previousEpisodeId shouldBe 10L
         state.nextEpisodeId shouldBe 30L
+    }
+
+    @Test
+    fun `play next episode uses merged sequence when bypassMerge is false`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val resolver = RecordingVideoStreamResolver()
+        val getAnimeWithEpisodes = mockk<GetAnimeWithEpisodes>()
+        coEvery { getAnimeWithEpisodes.awaitEpisodes(id = 100L, bypassMerge = false) } returns listOf(
+            videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
+            videoEpisode(id = 20L, animeId = 2L, sourceOrder = 1L),
+            videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L),
+        )
+
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = resolver,
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(
+                episodes = listOf(
+                    videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
+                    videoEpisode(id = 20L, animeId = 2L, sourceOrder = 1L),
+                    videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L),
+                ),
+            ),
+            getAnimeWithEpisodes = getAnimeWithEpisodes,
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 100L, episodeId = 10L, ownerAnimeId = 1L, bypassMerge = false)
+        advanceUntilIdle()
+        viewModel.playNextEpisode()
+        advanceUntilIdle()
+
+        resolver.requests shouldBe listOf(10L, 20L)
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.episodeId shouldBe 20L
+        state.previousEpisodeId shouldBe 10L
+        state.nextEpisodeId shouldBe 30L
+    }
+
+    @Test
+    fun `play next episode stays on owner sequence when bypassMerge is true`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val resolver = RecordingVideoStreamResolver()
+        val getAnimeWithEpisodes = mockk<GetAnimeWithEpisodes>()
+        coEvery { getAnimeWithEpisodes.awaitEpisodes(id = 100L, bypassMerge = true) } returns listOf(
+            videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
+            videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L),
+        )
+
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = resolver,
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(
+                episodes = listOf(
+                    videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
+                    videoEpisode(id = 20L, animeId = 2L, sourceOrder = 1L),
+                    videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L),
+                ),
+            ),
+            getAnimeWithEpisodes = getAnimeWithEpisodes,
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 100L, episodeId = 10L, ownerAnimeId = 1L, bypassMerge = true)
+        advanceUntilIdle()
+        viewModel.playNextEpisode()
+        advanceUntilIdle()
+
+        resolver.requests shouldBe listOf(10L, 30L)
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.episodeId shouldBe 30L
+        state.previousEpisodeId shouldBe 10L
+        state.nextEpisodeId shouldBe null
     }
 
     @Test
@@ -467,10 +553,12 @@ class VideoPlayerViewModelTest {
             override suspend fun invoke(
                 animeId: Long,
                 episodeId: Long,
+                ownerAnimeId: Long,
                 selection: VideoPlaybackSelection?,
             ): ResolveVideoStream.Result {
                 return ResolveVideoStream.Result.Success(
-                    video = video,
+                    visibleAnime = video,
+                    ownerAnime = video,
                     episode = episode,
                     playbackData = VideoPlaybackData(
                         selection = selection ?: VideoPlaybackSelection(),
@@ -516,10 +604,12 @@ class VideoPlayerViewModelTest {
             override suspend fun invoke(
                 animeId: Long,
                 episodeId: Long,
+                ownerAnimeId: Long,
                 selection: VideoPlaybackSelection?,
             ): ResolveVideoStream.Result {
                 return ResolveVideoStream.Result.Success(
-                    video = video,
+                    visibleAnime = video,
+                    ownerAnime = video,
                     episode = episode,
                     playbackData = VideoPlaybackData(
                         selection = VideoPlaybackSelection(
@@ -654,6 +744,7 @@ class VideoPlayerViewModelTest {
         override suspend fun invoke(
             animeId: Long,
             episodeId: Long,
+            ownerAnimeId: Long,
             selection: VideoPlaybackSelection?,
         ): ResolveVideoStream.Result {
             requests += episodeId
@@ -679,7 +770,8 @@ class VideoPlayerViewModelTest {
             )
 
             return ResolveVideoStream.Result.Success(
-                video = video,
+                visibleAnime = video,
+                ownerAnime = video,
                 episode = episode,
                 playbackData = VideoPlaybackData(
                     selection = selection ?: VideoPlaybackSelection(),
@@ -705,6 +797,7 @@ class VideoPlayerViewModelTest {
         override suspend fun invoke(
             animeId: Long,
             episodeId: Long,
+            ownerAnimeId: Long,
             selection: VideoPlaybackSelection?,
         ): ResolveVideoStream.Result {
             selections += selection
@@ -741,7 +834,8 @@ class VideoPlayerViewModelTest {
             }
 
             return ResolveVideoStream.Result.Success(
-                video = video,
+                visibleAnime = video,
+                ownerAnime = video,
                 episode = episode,
                 playbackData = VideoPlaybackData(
                     selection = selection ?: VideoPlaybackSelection(),
@@ -773,10 +867,11 @@ class VideoPlayerViewModelTest {
         override suspend fun invoke(
             animeId: Long,
             episodeId: Long,
+            ownerAnimeId: Long,
             selection: VideoPlaybackSelection?,
         ): ResolveVideoStream.Result {
             kotlinx.coroutines.delay(delayMs)
-            return delegate.invoke(animeId, episodeId, selection)
+            return delegate.invoke(animeId, episodeId, ownerAnimeId, selection)
         }
     }
 
@@ -786,6 +881,7 @@ class VideoPlayerViewModelTest {
         override suspend fun invoke(
             animeId: Long,
             episodeId: Long,
+            ownerAnimeId: Long,
             selection: VideoPlaybackSelection?,
         ): ResolveVideoStream.Result {
             kotlinx.coroutines.delay(delayMs)
@@ -810,7 +906,8 @@ class VideoPlayerViewModelTest {
             )
 
             return ResolveVideoStream.Result.Success(
-                video = video,
+                visibleAnime = video,
+                ownerAnime = video,
                 episode = episode,
                 playbackData = VideoPlaybackData(
                     selection = selection ?: VideoPlaybackSelection(),

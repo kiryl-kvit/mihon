@@ -17,8 +17,10 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.core.util.ifAnimeSourcesLoaded
 import eu.kanade.presentation.anime.EpisodeSettingsDialog
+import eu.kanade.presentation.anime.ManageAnimeMergeDialog
 import eu.kanade.presentation.anime.AnimeScreen
 import eu.kanade.presentation.anime.AnimeScheduleSheet
+import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.manga.components.EditDisplayNameDialog
@@ -43,6 +45,7 @@ import kotlinx.coroutines.launch
 
 data class AnimeScreen(
     private val animeId: Long,
+    private val bypassMerge: Boolean = false,
 ) : Screen() {
 
     @Composable
@@ -55,7 +58,9 @@ data class AnimeScreen(
         val context = LocalContext.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
-        val screenModel = rememberScreenModel { AnimeScreenModel(context.applicationContext, animeId) }
+        val screenModel = rememberScreenModel {
+            AnimeScreenModel(context.applicationContext, animeId, bypassMerge = bypassMerge)
+        }
         val state by screenModel.state.collectAsState()
 
         when (val current = state) {
@@ -107,7 +112,17 @@ data class AnimeScreen(
                     onScheduleClicked = screenModel::showScheduleDialog.takeIf { current.showScheduleButton },
                     onCoverClicked = screenModel::showCoverDialog,
                     onFilterClicked = screenModel::showSettingsDialog,
-                    onEpisodeClick = { episodeId -> context.startAnimeEpisode(current.anime.id, episodeId) },
+                    onManageMergeClicked = screenModel::showManageMergeDialog.takeIf { current.isMerged },
+                    onEpisodeClick = { episode ->
+                        scope.launch {
+                            context.startAnimeEpisode(
+                                visibleAnimeId = screenModel.getVisibleAnimeId(episode.animeId),
+                                ownerAnimeId = episode.animeId,
+                                episodeId = episode.id,
+                                bypassMerge = bypassMerge,
+                            )
+                        }
+                    },
                     onEpisodeSelected = screenModel::toggleSelection,
                     onAllEpisodesSelected = screenModel::toggleAllSelection,
                     onInvertSelection = screenModel::invertSelection,
@@ -164,6 +179,37 @@ data class AnimeScreen(
                             initialValue = dialog.initialValue,
                             onDismissRequest = screenModel::dismissDialog,
                             onConfirm = screenModel::updateDisplayName,
+                        )
+                    }
+                    is AnimeScreenModel.Dialog.ManageMerge -> {
+                        ManageAnimeMergeDialog(
+                            targetId = dialog.targetId,
+                            members = dialog.members,
+                            removableIds = dialog.removableIds,
+                            onDismissRequest = screenModel::dismissDialog,
+                            onMove = screenModel::reorderMergeMembers,
+                            onSaveOrder = screenModel::saveMergeOrder,
+                            onOpenAnime = { animeIdToOpen ->
+                                screenModel.dismissDialog()
+                                navigator.push(AnimeScreen(animeIdToOpen, bypassMerge = true))
+                            },
+                            onToggleRemoveMember = screenModel::toggleMergedMemberRemoval,
+                            onRemoveMembers = screenModel::removeMergedMembers,
+                            onUnmergeAll = screenModel::unmergeAll,
+                        )
+                    }
+                    is AnimeScreenModel.Dialog.RemoveMergedAnime -> {
+                        DeleteLibraryMangaDialog(
+                            containsLocalManga = false,
+                            containsMergedManga = true,
+                            onDismissRequest = screenModel::dismissDialog,
+                            onConfirm = { deleteAnime, _ ->
+                                if (deleteAnime) {
+                                    screenModel.removeMergedAnime(dialog.members)
+                                } else {
+                                    screenModel.dismissDialog()
+                                }
+                            },
                         )
                     }
                     null -> Unit
@@ -261,12 +307,19 @@ private suspend fun performTagSearch(
     }
 }
 
-private fun android.content.Context.startAnimeEpisode(animeId: Long, episodeId: Long) {
+private fun android.content.Context.startAnimeEpisode(
+    visibleAnimeId: Long,
+    ownerAnimeId: Long,
+    episodeId: Long,
+    bypassMerge: Boolean = false,
+) {
     startActivity(
         VideoPlayerActivity.newIntent(
             context = this,
-            animeId = animeId,
+            animeId = visibleAnimeId,
+            ownerAnimeId = ownerAnimeId,
             episodeId = episodeId,
+            bypassMerge = bypassMerge,
         ),
     )
 }

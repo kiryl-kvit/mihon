@@ -6,6 +6,7 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.preference.asState
 import eu.kanade.core.preference.PreferenceMutableState
+import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.tachiyomi.ui.library.LibraryPage
@@ -13,7 +14,6 @@ import eu.kanade.tachiyomi.ui.library.LibraryPageTab
 import eu.kanade.tachiyomi.ui.library.displayTitle
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.collectLatest
@@ -37,6 +37,9 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
@@ -53,11 +56,13 @@ import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
+import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.effectiveLibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
+import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -70,6 +75,8 @@ class AnimeLibraryScreenModel(
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = Injekt.get(),
+    private val updateMergedAnime: UpdateMergedAnime = Injekt.get(),
     private val categoryRepository: tachiyomi.domain.category.repository.CategoryRepository = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val setSortModeForCategory: SetSortModeForCategory = Injekt.get(),
@@ -101,6 +108,7 @@ class AnimeLibraryScreenModel(
             combine(
                 state.map { it.searchQuery }.distinctUntilChanged().debounce(SEARCH_DEBOUNCE_MILLIS),
                 animeRepository.getFavoritesAsFlow(),
+                getMergedAnime.subscribeAll(),
                 getCategories.subscribe(),
                 libraryPreferences.groupType.changes(),
                 libraryPreferences.sortingMode.changes(),
@@ -117,15 +125,16 @@ class AnimeLibraryScreenModel(
                 LibrarySnapshot(
                     searchQuery = values[0] as String?,
                     favorites = favorites,
-                    categories = values[2] as List<Category>,
-                    groupType = values[3] as LibraryGroupType,
-                    sortMode = values[4] as LibrarySort,
-                    randomSortSeed = values[5] as Int,
-                    showCategoryTabs = values[6] as Boolean,
-                    showItemCount = values[7] as Boolean,
-                    showUnwatchedBadge = values[8] as Boolean,
-                    showLanguageBadge = values[9] as Boolean,
-                    showContinueWatchingButton = values[10] as Boolean,
+                    merges = values[2] as List<AnimeMerge>,
+                    categories = values[3] as List<Category>,
+                    groupType = values[4] as LibraryGroupType,
+                    sortMode = values[5] as LibrarySort,
+                    randomSortSeed = values[6] as Int,
+                    showCategoryTabs = values[7] as Boolean,
+                    showItemCount = values[8] as Boolean,
+                    showUnwatchedBadge = values[9] as Boolean,
+                    showLanguageBadge = values[10] as Boolean,
+                    showContinueWatchingButton = values[11] as Boolean,
                     sourceNamesBySourceId = favorites
                         .map(AnimeTitle::source)
                         .distinct()
@@ -136,8 +145,8 @@ class AnimeLibraryScreenModel(
                                     sourceId.toString(),
                                 )
                         },
-                    filterUnwatched = values[11] as TriState,
-                    filterStarted = values[12] as TriState,
+                    filterUnwatched = values[12] as TriState,
+                    filterStarted = values[13] as TriState,
                 )
             }
                 .distinctUntilChanged()
@@ -151,8 +160,7 @@ class AnimeLibraryScreenModel(
     private suspend fun buildState(snapshot: LibrarySnapshot): State {
         val previousState = mutableState.value
         return try {
-            val favorites = snapshot.filteredFavorites()
-            val animeIds = favorites.map(AnimeTitle::id)
+            val animeIds = snapshot.favorites.map(AnimeTitle::id)
             val episodes = if (animeIds.isEmpty()) {
                 emptyList()
             } else {
@@ -165,7 +173,7 @@ class AnimeLibraryScreenModel(
 
             val animeItems = buildAnimeItems(
                 snapshot = snapshot,
-                favorites = favorites,
+                favorites = snapshot.favorites,
                 episodes = episodes,
                 playbackStates = playbackStates,
                 categoryIdsByAnimeId = categoryIdsByAnimeId,
@@ -216,11 +224,13 @@ class AnimeLibraryScreenModel(
     }
 
     private fun List<AnimeLibraryItem>.applyFilters(snapshot: LibrarySnapshot): List<AnimeLibraryItem> {
+        val query = snapshot.searchQuery?.trim()?.takeIf { it.isNotEmpty() }
         val filterUnwatched = snapshot.filterUnwatched
         val filterStarted = snapshot.filterStarted
 
         return filter { item ->
-            applyFilter(filterUnwatched) { item.hasUnwatched } &&
+            (query == null || item.matches(query)) &&
+                applyFilter(filterUnwatched) { item.hasUnwatched } &&
                 applyFilter(filterStarted) { item.hasStarted }
         }
     }
@@ -235,7 +245,7 @@ class AnimeLibraryScreenModel(
         val episodesByAnimeId = episodes.groupBy(AnimeEpisode::animeId)
         val playbackStateByEpisodeId = playbackStates.associateBy(AnimePlaybackState::episodeId)
 
-        return favorites.map { anime ->
+        val itemsById = favorites.associate { anime ->
             val animeEpisodes = episodesByAnimeId[anime.id].orEmpty()
             val unwatchedCount = animeEpisodes.count { !it.completed }
             val hasUnwatched = animeEpisodes.any { !it.completed }
@@ -249,15 +259,20 @@ class AnimeLibraryScreenModel(
                 ?.let { playbackState -> animeEpisodes.firstOrNull { it.id == playbackState.episodeId } }
                 ?: animeEpisodes.firstOrNull { !it.completed }
                 ?: animeEpisodes.firstOrNull()
-            val source = animeSourceManager.get(anime.source)
 
-            AnimeLibraryItem(
+            anime.id to AnimeLibraryItem(
                 animeId = anime.id,
+                anime = anime,
+                memberAnimes = listOf(anime),
                 title = anime.displayTitle,
                 coverData = anime.toMangaCover(),
                 sourceId = anime.source,
-                sourceName = source?.name ?: application.stringResource(tachiyomi.i18n.MR.strings.source_not_installed, anime.source.toString()),
-                sourceLanguage = if (snapshot.showLanguageBadge) source?.lang.orEmpty() else "",
+                displaySourceId = anime.source,
+                sourceIds = setOf(anime.source),
+                sourceName = snapshot.sourceNamesBySourceId.getValue(anime.source),
+                sourceNames = setOf(snapshot.sourceNamesBySourceId.getValue(anime.source)),
+                sourceLanguage = if (snapshot.showLanguageBadge) animeSourceManager.get(anime.source)?.lang.orEmpty() else "",
+                primaryEpisodeAnimeId = primaryEpisode?.animeId,
                 primaryEpisodeId = primaryEpisode?.id,
                 hasUnwatched = hasUnwatched,
                 unwatchedCount = unwatchedCount.toLong(),
@@ -272,6 +287,80 @@ class AnimeLibraryScreenModel(
                 categoryIds = categoryIdsByAnimeId[anime.id].orEmpty(),
             )
         }
+
+        val mergesByTargetId = snapshot.merges.groupBy(AnimeMerge::targetId)
+        val mergeByAnimeId = snapshot.merges.associateBy(AnimeMerge::animeId)
+        val collapsedItems = mutableListOf<AnimeLibraryItem>()
+        val consumedIds = mutableSetOf<Long>()
+
+        favorites.forEach { anime ->
+            if (!consumedIds.add(anime.id)) return@forEach
+
+            val targetId = mergeByAnimeId[anime.id]?.targetId
+            val members = targetId
+                ?.let { mergesByTargetId[it] }
+                .orEmpty()
+                .sortedBy(AnimeMerge::position)
+                .mapNotNull { itemsById[it.animeId] }
+
+            if (members.size > 1) {
+                collapsedItems += mergeAnimeItem(
+                    targetId = targetId ?: anime.id,
+                    members = members,
+                    showUnwatchedBadge = snapshot.showUnwatchedBadge,
+                    showLanguageBadge = snapshot.showLanguageBadge,
+                )
+                consumedIds += members.map(AnimeLibraryItem::animeId)
+            } else {
+                collapsedItems += itemsById.getValue(anime.id)
+            }
+        }
+
+        return collapsedItems
+    }
+
+    private fun mergeAnimeItem(
+        targetId: Long,
+        members: List<AnimeLibraryItem>,
+        showUnwatchedBadge: Boolean,
+        showLanguageBadge: Boolean,
+    ): AnimeLibraryItem {
+        val target = members.firstOrNull { it.animeId == targetId } ?: members.first()
+        val sourceIds = members.flatMap { it.sourceIds }.toSet()
+        val displaySourceId = if (sourceIds.size > 1) LibraryManga.MULTI_SOURCE_ID else sourceIds.first()
+        val displaySourceName = if (displaySourceId == LibraryManga.MULTI_SOURCE_ID) {
+            application.stringResource(MR.strings.multi_lang)
+        } else {
+            members.firstOrNull { displaySourceId in it.sourceIds }?.sourceName.orEmpty()
+        }
+        val primaryEntry = members.firstOrNull { it.hasInProgress && it.primaryEpisodeId != null }
+            ?: members.firstOrNull { it.hasUnwatched && it.primaryEpisodeId != null }
+            ?: members.firstOrNull { it.primaryEpisodeId != null }
+        val unwatchedCount = members.sumOf(AnimeLibraryItem::unwatchedCount)
+
+        return target.copy(
+            memberAnimes = members.flatMap(AnimeLibraryItem::memberAnimes),
+            displaySourceId = displaySourceId,
+            sourceIds = sourceIds,
+            sourceName = displaySourceName,
+            sourceNames = members.flatMap(AnimeLibraryItem::sourceNames).toSet(),
+            sourceLanguage = when {
+                !showLanguageBadge -> ""
+                displaySourceId == LibraryManga.MULTI_SOURCE_ID -> LibraryManga.MULTI_SOURCE_ID.toString()
+                else -> members.firstOrNull { displaySourceId in it.sourceIds }?.sourceLanguage.orEmpty()
+            },
+            primaryEpisodeAnimeId = primaryEntry?.primaryEpisodeAnimeId,
+            primaryEpisodeId = primaryEntry?.primaryEpisodeId,
+            hasUnwatched = members.any(AnimeLibraryItem::hasUnwatched),
+            unwatchedCount = unwatchedCount,
+            unwatchedBadgeCount = if (showUnwatchedBadge) unwatchedCount else 0L,
+            hasStarted = members.any(AnimeLibraryItem::hasStarted),
+            hasInProgress = members.any(AnimeLibraryItem::hasInProgress),
+            progressFraction = primaryEntry?.progressFraction,
+            favoriteModifiedAt = members.maxOfOrNull(AnimeLibraryItem::favoriteModifiedAt) ?: target.favoriteModifiedAt,
+            lastUpdate = members.maxOfOrNull(AnimeLibraryItem::lastUpdate) ?: target.lastUpdate,
+            categoryIds = members.flatMap(AnimeLibraryItem::categoryIds).distinct(),
+        )
     }
 
     private fun buildPages(
@@ -290,11 +379,15 @@ class AnimeLibraryScreenModel(
                 category = category,
             )
         }
-        val sourceNames = items.map(AnimeLibraryItem::sourceId)
+        val sourceNames = items.map(AnimeLibraryItem::displaySourceId)
             .distinct()
             .associateWith { sourceId ->
-                items.firstOrNull { it.sourceId == sourceId }?.sourceName
-                    ?: application.stringResource(tachiyomi.i18n.MR.strings.source_not_installed, sourceId.toString())
+                items.firstOrNull { it.displaySourceId == sourceId }?.sourceName
+                    ?: if (sourceId == LibraryManga.MULTI_SOURCE_ID) {
+                        application.stringResource(MR.strings.multi_lang)
+                    } else {
+                        application.stringResource(tachiyomi.i18n.MR.strings.source_not_installed, sourceId.toString())
+                    }
             }
         val sourceTabs = sourceNames.keys.sortedWith { sourceId1, sourceId2 ->
             sourceNames.getValue(sourceId1)
@@ -325,14 +418,14 @@ class AnimeLibraryScreenModel(
                         id = tab.id,
                         primaryTab = tab,
                         sourceId = sourceId,
-                        itemIds = items.filter { it.sourceId == sourceId }.map(AnimeLibraryItem::animeId),
+                        itemIds = items.filter { it.displaySourceId == sourceId }.map(AnimeLibraryItem::animeId),
                     )
                 }
             }
             LibraryGroupType.ExtensionCategory -> {
                 sourceTabs.flatMap { (sourceId, sourceTab) ->
                     visibleCategories.mapNotNull { category ->
-                        val itemIds = items.filter { it.sourceId == sourceId && it.matchesCategory(category.id) }
+                        val itemIds = items.filter { it.displaySourceId == sourceId && it.matchesCategory(category.id) }
                             .map(AnimeLibraryItem::animeId)
                         itemIds.takeIf { it.isNotEmpty() }?.let {
                             LibraryPage(
@@ -359,7 +452,7 @@ class AnimeLibraryScreenModel(
                             ),
                         )
                     } else {
-                        val categorySourceIds = categoryItems.map(AnimeLibraryItem::sourceId)
+                        val categorySourceIds = categoryItems.map(AnimeLibraryItem::displaySourceId)
                             .distinct()
                             .sortedWith { sourceId1, sourceId2 ->
                                 sourceNames.getValue(sourceId1)
@@ -374,7 +467,7 @@ class AnimeLibraryScreenModel(
                                 secondaryTab = sourceTabs.getValue(sourceId),
                                 category = category,
                                 sourceId = sourceId,
-                                itemIds = categoryItems.filter { it.sourceId == sourceId }.map(AnimeLibraryItem::animeId),
+                                itemIds = categoryItems.filter { it.displaySourceId == sourceId }.map(AnimeLibraryItem::animeId),
                             )
                         }
                     }
@@ -478,14 +571,24 @@ class AnimeLibraryScreenModel(
 
     fun openChangeCategoryDialog() {
         screenModelScope.launchIO {
-            val animeIds = state.value.selection.toList()
+            val animeIds = getSelectedActionAnimeIds()
             if (animeIds.isEmpty()) return@launchIO
 
-            val selectedItems = state.value.selectedLibraryAnime
             val categories = state.value.availableCategories
-
-            val common = getCommonCategories(selectedItems)
-            val mixed = getMixedCategories(selectedItems)
+            val categoryIdsByAnime = animeIds.map { animeId ->
+                getAnimeCategories.await(animeId)
+                    .map(Category::id)
+                    .ifEmpty { listOf(Category.UNCATEGORIZED_ID) }
+            }
+            val common = categoryIdsByAnime
+                .reduceOrNull { categoryIds1, categoryIds2 -> categoryIds1.intersect(categoryIds2.toSet()).toList() }
+                .orEmpty()
+                .filterNot { it == Category.UNCATEGORIZED_ID }
+                .toSet()
+            val mixed = categoryIdsByAnime
+                .flatten()
+                .filterNot { it == Category.UNCATEGORIZED_ID || it in common }
+                .toSet()
             val preselected = categories
                 .map {
                     when (it.id) {
@@ -503,17 +606,98 @@ class AnimeLibraryScreenModel(
     }
 
     fun openRemoveAnimeDialog() {
-        val animeIds = state.value.selection.toList()
-        if (animeIds.isEmpty()) return
+        screenModelScope.launchIO {
+            val animeIds = getSelectedActionAnimeIds()
+            if (animeIds.isEmpty()) return@launchIO
 
-        mutableState.update {
-            it.copy(dialog = Dialog.RemoveAnime(animeIds))
+            mutableState.update {
+                it.copy(dialog = Dialog.RemoveAnime(animeIds))
+            }
         }
+    }
+
+    fun canMergeSelection(): Boolean {
+        val selection = state.value.selectedLibraryAnime
+        if (selection.size < 2) return false
+
+        val mergedSelections = selection.count(AnimeLibraryItem::isMerged)
+        return mergedSelections <= 1
+    }
+
+    fun openMergeDialog() {
+        screenModelScope.launchIO {
+            val selection = state.value.selectedLibraryAnime
+            if (selection.size < 2) return@launchIO
+
+            val mergedSelections = selection.filter(AnimeLibraryItem::isMerged)
+            if (mergedSelections.size > 1) return@launchIO
+
+            val entries = selection.map { item ->
+                MergeEntry(
+                    id = item.animeId,
+                    anime = item.anime,
+                    memberAnimes = item.memberAnimes.toImmutableList(),
+                    isExistingMerge = item.isMerged,
+                    title = item.title,
+                    subtitle = buildMergeSubtitle(item.anime),
+                )
+            }
+                .toImmutableList()
+
+            val existingMerge = mergedSelections.firstOrNull()
+            mutableState.update {
+                it.copy(
+                    dialog = Dialog.MergeAnime(
+                        entries = entries,
+                        targetId = existingMerge?.animeId ?: entries.first().id,
+                        targetLocked = existingMerge != null,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun reorderMergeSelection(fromIndex: Int, toIndex: Int) {
+        mutableState.update { state ->
+            val dialog = state.dialog as? Dialog.MergeAnime ?: return@update state
+            if (fromIndex !in dialog.entries.indices || toIndex !in dialog.entries.indices) return@update state
+            val reordered = dialog.entries.toMutableList().apply {
+                val item = removeAt(fromIndex)
+                add(toIndex, item)
+            }
+            state.copy(dialog = dialog.copy(entries = reordered.toImmutableList()))
+        }
+    }
+
+    fun setMergeTarget(animeId: Long) {
+        mutableState.update { state ->
+            val dialog = state.dialog as? Dialog.MergeAnime ?: return@update state
+            if (dialog.targetLocked || dialog.entries.none { it.id == animeId }) return@update state
+            state.copy(dialog = dialog.copy(targetId = animeId))
+        }
+    }
+
+    fun confirmMergeSelection() {
+        val dialog = state.value.dialog as? Dialog.MergeAnime ?: return
+        screenModelScope.launchNonCancellable {
+            val targetId = dialog.targetId.takeIf { targetAnimeId -> dialog.entries.any { it.id == targetAnimeId } }
+                ?: dialog.entries.firstOrNull()?.id
+                ?: return@launchNonCancellable
+            val mergedIds = dialog.entries
+                .flatMap { entry -> entry.memberAnimes.map(AnimeTitle::id) }
+                .distinct()
+
+            if (mergedIds.size > 1) {
+                updateMergedAnime.awaitMerge(targetId, mergedIds)
+            }
+        }
+        clearSelection()
+        closeDialog()
     }
 
     fun setAnimeCategories(animeIds: List<Long>, addCategories: List<Long>, removeCategories: List<Long>) {
         screenModelScope.launchIO {
-            animeIds.forEach { animeId ->
+            animeIds.distinct().forEach { animeId ->
                 val categoryIds = getAnimeCategories.await(animeId)
                     .map(Category::id)
                     .subtract(removeCategories.toSet())
@@ -527,7 +711,16 @@ class AnimeLibraryScreenModel(
 
     fun removeAnime(animeIds: List<Long>) {
         screenModelScope.launchIO {
-            animeIds.distinct().forEach { animeId ->
+            val distinctAnimeIds = animeIds.distinct()
+            val removedMergesByTargetId = distinctAnimeIds.mapNotNull { animeId ->
+                getMergedAnime.awaitTargetId(animeId)?.let { targetId -> targetId to animeId }
+            }
+                .groupBy(keySelector = { it.first }, valueTransform = { it.second })
+            removedMergesByTargetId.forEach { (targetId, memberIds) ->
+                updateMergedAnime.awaitRemoveMembers(targetId, memberIds)
+            }
+
+            distinctAnimeIds.forEach { animeId ->
                 animeRepository.update(
                     AnimeTitleUpdate(
                         id = animeId,
@@ -544,8 +737,9 @@ class AnimeLibraryScreenModel(
         if (selectedAnime.isEmpty()) return
 
         screenModelScope.launchNonCancellable {
-            val episodeUpdates = selectedAnime.flatMap { animeItem ->
-                animeEpisodeRepository.getEpisodesByAnimeId(animeItem.animeId)
+            val animeIds = selectedAnime.flatMap(AnimeLibraryItem::memberAnimeIds).distinct()
+            val episodeUpdates = animeIds.flatMap { animeId ->
+                animeEpisodeRepository.getEpisodesByAnimeId(animeId)
                     .filter { episode ->
                         when (watched) {
                             true -> !episode.completed || !episode.watched
@@ -564,8 +758,8 @@ class AnimeLibraryScreenModel(
                 animeEpisodeRepository.updateAll(episodeUpdates)
             }
 
-            selectedAnime.forEach { animeItem ->
-                animePlaybackStateRepository.getByAnimeIdAsFlow(animeItem.animeId)
+            animeIds.forEach { animeId ->
+                animePlaybackStateRepository.getByAnimeIdAsFlow(animeId)
                     .first()
                     .forEach { playbackState ->
                         animePlaybackStateRepository.upsert(
@@ -679,14 +873,40 @@ class AnimeLibraryScreenModel(
         preference(libraryPreferences).getAndSet { it.next() }
     }
 
+    private fun buildMergeSubtitle(anime: AnimeTitle): String {
+        val sourceName = animeSourceManager.get(anime.source)?.name
+            ?: application.stringResource(MR.strings.source_not_installed, anime.source.toString())
+        val creator = listOf(anime.director, anime.studio, anime.producer, anime.writer)
+            .firstOrNull { !it.isNullOrBlank() }
+        return buildString {
+            append(sourceName)
+            if (!creator.isNullOrBlank() && !creator.equals(sourceName, ignoreCase = true)) {
+                append(" • ")
+                append(creator)
+            }
+        }
+    }
+
+    private fun getSelectedActionAnimeIds(): List<Long> {
+        return state.value.selectedLibraryAnime
+            .flatMap(AnimeLibraryItem::memberAnimeIds)
+            .distinct()
+    }
+
     @Immutable
     data class AnimeLibraryItem(
         val animeId: Long,
+        val anime: AnimeTitle,
+        val memberAnimes: List<AnimeTitle>,
         val title: String,
         val coverData: tachiyomi.domain.manga.model.MangaCover,
         val sourceId: Long,
+        val displaySourceId: Long,
+        val sourceIds: Set<Long>,
         val sourceName: String,
+        val sourceNames: Set<String>,
         val sourceLanguage: String,
+        val primaryEpisodeAnimeId: Long?,
         val primaryEpisodeId: Long?,
         val hasUnwatched: Boolean,
         val unwatchedCount: Long,
@@ -700,6 +920,12 @@ class AnimeLibraryScreenModel(
         val showContinueWatching: Boolean,
         val categoryIds: List<Long>,
     ) {
+        val memberAnimeIds: List<Long>
+            get() = memberAnimes.map(AnimeTitle::id)
+
+        val isMerged: Boolean
+            get() = memberAnimes.size > 1
+
         val isUncategorized: Boolean
             get() = categoryIds.isEmpty()
 
@@ -712,6 +938,46 @@ class AnimeLibraryScreenModel(
                 else -> categoryId in categoryIds
             }
         }
+
+        fun matches(constraint: String): Boolean {
+            if (constraint.startsWith("id:", true)) {
+                return animeId == constraint.substringAfter("id:").toLongOrNull()
+            } else if (constraint.startsWith("src:", true)) {
+                val querySource = constraint.substringAfter("src:")
+                return if (querySource.equals(MULTI_SOURCE_ID_ALIAS, ignoreCase = true)) {
+                    displaySourceId == LibraryManga.MULTI_SOURCE_ID
+                } else {
+                    querySource.toLongOrNull() in sourceIds
+                }
+            }
+
+            return memberAnimes.any { anime ->
+                anime.displayTitle.contains(constraint, ignoreCase = true) ||
+                    anime.title.contains(constraint, ignoreCase = true) ||
+                    (anime.originalTitle?.contains(constraint, ignoreCase = true) ?: false) ||
+                    (anime.studio?.contains(constraint, ignoreCase = true) ?: false) ||
+                    (anime.producer?.contains(constraint, ignoreCase = true) ?: false) ||
+                    (anime.director?.contains(constraint, ignoreCase = true) ?: false) ||
+                    (anime.writer?.contains(constraint, ignoreCase = true) ?: false) ||
+                    (anime.description?.contains(constraint, ignoreCase = true) ?: false)
+            } || constraint.split(",").map { it.trim() }.all { subconstraint ->
+                checkNegatableConstraint(subconstraint) {
+                    sourceNames.any { sourceName -> sourceName.contains(it, ignoreCase = true) } ||
+                        memberAnimes.any { anime -> anime.genre?.any { genreEntry -> genreEntry.equals(it, ignoreCase = true) } == true }
+                }
+            }
+        }
+
+        private fun checkNegatableConstraint(
+            constraint: String,
+            predicate: (String) -> Boolean,
+        ): Boolean {
+            return if (constraint.startsWith("-")) {
+                !predicate(constraint.substringAfter("-").trimStart())
+            } else {
+                predicate(constraint)
+            }
+        }
     }
 
     sealed interface Dialog {
@@ -722,10 +988,26 @@ class AnimeLibraryScreenModel(
             val initialSelection: ImmutableList<CheckboxState<Category>>,
         ) : Dialog
 
+        data class MergeAnime(
+            val entries: ImmutableList<MergeEntry>,
+            val targetId: Long,
+            val targetLocked: Boolean,
+        ) : Dialog
+
         data class RemoveAnime(
             val animeIds: List<Long>,
         ) : Dialog
     }
+
+    @Immutable
+    data class MergeEntry(
+        val id: Long,
+        val anime: AnimeTitle,
+        val memberAnimes: ImmutableList<AnimeTitle>,
+        val isExistingMerge: Boolean,
+        val title: String,
+        val subtitle: String,
+    )
 
     @Immutable
     data class State(
@@ -791,37 +1073,22 @@ class AnimeLibraryScreenModel(
                 .size
         }
 
-        fun getToolbarTitle(defaultTitle: String, defaultCategoryTitle: String): eu.kanade.presentation.library.components.LibraryToolbarTitle {
-            val currentPage = activePage ?: return eu.kanade.presentation.library.components.LibraryToolbarTitle(defaultTitle)
+        fun getToolbarTitle(defaultTitle: String, defaultCategoryTitle: String): LibraryToolbarTitle {
+            val currentPage = activePage ?: return LibraryToolbarTitle(defaultTitle)
             val title = if (showCategoryTabs) defaultTitle else currentPage.displayTitle(defaultCategoryTitle)
             val count = when {
                 !showItemCount -> null
                 !showCategoryTabs -> getItemCountForPage(currentPage)
                 else -> libraryItems.size
             }
-            return eu.kanade.presentation.library.components.LibraryToolbarTitle(title, count)
+            return LibraryToolbarTitle(title, count)
         }
-    }
-
-    private fun getCommonCategories(items: List<AnimeLibraryItem>): Set<Long> {
-        return items.map(AnimeLibraryItem::effectiveCategoryIds)
-            .reduceOrNull { set1, set2 -> set1.intersect(set2.toSet()).toList() }
-            .orEmpty()
-            .filterNot { it == Category.UNCATEGORIZED_ID }
-            .toSet()
-    }
-
-    private fun getMixedCategories(items: List<AnimeLibraryItem>): Set<Long> {
-        if (items.isEmpty()) return emptySet()
-        val common = getCommonCategories(items)
-        return items.flatMap(AnimeLibraryItem::effectiveCategoryIds)
-            .filterNot { it == Category.UNCATEGORIZED_ID || it in common }
-            .toSet()
     }
 
     private data class LibrarySnapshot(
         val searchQuery: String?,
         val favorites: List<AnimeTitle>,
+        val merges: List<AnimeMerge>,
         val categories: List<Category>,
         val groupType: LibraryGroupType,
         val sortMode: LibrarySort,
@@ -837,43 +1104,11 @@ class AnimeLibraryScreenModel(
     ) {
         val hasActiveFilters: Boolean
             get() = filterUnwatched != TriState.DISABLED || filterStarted != TriState.DISABLED
-
-        fun filteredFavorites(): List<AnimeTitle> {
-            val query = searchQuery?.trim()?.takeIf { it.isNotEmpty() } ?: return favorites
-            return favorites.filter { anime -> anime.matches(query) }
-        }
-
-        private fun AnimeTitle.matches(constraint: String): Boolean {
-            if (constraint.startsWith("id:", true)) {
-                return id == constraint.substringAfter("id:").toLongOrNull()
-            } else if (constraint.startsWith("src:", true)) {
-                return source == constraint.substringAfter("src:").toLongOrNull()
-            }
-
-            return displayTitle.contains(constraint, ignoreCase = true) ||
-                title.contains(constraint, ignoreCase = true) ||
-                (description?.contains(constraint, ignoreCase = true) ?: false) ||
-                constraint.split(",").map { it.trim() }.all { subconstraint ->
-                    checkNegatableConstraint(subconstraint) {
-                        sourceNamesBySourceId[source]?.contains(it, ignoreCase = true) == true ||
-                            (genre?.any { genreEntry -> genreEntry.equals(it, ignoreCase = true) } ?: false)
-                    }
-                }
-        }
-
-        private fun checkNegatableConstraint(
-            constraint: String,
-            predicate: (String) -> Boolean,
-        ): Boolean {
-            return if (constraint.startsWith("-")) {
-                !predicate(constraint.substringAfter("-").trimStart())
-            } else {
-                predicate(constraint)
-            }
-        }
     }
 }
 
 private fun AnimePlaybackState.progressFraction(): Float {
     return (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
 }
+
+private const val MULTI_SOURCE_ID_ALIAS = "multi"

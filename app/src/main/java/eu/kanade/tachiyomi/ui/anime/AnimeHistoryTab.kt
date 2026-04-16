@@ -23,6 +23,7 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.anime.history.AnimeHistoryScreenModel
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -53,6 +54,7 @@ data object AnimeHistoryTab : Tab {
 
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
         val screenModel = rememberScreenModel { AnimeHistoryScreenModel() }
         val state by screenModel.state.collectAsState()
 
@@ -61,8 +63,14 @@ data object AnimeHistoryTab : Tab {
             snackbarHostState = screenModel.snackbarHostState,
             onSearchQueryChange = screenModel::updateSearchQuery,
             onClickCover = { animeId -> navigator.push(AnimeScreen(animeId)) },
-            onClickResume = { animeId, episodeId ->
-                context.openAnimeEpisode(animeId, episodeId)
+            onClickResume = { ownerAnimeId, episodeId ->
+                scope.launch {
+                    context.openAnimeEpisode(
+                        visibleAnimeId = screenModel.getVisibleAnimeId(ownerAnimeId),
+                        ownerAnimeId = ownerAnimeId,
+                        episodeId = episodeId,
+                    )
+                }
             },
             onDelete = screenModel::removeFromHistory,
             onDeleteAll = screenModel::removeAllHistory,
@@ -90,11 +98,12 @@ data object AnimeHistoryTab : Tab {
     }
 }
 
-private fun Context.openAnimeEpisode(animeId: Long, episodeId: Long) {
+private fun Context.openAnimeEpisode(visibleAnimeId: Long, ownerAnimeId: Long, episodeId: Long) {
     startActivity(
         VideoPlayerActivity.newIntent(
             context = this,
-            animeId = animeId,
+            animeId = visibleAnimeId,
+            ownerAnimeId = ownerAnimeId,
             episodeId = episodeId,
         ),
     )

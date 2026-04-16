@@ -254,6 +254,8 @@ class BackupRestorer(
                             isSync,
                         )
                     }
+
+                animeRestorer.restorePendingMerges()
             }
         }
 
@@ -397,6 +399,8 @@ class BackupRestorer(
                 restoreProgress += 1
                 notifier.showRestoreProgress(it.title, restoreProgress, restoreAmount, isSync)
             }
+
+        animeRestorer.restorePendingMerges()
     }
 
     private fun CoroutineScope.restoreAppPreferences(

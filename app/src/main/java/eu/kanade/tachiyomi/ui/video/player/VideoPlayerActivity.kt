@@ -118,12 +118,14 @@ class VideoPlayerActivity : BaseActivity() {
         super.onCreate(savedInstanceState)
 
         val animeId = intent.extras?.getLong(EXTRA_VIDEO_ID, INVALID_ID) ?: INVALID_ID
+        val ownerAnimeId = intent.extras?.getLong(EXTRA_OWNER_VIDEO_ID, animeId) ?: animeId
         val episodeId = intent.extras?.getLong(EXTRA_EPISODE_ID, INVALID_ID) ?: INVALID_ID
+        val bypassMerge = intent.extras?.getBoolean(EXTRA_BYPASS_MERGE, false) ?: false
         if (animeId == INVALID_ID || episodeId == INVALID_ID) {
             finish()
             return
         }
-        viewModel.init(animeId, episodeId)
+        viewModel.init(animeId, episodeId, ownerAnimeId, bypassMerge)
 
         setComposeContent {
             val state by viewModel.state.collectAsState()
@@ -700,15 +702,25 @@ class VideoPlayerActivity : BaseActivity() {
 
     companion object {
         private const val EXTRA_VIDEO_ID = "video_id"
+        private const val EXTRA_OWNER_VIDEO_ID = "owner_video_id"
         private const val EXTRA_EPISODE_ID = "episode_id"
+        private const val EXTRA_BYPASS_MERGE = "bypass_merge"
         private const val INVALID_ID = -1L
         private const val PROGRESS_SAVE_INTERVAL_MS = 10_000L
 
-        fun newIntent(context: Context, animeId: Long, episodeId: Long): Intent {
+        fun newIntent(
+            context: Context,
+            animeId: Long,
+            episodeId: Long,
+            ownerAnimeId: Long = animeId,
+            bypassMerge: Boolean = false,
+        ): Intent {
             return Intent(context, VideoPlayerActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 putExtra(EXTRA_VIDEO_ID, animeId)
+                putExtra(EXTRA_OWNER_VIDEO_ID, ownerAnimeId)
                 putExtra(EXTRA_EPISODE_ID, episodeId)
+                putExtra(EXTRA_BYPASS_MERGE, bypassMerge)
             }
         }
     }

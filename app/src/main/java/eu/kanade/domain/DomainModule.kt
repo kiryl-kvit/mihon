@@ -48,6 +48,7 @@ import mihon.domain.extensionrepo.service.ExtensionRepoService
 import mihon.domain.migration.usecases.MigrateMangaUseCase
 import mihon.domain.upcoming.interactor.GetUpcomingManga
 import tachiyomi.data.ActiveProfileProvider
+import tachiyomi.data.anime.MergedAnimeRepositoryImpl
 import tachiyomi.data.category.CategoryRepositoryImpl
 import tachiyomi.data.chapter.ChapterRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
@@ -130,12 +131,16 @@ import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.GetAnimeUpdates
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import uy.kohesive.injekt.api.InjektModule
 import uy.kohesive.injekt.api.InjektRegistrar
 import uy.kohesive.injekt.api.addFactory
@@ -157,8 +162,11 @@ class DomainModule : InjektModule {
         addFactory { UpdateCategory(get()) }
         addFactory { DeleteCategory(get(), get(), get()) }
 
+        addSingletonFactory<MergedAnimeRepository> { MergedAnimeRepositoryImpl(get(), get()) }
         addSingletonFactory<MangaRepository> { MangaRepositoryImpl(get(), get()) }
         addSingletonFactory<MergedMangaRepository> { MergedMangaRepositoryImpl(get(), get()) }
+        addFactory { GetAnimeWithEpisodes(get(), get(), get()) }
+        addFactory { GetMergedAnime(get()) }
         addFactory { GetDuplicateLibraryManga(get(), get(), get(), get()) }
         addFactory { EnhanceDuplicateLibraryManga(get(), get()) }
         addFactory { GetEnhancedDuplicateLibraryManga(get(), get(), get(), get()) }
@@ -177,6 +185,7 @@ class DomainModule : InjektModule {
         addFactory { SetMangaViewerFlags(get()) }
         addFactory { NetworkToLocalManga(get()) }
         addFactory { UpdateManga(get(), get()) }
+        addFactory { UpdateMergedAnime(get()) }
         addFactory { UpdateMergedManga(get()) }
         addFactory { UpdateMangaNotes(get()) }
         addFactory { SetMangaCategories(get()) }

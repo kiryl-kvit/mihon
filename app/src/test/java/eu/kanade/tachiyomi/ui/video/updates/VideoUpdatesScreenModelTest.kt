@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.ui.anime.updates
 
 import android.app.Application
+import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.presentation.updates.UpdatesUiModel
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldHaveSize
@@ -17,6 +18,10 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.model.AnimeMerge
+import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.interactor.GetAnimeUpdates
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
@@ -24,6 +29,8 @@ import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeUpdatesWithRelations
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
+import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.service.HiddenAnimeSourceIds
@@ -48,6 +55,8 @@ class AnimeUpdatesScreenModelTest {
     @Test
     fun `groups updates by fetch date`() = runTest(dispatcher) {
         val model = AnimeUpdatesScreenModel(
+            getAnime = GetAnime(FakeAnimeRepository(emptyList())),
+            getMergedAnime = GetMergedAnime(FakeMergedAnimeRepository()),
             getAnimeUpdates = GetAnimeUpdates(
                 repository = FakeAnimeUpdatesRepository(
                     listOf(
@@ -73,6 +82,48 @@ class AnimeUpdatesScreenModelTest {
             uiModels[2]::class shouldBe UpdatesUiModel.Item::class
             uiModels[3]::class shouldBe UpdatesUiModel.Header::class
             uiModels[4]::class shouldBe UpdatesUiModel.Item::class
+        }
+    }
+
+    @Test
+    fun `remaps update item to visible merged anime metadata`() = runTest(dispatcher) {
+        val visibleAnime = AnimeTitle.create().copy(
+            id = 10L,
+            source = 1L,
+            url = "/visible",
+            title = "Visible Anime",
+            thumbnailUrl = "https://example.com/visible.jpg",
+            initialized = true,
+        )
+        val model = AnimeUpdatesScreenModel(
+            getAnime = GetAnime(FakeAnimeRepository(listOf(visibleAnime))),
+            getMergedAnime = GetMergedAnime(
+                FakeMergedAnimeRepository(
+                    visibleTargetIds = mapOf(1L to visibleAnime.id),
+                    groupsByAnimeId = mapOf(
+                        1L to listOf(
+                            AnimeMerge(targetId = visibleAnime.id, animeId = visibleAnime.id, position = 0L),
+                            AnimeMerge(targetId = visibleAnime.id, animeId = 1L, position = 1L),
+                        ),
+                    ),
+                ),
+            ),
+            getAnimeUpdates = GetAnimeUpdates(
+                repository = FakeAnimeUpdatesRepository(listOf(update(1L, 1_700_000_000_000L))),
+                hiddenAnimeSourceIds = FakeHiddenAnimeSourceIds(),
+            ),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(emptyList()),
+            animePlaybackStateRepository = FakeAnimePlaybackStateRepository(),
+            updatesPreferences = UpdatesPreferences(InMemoryPreferenceStore()),
+            libraryPreferences = LibraryPreferences(InMemoryPreferenceStore()),
+            application = mockk<Application>(relaxed = true),
+        )
+
+        eventually(2.seconds) {
+            val item = model.state.value.items.single()
+            item.visibleAnimeId shouldBe visibleAnime.id
+            item.visibleAnimeTitle shouldBe visibleAnime.displayTitle
+            item.visibleCoverData shouldBe visibleAnime.toMangaCover()
         }
     }
 
@@ -158,5 +209,62 @@ class AnimeUpdatesScreenModelTest {
         override suspend fun upsert(state: AnimePlaybackState) = Unit
 
         override suspend fun upsertAndSyncEpisodeState(state: AnimePlaybackState) = Unit
+    }
+
+    private class FakeAnimeRepository(
+        private val anime: List<AnimeTitle>,
+    ) : AnimeRepository {
+        private val animeById = anime.associateBy(AnimeTitle::id)
+
+        override suspend fun getAnimeById(id: Long): AnimeTitle = animeById.getValue(id)
+
+        override suspend fun getAnimeByIdAsFlow(id: Long): Flow<AnimeTitle> = flowOf(animeById.getValue(id))
+
+        override suspend fun getAnimeByUrlAndSourceId(url: String, sourceId: Long): AnimeTitle? = null
+
+        override fun getAnimeByUrlAndSourceIdAsFlow(url: String, sourceId: Long): Flow<AnimeTitle?> = flowOf(null)
+
+        override suspend fun getFavorites(): List<AnimeTitle> = anime
+
+        override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(anime)
+
+        override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = anime
+
+        override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = true
+
+        override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = true
+
+        override suspend fun updateAll(animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
+
+        override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = animes
+
+        override suspend fun setAnimeCategories(animeId: Long, categoryIds: List<Long>) = Unit
+    }
+
+    private class FakeMergedAnimeRepository(
+        private val visibleTargetIds: Map<Long, Long> = emptyMap(),
+        private val groupsByAnimeId: Map<Long, List<AnimeMerge>> = emptyMap(),
+    ) : MergedAnimeRepository {
+        override suspend fun getAll(): List<AnimeMerge> = groupsByAnimeId.values.flatten()
+
+        override fun subscribeAll(): Flow<List<AnimeMerge>> = flowOf(groupsByAnimeId.values.flatten())
+
+        override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> = groupsByAnimeId[animeId].orEmpty()
+
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(groupsByAnimeId[animeId].orEmpty())
+
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> {
+            return groupsByAnimeId.values.flatten().filter { it.targetId == targetAnimeId }
+        }
+
+        override suspend fun getTargetId(animeId: Long): Long? = visibleTargetIds[animeId]
+
+        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(visibleTargetIds[animeId])
+
+        override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
+
+        override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
+
+        override suspend fun deleteGroup(targetAnimeId: Long) = Unit
     }
 }

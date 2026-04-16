@@ -31,6 +31,7 @@ import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.updates.UpdatesSettingsScreenModel
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
@@ -61,6 +62,7 @@ data object AnimeUpdatesTab : Tab {
 
         val context = LocalContext.current
         val navigator = LocalNavigator.currentOrThrow
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
         val screenModel = rememberScreenModel { AnimeUpdatesScreenModel() }
         val settingsScreenModel = rememberScreenModel { UpdatesSettingsScreenModel() }
         val state by screenModel.state.collectAsState()
@@ -84,8 +86,12 @@ data object AnimeUpdatesTab : Tab {
             onUpdateLibrary = screenModel::updateLibrary,
             onFilterClicked = screenModel::showFilterDialog,
             hasActiveFilters = state.hasActiveFilters,
-            onClickCover = { item -> navigator.push(AnimeScreen(item.update.animeId)) },
-            onOpenEpisode = { item -> context.openAnimeEpisode(item.update.animeId, item.update.episodeId) },
+            onClickCover = { item -> navigator.push(AnimeScreen(item.visibleAnimeId)) },
+            onOpenEpisode = { item ->
+                scope.launch {
+                    context.openAnimeEpisode(item.visibleAnimeId, item.update.animeId, item.update.episodeId)
+                }
+            },
             onUpdateSelected = screenModel::toggleSelection,
         )
 
@@ -142,11 +148,12 @@ data object AnimeUpdatesTab : Tab {
     }
 }
 
-private fun Context.openAnimeEpisode(animeId: Long, episodeId: Long) {
+private fun Context.openAnimeEpisode(visibleAnimeId: Long, ownerAnimeId: Long, episodeId: Long) {
     startActivity(
         VideoPlayerActivity.newIntent(
             context = this,
-            animeId = animeId,
+            animeId = visibleAnimeId,
+            ownerAnimeId = ownerAnimeId,
             episodeId = episodeId,
         ),
     )

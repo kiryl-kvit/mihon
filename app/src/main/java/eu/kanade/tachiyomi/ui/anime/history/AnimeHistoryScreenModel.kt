@@ -5,6 +5,7 @@ import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.insertSeparators
+import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.tachiyomi.util.lang.toLocalDate
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
@@ -20,13 +21,18 @@ import kotlinx.coroutines.launch
 import logcat.LogPriority
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
+import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeHistoryWithRelations
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
+import tachiyomi.domain.manga.model.MangaCover
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class AnimeHistoryScreenModel(
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
+    private val getAnime: GetAnime = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = Injekt.get(),
     private val animeHistoryRepository: AnimeHistoryRepository = Injekt.get(),
 ) : StateScreenModel<AnimeHistoryScreenModel.State>(State()) {
 
@@ -52,8 +58,26 @@ class AnimeHistoryScreenModel(
         }
     }
 
-    private fun List<AnimeHistoryWithRelations>.toUiModels(): List<AnimeHistoryUiModel> {
-        return map { history -> AnimeHistoryUiModel.Item(history) }
+    private suspend fun List<AnimeHistoryWithRelations>.toUiModels(): List<AnimeHistoryUiModel> {
+        val visibleTargetCache = mutableMapOf<Long, Long>()
+        val visibleAnimeCache = mutableMapOf<Long, Pair<String, MangaCover>?>()
+
+        return map { history ->
+            val visibleAnimeId = visibleTargetCache.getOrPut(history.animeId) {
+                getMergedAnime.awaitVisibleTargetId(history.animeId)
+            }
+            val visibleAnime = visibleAnimeCache.getOrPut(visibleAnimeId) {
+                getAnime.await(visibleAnimeId)?.let { anime ->
+                    anime.displayTitle to anime.toMangaCover()
+                }
+            }
+            AnimeHistoryUiModel.Item(
+                history = history,
+                visibleAnimeId = visibleAnimeId,
+                visibleTitle = visibleAnime?.first ?: history.title,
+                visibleCoverData = visibleAnime?.second ?: history.coverData,
+            )
+        }
             .insertSeparators { before, after ->
                 val beforeDate = before?.history?.watchedAt?.time?.toLocalDate()
                 val afterDate = after?.history?.watchedAt?.time?.toLocalDate()
@@ -100,6 +124,10 @@ class AnimeHistoryScreenModel(
         }
     }
 
+    suspend fun getVisibleAnimeId(animeId: Long): Long {
+        return getMergedAnime.awaitVisibleTargetId(animeId)
+    }
+
     sealed interface Event {
         data object InternalError : Event
         data object HistoryCleared : Event
@@ -123,5 +151,8 @@ sealed interface AnimeHistoryUiModel {
 
     data class Item(
         val history: AnimeHistoryWithRelations,
+        val visibleAnimeId: Long,
+        val visibleTitle: String,
+        val visibleCoverData: MangaCover,
     ) : AnimeHistoryUiModel
 }

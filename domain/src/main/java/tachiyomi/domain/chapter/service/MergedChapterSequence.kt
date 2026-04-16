@@ -2,14 +2,7 @@ package tachiyomi.domain.chapter.service
 
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.manga.model.Manga
-
-private fun List<Long>.orderedPresentIds(chapters: List<Chapter>): List<Long> {
-    if (isEmpty()) return chapters.map(Chapter::mangaId).distinct()
-    val presentIds = chapters.map(Chapter::mangaId).toSet()
-    return asSequence()
-        .filter { it in presentIds }
-        .toList()
-}
+import tachiyomi.domain.util.orderedPresentIds
 
 fun List<Chapter>.sortedForMergedDisplay(
     manga: Manga,
@@ -20,7 +13,7 @@ fun List<Chapter>.sortedForMergedDisplay(
     }
 
     val chapterSort = getChapterSort(manga)
-    return mergedMangaIds.orderedPresentIds(this)
+    return mergedMangaIds.orderedPresentIds(this, Chapter::mangaId)
         .flatMap { mangaId ->
             asSequence()
                 .filter { it.mangaId == mangaId }
@@ -38,7 +31,7 @@ fun List<Chapter>.sortedForReading(
     }
 
     val readingSort = getChapterSort(manga, sortDescending = false)
-    val orderedMergedIds = mergedMangaIds.orderedPresentIds(this).let { ids ->
+    val orderedMergedIds = mergedMangaIds.orderedPresentIds(this, Chapter::mangaId).let { ids ->
         if (manga.sortDescending()) ids.asReversed() else ids
     }
     return orderedMergedIds
@@ -53,7 +46,7 @@ fun List<Chapter>.sortedForReading(
 fun List<Chapter>.groupedByMergedMember(
     mergedMangaIds: List<Long> = map(Chapter::mangaId).distinct(),
 ): List<Pair<Long, List<Chapter>>> {
-    return mergedMangaIds.orderedPresentIds(this)
+    return mergedMangaIds.orderedPresentIds(this, Chapter::mangaId)
         .mapNotNull { mangaId ->
             val memberChapters = filter { it.mangaId == mangaId }
             memberChapters.takeIf { it.isNotEmpty() }?.let { mangaId to it }

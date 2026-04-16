@@ -30,6 +30,8 @@ import tachiyomi.core.common.i18n.pluralStringResource
 import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchUI
+import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.i18n.MR
@@ -42,6 +44,8 @@ import java.text.NumberFormat
 class AnimeLibraryUpdateNotifier(
     private val context: Context,
     private val securityPreferences: SecurityPreferences = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = Injekt.get(),
+    private val getAnime: GetAnime = Injekt.get(),
 ) {
 
     private val percentFormatter = NumberFormat.getPercentInstance().apply {
@@ -108,26 +112,38 @@ class AnimeLibraryUpdateNotifier(
     }
 
     fun showUpdateNotifications(updates: List<Pair<AnimeTitle, Array<AnimeEpisode>>>) {
+        val visibleUpdates = runBlocking {
+            updates.map { (anime, episodes) ->
+                NotificationAnimeUpdate(
+                    originAnime = anime,
+                    visibleAnime = getVisibleAnime(anime),
+                    episodes = episodes,
+                )
+            }
+        }
+
         context.notify(
             Notifications.ID_NEW_EPISODES,
             Notifications.CHANNEL_NEW_EPISODES,
         ) {
             setContentTitle(context.stringResource(MR.strings.notification_new_episodes))
-            if (updates.size == 1 && !securityPreferences.hideNotificationContent.get()) {
-                setContentText(updates.first().first.displayTitle.chop(NOTIF_TITLE_MAX_LEN))
+            if (visibleUpdates.size == 1 && !securityPreferences.hideNotificationContent.get()) {
+                setContentText(visibleUpdates.first().visibleAnime.displayTitle.chop(NOTIF_TITLE_MAX_LEN))
             } else {
                 setContentText(
                     context.pluralStringResource(
                         MR.plurals.notification_new_episodes_summary,
-                        updates.size,
-                        updates.size,
+                        visibleUpdates.size,
+                        visibleUpdates.size,
                     ),
                 )
 
                 if (!securityPreferences.hideNotificationContent.get()) {
                     setStyle(
                         NotificationCompat.BigTextStyle().bigText(
-                            updates.joinToString("\n") { it.first.displayTitle.chop(NOTIF_TITLE_MAX_LEN) },
+                            visibleUpdates.joinToString("\n") {
+                                it.visibleAnime.displayTitle.chop(NOTIF_TITLE_MAX_LEN)
+                            },
                         ),
                     )
                 }
@@ -148,10 +164,14 @@ class AnimeLibraryUpdateNotifier(
         if (!securityPreferences.hideNotificationContent.get()) {
             launchUI {
                 context.notify(
-                    updates.map { (anime, episodes) ->
+                    visibleUpdates.map { update ->
                         NotificationManagerCompat.NotificationWithIdAndTag(
-                            anime.id.hashCode(),
-                            createNewEpisodesNotification(anime, episodes),
+                            update.originAnime.id.hashCode(),
+                            createNewEpisodesNotification(
+                                anime = update.originAnime,
+                                visibleAnime = update.visibleAnime,
+                                episodes = update.episodes,
+                            ),
                         )
                     },
                 )
@@ -165,11 +185,12 @@ class AnimeLibraryUpdateNotifier(
 
     private suspend fun createNewEpisodesNotification(
         anime: AnimeTitle,
+        visibleAnime: AnimeTitle,
         episodes: Array<AnimeEpisode>,
     ): Notification {
-        val icon = getAnimeIcon(anime)
+        val icon = getAnimeIcon(visibleAnime)
         return context.notificationBuilder(Notifications.CHANNEL_NEW_EPISODES) {
-            setContentTitle(anime.displayTitle)
+            setContentTitle(visibleAnime.displayTitle)
 
             val description = getNewEpisodesDescription(episodes)
             setContentText(description)
@@ -185,7 +206,14 @@ class AnimeLibraryUpdateNotifier(
             setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_SUMMARY)
             priority = NotificationCompat.PRIORITY_HIGH
 
-            setContentIntent(NotificationReceiver.openEpisodePendingActivity(context, anime.id, episodes.first().id))
+            setContentIntent(
+                NotificationReceiver.openEpisodePendingActivity(
+                    context,
+                    visibleAnimeId = visibleAnime.id,
+                    ownerAnimeId = anime.id,
+                    episodes.first().id,
+                ),
+            )
             setAutoCancel(true)
 
             addAction(
@@ -203,7 +231,7 @@ class AnimeLibraryUpdateNotifier(
                 context.stringResource(MR.strings.action_view_episodes),
                 NotificationReceiver.openAnimeEntryPendingActivity(
                     context,
-                    anime.id,
+                    visibleAnime.id,
                     Notifications.ID_NEW_EPISODES,
                 ),
             )
@@ -218,6 +246,11 @@ class AnimeLibraryUpdateNotifier(
             .build()
         val drawable = context.imageLoader.execute(request).image?.asDrawable(context.resources)
         return drawable?.getBitmapOrNull()
+    }
+
+    private suspend fun getVisibleAnime(anime: AnimeTitle): AnimeTitle {
+        val visibleAnimeId = getMergedAnime.awaitVisibleTargetId(anime.id)
+        return getAnime.await(visibleAnimeId) ?: anime
     }
 
     private fun getNewEpisodesDescription(episodes: Array<AnimeEpisode>): String {
@@ -285,6 +318,12 @@ class AnimeLibraryUpdateNotifier(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
+
+    private data class NotificationAnimeUpdate(
+        val originAnime: AnimeTitle,
+        val visibleAnime: AnimeTitle,
+        val episodes: Array<AnimeEpisode>,
+    )
 }
 
 private const val NOTIF_MAX_EPISODES = 5
