@@ -59,6 +59,11 @@ DELETE FROM merged_mangas
 WHERE profile_id = :profileId
 AND target_manga_id = :targetMangaId;
 
+deleteByMangaId:
+DELETE FROM merged_mangas
+WHERE profile_id = :profileId
+AND manga_id = :mangaId;
+
 deleteByProfile:
 DELETE FROM merged_mangas
 WHERE profile_id = :profileId;

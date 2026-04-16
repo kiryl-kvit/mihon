@@ -42,9 +42,12 @@ import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.presentation.browse.BrowseSourceContent
 import eu.kanade.presentation.browse.MissingSourceScreen
 import eu.kanade.presentation.browse.components.BrowseFeedNameDialog
+import eu.kanade.presentation.browse.components.BrowseLibraryActionDialog
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.browse.components.BrowseMangaPreviewSheet
 import eu.kanade.presentation.browse.components.BrowseSourceToolbar
 import eu.kanade.presentation.browse.components.DeleteBrowsePresetDialog
+import eu.kanade.presentation.browse.components.MergeTargetPickerDialog
 import eu.kanade.presentation.browse.components.RemoveMangaDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
@@ -56,21 +59,27 @@ import eu.kanade.tachiyomi.ui.browse.extension.details.SourcePreferencesScreen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel.Listing
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.manga.pushSourceMangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
 import mihon.feature.migration.dialog.MigrateMangaDialog
 import mihon.presentation.core.util.collectAsLazyPagingItems
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
+import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.LocalSource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 data class BrowseSourceScreen(
     val sourceId: Long,
@@ -112,7 +121,13 @@ data class BrowseSourceScreen(
         val haptic = LocalHapticFeedback.current
         val uriHandler = LocalUriHandler.current
         val snackbarHostState = remember { SnackbarHostState() }
+        val getMergedManga = remember { Injekt.get<GetMergedManga>() }
         var presetPendingDeletion by rememberSaveable { mutableStateOf<String?>(null) }
+        val openSourceManga: (Long) -> Unit = { mangaId ->
+            scope.launch {
+                navigator.pushSourceMangaScreen(mangaId, getMergedManga)
+            }
+        }
 
         val onHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) }
         val onWebViewClick = f@{
@@ -237,7 +252,7 @@ data class BrowseSourceScreen(
                 onWebViewClick = onWebViewClick,
                 onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
                 onLocalSourceHelpClick = onHelpClick,
-                onMangaClick = { navigator.push((MangaScreen(it.id, true))) },
+                onMangaClick = { openSourceManga(it.id) },
                 onMangaLongClick = { manga ->
                     scope.launchIO {
                         if (screenModel.onMangaLongClick(manga)) {
@@ -289,8 +304,9 @@ data class BrowseSourceScreen(
                 BrowseMangaPreviewSheet(
                     mangaId = dialog.mangaId,
                     previewSize = screenModel.mangaPreviewSizeUi(),
-                    onLibraryAction = screenModel::onMangaLibraryAction,
-                    onOpenManga = { navigator.push(MangaScreen(it, true)) },
+                    onLibraryAction = screenModel::confirmBrowseLibraryAction,
+                    onMergeAction = screenModel::showMergeTargetPicker,
+                    onOpenManga = openSourceManga,
                     onDismissRequest = onDismissRequest,
                 )
             }
@@ -301,6 +317,42 @@ data class BrowseSourceScreen(
                     onConfirm = { screenModel.addFavorite(dialog.manga) },
                     onOpenManga = { navigator.push(MangaScreen(it.id)) },
                     onMigrate = { screenModel.setDialog(BrowseSourceScreenModel.Dialog.Migrate(dialog.manga, it)) },
+                    onMerge = { screenModel.showMergeTargetPicker(it.manga) },
+                )
+            }
+            is BrowseSourceScreenModel.Dialog.LibraryActionChooser -> {
+                BrowseLibraryActionDialog(
+                    mangaTitle = dialog.manga.presentationTitle(),
+                    favorite = dialog.manga.favorite,
+                    onDismissRequest = onDismissRequest,
+                    onLibraryAction = {
+                        onDismissRequest()
+                        screenModel.confirmBrowseLibraryAction(dialog.manga)
+                    },
+                    onMergeIntoLibrary = { screenModel.showMergeTargetPicker(dialog.manga) },
+                )
+            }
+            is BrowseSourceScreenModel.Dialog.SelectMergeTarget -> {
+                MergeTargetPickerDialog(
+                    title = stringResource(MR.strings.action_merge_into_library),
+                    query = dialog.query,
+                    visibleTargets = dialog.visibleTargets,
+                    onDismissRequest = onDismissRequest,
+                    onQueryChange = screenModel::updateMergeTargetQuery,
+                    onSelectTarget = screenModel::openMergeEditor,
+                )
+            }
+            is BrowseSourceScreenModel.Dialog.EditMerge -> {
+                BrowseMergeEditorDialog(
+                    entries = dialog.entries,
+                    targetId = dialog.targetId,
+                    targetLocked = dialog.targetLocked,
+                    removedIds = dialog.removedIds,
+                    confirmEnabled = dialog.enabled,
+                    onDismissRequest = onDismissRequest,
+                    onMove = screenModel::moveMergeEntry,
+                    onToggleRemove = screenModel::toggleMergeEntryRemoval,
+                    onConfirm = screenModel::confirmBrowseMerge,
                 )
             }
 

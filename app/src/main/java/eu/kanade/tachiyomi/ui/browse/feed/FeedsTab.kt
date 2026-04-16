@@ -69,7 +69,10 @@ import eu.kanade.domain.source.model.snapshot
 import eu.kanade.domain.source.model.toListing
 import eu.kanade.presentation.browse.BrowseSourceContent
 import eu.kanade.presentation.browse.components.BaseSourceItem
+import eu.kanade.presentation.browse.components.BrowseLibraryActionDialog
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.browse.components.BrowseMangaPreviewSheet
+import eu.kanade.presentation.browse.components.MergeTargetPickerDialog
 import eu.kanade.presentation.browse.components.RemoveMangaDialog
 import eu.kanade.presentation.browse.components.SourceIcon
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
@@ -84,10 +87,12 @@ import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.manga.pushSourceMangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import mihon.feature.migration.dialog.MigrateMangaDialog
 import mihon.feature.profiles.core.ProfileManager
 import mihon.presentation.core.util.collectAsLazyPagingItems
@@ -96,7 +101,9 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.domain.source.model.Source
+import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh
@@ -201,6 +208,12 @@ private fun FeedsTabContent(
     val haptic = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+    val getMergedManga = remember { Injekt.get<GetMergedManga>() }
+    val openSourceManga: (Long) -> Unit = { mangaId ->
+        scope.launch {
+            navigator.pushSourceMangaScreen(mangaId, getMergedManga)
+        }
+    }
 
     if (state.enabledFeeds.isEmpty()) {
         EmptyScreen(
@@ -326,7 +339,7 @@ private fun FeedsTabContent(
                                     },
                                     onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
                                     onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                                    onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
+                                    onMangaClick = { openSourceManga(it.id) },
                                     onMangaLongClick = { manga ->
                                         scope.launchIO {
                                             if (browseModel.onMangaLongClick(manga)) {
@@ -366,7 +379,7 @@ private fun FeedsTabContent(
                                     },
                                     onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
                                     onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                                    onMangaClick = { navigator.push(MangaScreen(it.id, true)) },
+                                    onMangaClick = { openSourceManga(it.id) },
                                     onMangaLongClick = { manga ->
                                         scope.launchIO {
                                             if (browseModel.onMangaLongClick(manga)) {
@@ -385,8 +398,9 @@ private fun FeedsTabContent(
                         BrowseMangaPreviewSheet(
                             mangaId = dialog.mangaId,
                             previewSize = browseModel.mangaPreviewSizeUi(),
-                            onLibraryAction = browseModel::onMangaLibraryAction,
-                            onOpenManga = { navigator.push(MangaScreen(it, true)) },
+                            onLibraryAction = browseModel::confirmBrowseLibraryAction,
+                            onMergeAction = browseModel::showMergeTargetPicker,
+                            onOpenManga = openSourceManga,
                             onDismissRequest = browseModel::dismissDialog,
                         )
                     }
@@ -399,6 +413,42 @@ private fun FeedsTabContent(
                             onMigrate = {
                                 browseModel.setDialog(BrowseSourceScreenModel.Dialog.Migrate(dialog.manga, it))
                             },
+                            onMerge = { browseModel.showMergeTargetPicker(it.manga) },
+                        )
+                    }
+                    is BrowseSourceScreenModel.Dialog.LibraryActionChooser -> {
+                        BrowseLibraryActionDialog(
+                            mangaTitle = dialog.manga.presentationTitle(),
+                            favorite = dialog.manga.favorite,
+                            onDismissRequest = browseModel::dismissDialog,
+                            onLibraryAction = {
+                                browseModel.dismissDialog()
+                                browseModel.confirmBrowseLibraryAction(dialog.manga)
+                            },
+                            onMergeIntoLibrary = { browseModel.showMergeTargetPicker(dialog.manga) },
+                        )
+                    }
+                    is BrowseSourceScreenModel.Dialog.SelectMergeTarget -> {
+                        MergeTargetPickerDialog(
+                            title = stringResource(MR.strings.action_merge_into_library),
+                            query = dialog.query,
+                            visibleTargets = dialog.visibleTargets,
+                            onDismissRequest = browseModel::dismissDialog,
+                            onQueryChange = browseModel::updateMergeTargetQuery,
+                            onSelectTarget = browseModel::openMergeEditor,
+                        )
+                    }
+                    is BrowseSourceScreenModel.Dialog.EditMerge -> {
+                        BrowseMergeEditorDialog(
+                            entries = dialog.entries,
+                            targetId = dialog.targetId,
+                            targetLocked = dialog.targetLocked,
+                            removedIds = dialog.removedIds,
+                            confirmEnabled = dialog.enabled,
+                            onDismissRequest = browseModel::dismissDialog,
+                            onMove = browseModel::moveMergeEntry,
+                            onToggleRemove = browseModel::toggleMergeEntryRemoval,
+                            onConfirm = browseModel::confirmBrowseMerge,
                         )
                     }
                     is BrowseSourceScreenModel.Dialog.Migrate -> {

@@ -29,18 +29,22 @@ import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
 import eu.kanade.tachiyomi.ui.browse.source.browse.SourceFilterDialog
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.manga.pushSourceMangaScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.coroutines.launch
 import mihon.feature.migration.dialog.MigrateMangaDialog
 import mihon.feature.migration.list.MigrationListScreen
 import mihon.presentation.core.util.collectAsLazyPagingItems
 import tachiyomi.core.common.Constants
+import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.LocalSource
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 data class MigrateSourceSearchScreen(
     private val currentManga: Manga,
@@ -58,6 +62,7 @@ data class MigrateSourceSearchScreen(
         val uriHandler = LocalUriHandler.current
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
+        val getMergedManga = remember { Injekt.get<GetMergedManga>() }
 
         val screenModel = rememberScreenModel { BrowseSourceScreenModel(sourceId, query) }
         val state by screenModel.state.collectAsState()
@@ -119,7 +124,11 @@ data class MigrateSourceSearchScreen(
                 onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
                 onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
                 onMangaClick = openMigrateDialog,
-                onMangaLongClick = { navigator.push(MangaScreen(it.id, true)) },
+                onMangaLongClick = {
+                    scope.launch {
+                        navigator.pushSourceMangaScreen(it.id, getMergedManga)
+                    }
+                },
             )
         }
 
@@ -145,7 +154,11 @@ data class MigrateSourceSearchScreen(
                     current = currentManga,
                     target = dialog.target,
                     // Initiated from the context of [currentManga] so we show [dialog.target].
-                    onClickTitle = { navigator.push(MangaScreen(dialog.target.id)) },
+                    onClickTitle = {
+                        scope.launch {
+                            navigator.pushSourceMangaScreen(dialog.target.id, getMergedManga)
+                        }
+                    },
                     onDismissRequest = onDismissRequest,
                     onComplete = {
                         scope.launch {

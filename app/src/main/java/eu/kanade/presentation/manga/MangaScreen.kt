@@ -2,6 +2,7 @@ package eu.kanade.presentation.manga
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,7 +24,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -43,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastMap
@@ -92,6 +98,7 @@ fun MangaScreen(
     onChapterClicked: (Chapter) -> Unit,
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
@@ -115,6 +122,7 @@ fun MangaScreen(
     onEditFetchIntervalClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onManageMergeClicked: (() -> Unit)?,
+    onOpenMergedEntryClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onEditNotesClicked: () -> Unit,
 
@@ -157,6 +165,7 @@ fun MangaScreen(
             onChapterClicked = onChapterClicked,
             onDownloadChapter = onDownloadChapter,
             onAddToLibraryClicked = onAddToLibraryClicked,
+            onAddToMergeClicked = onAddToMergeClicked,
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
@@ -174,6 +183,7 @@ fun MangaScreen(
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onEditDisplayNameClicked = onEditDisplayNameClicked,
             onManageMergeClicked = onManageMergeClicked,
+            onOpenMergedEntryClicked = onOpenMergedEntryClicked,
             onMigrateClicked = onMigrateClicked,
             onEditNotesClicked = onEditNotesClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
@@ -203,6 +213,7 @@ fun MangaScreen(
             onChapterClicked = onChapterClicked,
             onDownloadChapter = onDownloadChapter,
             onAddToLibraryClicked = onAddToLibraryClicked,
+            onAddToMergeClicked = onAddToMergeClicked,
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
@@ -220,6 +231,7 @@ fun MangaScreen(
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onEditDisplayNameClicked = onEditDisplayNameClicked,
             onManageMergeClicked = onManageMergeClicked,
+            onOpenMergedEntryClicked = onOpenMergedEntryClicked,
             onMigrateClicked = onMigrateClicked,
             onEditNotesClicked = onEditNotesClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
@@ -252,6 +264,7 @@ private fun MangaScreenSmallImpl(
     onChapterClicked: (Chapter) -> Unit,
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
@@ -276,6 +289,7 @@ private fun MangaScreenSmallImpl(
     onEditIntervalClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onManageMergeClicked: (() -> Unit)?,
+    onOpenMergedEntryClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onEditNotesClicked: () -> Unit,
 
@@ -431,6 +445,18 @@ private fun MangaScreenSmallImpl(
                         )
                     }
 
+                    if (state.showMergeNotice) {
+                        item(
+                            key = MangaScreenItem.MERGE_NOTICE,
+                            contentType = MangaScreenItem.MERGE_NOTICE,
+                        ) {
+                            MergeNotice(
+                                onOpenMergedEntry = onOpenMergedEntryClicked,
+                                onManageMerge = onManageMergeClicked,
+                            )
+                        }
+                    }
+
                     item(
                         key = MangaScreenItem.ACTION_ROW,
                         contentType = MangaScreenItem.ACTION_ROW,
@@ -441,6 +467,7 @@ private fun MangaScreenSmallImpl(
                             nextUpdate = nextUpdate,
                             isUserIntervalMode = state.manga.fetchInterval < 0,
                             onAddToLibraryClicked = onAddToLibraryClicked,
+                            onAddToMergeClicked = onAddToMergeClicked,
                             onWebViewClicked = onWebViewClicked,
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
@@ -517,6 +544,7 @@ fun MangaScreenLargeImpl(
     onChapterClicked: (Chapter) -> Unit,
     onDownloadChapter: ((List<ChapterList.Item>, ChapterDownloadAction) -> Unit)?,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
@@ -541,6 +569,7 @@ fun MangaScreenLargeImpl(
     onEditIntervalClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onManageMergeClicked: (() -> Unit)?,
+    onOpenMergedEntryClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onEditNotesClicked: () -> Unit,
 
@@ -688,12 +717,19 @@ fun MangaScreenLargeImpl(
                             onCoverClick = onCoverClicked,
                             doSearch = onSearch,
                         )
+                        if (state.showMergeNotice) {
+                            MergeNotice(
+                                onOpenMergedEntry = onOpenMergedEntryClicked,
+                                onManageMerge = onManageMergeClicked,
+                            )
+                        }
                         MangaActionRow(
                             favorite = state.manga.favorite,
                             trackingCount = state.trackingCount,
                             nextUpdate = nextUpdate,
                             isUserIntervalMode = state.manga.fetchInterval < 0,
                             onAddToLibraryClicked = onAddToLibraryClicked,
+                            onAddToMergeClicked = onAddToMergeClicked,
                             onWebViewClicked = onWebViewClicked,
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
@@ -764,6 +800,45 @@ fun MangaScreenLargeImpl(
                     }
                 },
             )
+        }
+    }
+}
+
+@Composable
+private fun MergeNotice(
+    onOpenMergedEntry: (() -> Unit)?,
+    onManageMerge: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(MR.strings.merge_member_notice),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            onOpenMergedEntry?.let {
+                FilledTonalButton(
+                    onClick = it,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(MR.strings.action_open_merged_entry))
+                }
+            }
+            onManageMerge?.let {
+                OutlinedButton(
+                    onClick = it,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(MR.strings.action_manage_merge))
+                }
+            }
         }
     }
 }

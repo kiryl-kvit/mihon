@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.PersonOutline
@@ -85,6 +86,7 @@ fun DuplicateMangaDialog(
     onConfirm: () -> Unit,
     onOpenManga: (manga: Manga) -> Unit,
     onMigrate: (manga: Manga) -> Unit,
+    onMerge: ((duplicate: DuplicateMangaCandidate) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val sourceManager = remember { Injekt.get<SourceManager>() }
@@ -132,6 +134,7 @@ fun DuplicateMangaDialog(
                         duplicate = it,
                         getSource = { sourceManager.getOrStub(it.manga.source) },
                         onMigrate = { onMigrate(it.manga) },
+                        onMerge = { onMerge?.invoke(it) },
                         onDismissRequest = onDismissRequest,
                         onOpenManga = { onOpenManga(it.manga) },
                     )
@@ -179,6 +182,7 @@ private fun DuplicateMangaListItem(
     onDismissRequest: () -> Unit,
     onOpenManga: () -> Unit,
     onMigrate: () -> Unit,
+    onMerge: (() -> Unit)?,
 ) {
     val source = getSource()
     val manga = duplicate.manga
@@ -351,6 +355,27 @@ private fun DuplicateMangaListItem(
                         )
                         Text(
                             text = stringResource(MR.strings.action_migrate),
+                            modifier = Modifier.padding(start = MaterialTheme.padding.extraSmall),
+                        )
+                    }
+                }
+                onMerge?.let {
+                    OutlinedButton(
+                        onClick = {
+                            onDismissRequest()
+                            it()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = MaterialTheme.padding.small),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.CallSplit,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = stringResource(MR.strings.action_merge_with_this),
                             modifier = Modifier.padding(start = MaterialTheme.padding.extraSmall),
                         )
                     }

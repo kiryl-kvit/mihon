@@ -66,6 +66,9 @@ class MergedMangaRepositoryImpl(
 
         handler.await(inTransaction = true) {
             val profileId = profileProvider.activeProfileId
+            orderedMangaIds.forEach { mangaId ->
+                merged_mangasQueries.deleteByMangaId(profileId, mangaId)
+            }
             merged_mangasQueries.deleteByTargetId(profileId, targetMangaId)
             orderedMangaIds.forEachIndexed { index, mangaId ->
                 merged_mangasQueries.insert(profileId, targetMangaId, mangaId, index.toLong())

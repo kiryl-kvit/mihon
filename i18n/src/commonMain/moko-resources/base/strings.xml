@@ -175,8 +175,13 @@
     <string name="action_not_now">Not now</string>
     <string name="action_add_anyway">Add anyway</string>
     <string name="action_open">Open</string>
+    <string name="action_open_merged_entry">Open merged entry</string>
+    <string name="action_add_to_merge">Add to merge</string>
+    <string name="action_merge_into_library">Merge into library...</string>
+    <string name="action_merge_with_this">Merge with this</string>
     <string name="action_duplicates">Duplicate</string>
     <string name="action_keep">Keep</string>
+    <string name="action_keep_in_library">Keep in library</string>
     <string name="action_merge">Merge</string>
     <string name="action_set_display_name">Set display name</string>
     <string name="action_manage_merge">Manage merge</string>
@@ -184,9 +189,13 @@
 
     <string name="label_target">Root</string>
     <string name="label_member">Member</string>
+    <string name="label_new">New</string>
 
     <string name="merge_members_count">%d members</string>
     <string name="merge_existing_target_locked">Existing merged entry will stay as the root</string>
+    <string name="merge_member_notice">This entry is part of a merged entry.</string>
+    <string name="merge_editor_summary">Top to bottom = merged entry order. Uncheck members to replace them.</string>
+    <string name="merge_target_picker_merged_summary">%1$s • %2$d members</string>
     <string name="remove_merged_manga_warning">Merged entries are removed from the library as whole groups.</string>
 
     <!-- Operations -->

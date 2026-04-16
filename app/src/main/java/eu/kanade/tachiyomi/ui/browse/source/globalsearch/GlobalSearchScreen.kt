@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
@@ -14,8 +15,13 @@ import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.presentation.browse.GlobalSearchScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
-import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.manga.pushSourceMangaScreen
+import eu.kanade.tachiyomi.ui.manga.replaceSourceMangaScreen
+import kotlinx.coroutines.launch
+import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class GlobalSearchScreen(
     val searchQuery: String = "",
@@ -30,6 +36,8 @@ class GlobalSearchScreen(
         }
 
         val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
+        val getMergedManga = remember { Injekt.get<GetMergedManga>() }
 
         val screenModel = rememberScreenModel {
             GlobalSearchScreenModel(
@@ -51,7 +59,7 @@ class GlobalSearchScreen(
                     is SearchItemResult.Success -> {
                         val manga = result.result.singleOrNull()
                         if (manga != null) {
-                            navigator.replace(MangaScreen(manga.id, true))
+                            navigator.replaceSourceMangaScreen(manga.id, getMergedManga)
                         } else {
                             // Backoff to result screen
                             showSingleLoadingScreen = false
@@ -72,8 +80,16 @@ class GlobalSearchScreen(
                 onClickSource = {
                     navigator.push(BrowseSourceScreen(it.id, state.searchQuery))
                 },
-                onClickItem = { navigator.push(MangaScreen(it.id, true)) },
-                onLongClickItem = { navigator.push(MangaScreen(it.id, true)) },
+                onClickItem = {
+                    scope.launch {
+                        navigator.pushSourceMangaScreen(it.id, getMergedManga)
+                    }
+                },
+                onLongClickItem = {
+                    scope.launch {
+                        navigator.pushSourceMangaScreen(it.id, getMergedManga)
+                    }
+                },
             )
         }
     }

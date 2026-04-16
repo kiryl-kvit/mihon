@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.outlined.AttachMoney
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
@@ -202,6 +203,7 @@ fun MangaActionRow(
     nextUpdate: Instant?,
     isUserIntervalMode: Boolean,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
@@ -234,6 +236,14 @@ fun MangaActionRow(
             onClick = onAddToLibraryClicked,
             onLongClick = onEditCategory,
         )
+        if (onAddToMergeClicked != null) {
+            MangaActionButton(
+                title = stringResource(MR.strings.action_add_to_merge),
+                icon = Icons.AutoMirrored.Outlined.CallSplit,
+                color = defaultActionButtonColor,
+                onClick = onAddToMergeClicked,
+            )
+        }
         MangaActionButton(
             title = when (nextUpdateDays) {
                 null -> stringResource(MR.strings.not_applicable)
