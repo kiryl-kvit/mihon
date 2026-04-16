@@ -46,13 +46,18 @@ import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.RadioMenuItem
 import eu.kanade.presentation.components.SearchToolbar
+import eu.kanade.presentation.anime.AnimeMergeTargetPickerDialog
+import eu.kanade.presentation.anime.DuplicateAnimeDialog
+import eu.kanade.presentation.browse.components.BrowseLibraryActionDialog
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.anime.AnimeBrowseSourceContent
 import eu.kanade.tachiyomi.source.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.source.online.AnimeHttpSource
-import eu.kanade.tachiyomi.ui.browse.source.browse.SourceFilterDialog
 import eu.kanade.tachiyomi.ui.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.browse.source.browse.SourceFilterDialog
+import eu.kanade.tachiyomi.ui.anime.pushSourceAnimeScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.coroutines.launch
@@ -61,6 +66,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.collections.immutable.persistentListOf
 import mihon.presentation.core.util.collectAsLazyPagingItems
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.TextButton
@@ -69,6 +75,8 @@ import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 data class AnimeBrowseSourceScreen(
     val sourceId: Long,
@@ -87,6 +95,7 @@ data class AnimeBrowseSourceScreen(
         val screenModel = rememberScreenModel { AnimeBrowseSourceScreenModel(sourceId, listingQuery) }
         val state by screenModel.state.collectAsState()
         val navigator = LocalNavigator.currentOrThrow
+        val getMergedAnime = remember { Injekt.get<GetMergedAnime>() }
         val source = screenModel.source
         val navigateUp: () -> Unit = {
             when {
@@ -215,7 +224,11 @@ data class AnimeBrowseSourceScreen(
                 displayMode = screenModel.displayMode,
                 snackbarHostState = snackbarHostState,
                 contentPadding = paddingValues,
-                onAnimeClick = { anime -> navigator.push(AnimeScreen(anime.id)) },
+                onAnimeClick = { anime ->
+                    scope.launch {
+                        navigator.pushSourceAnimeScreen(anime.id, getMergedAnime)
+                    }
+                },
                 onAnimeLongClick = { anime ->
                     scope.launch {
                         if (screenModel.onAnimeLongClick(anime)) {
@@ -258,6 +271,53 @@ data class AnimeBrowseSourceScreen(
                 RemoveAnimeDialog(
                     onDismissRequest = screenModel::dismissDialog,
                     onConfirm = { screenModel.changeAnimeFavorite(dialog.anime) },
+                )
+            }
+            is AnimeBrowseSourceScreenModel.Dialog.LibraryActionChooser -> {
+                BrowseLibraryActionDialog(
+                    mangaTitle = dialog.anime.displayTitle,
+                    favorite = dialog.anime.favorite,
+                    onDismissRequest = screenModel::dismissDialog,
+                    onLibraryAction = {
+                        screenModel.dismissDialog()
+                        screenModel.confirmBrowseLibraryAction(dialog.anime)
+                    },
+                    onMergeIntoLibrary = { screenModel.showMergeTargetPicker(dialog.anime) },
+                )
+            }
+            is AnimeBrowseSourceScreenModel.Dialog.DuplicateAnime -> {
+                DuplicateAnimeDialog(
+                    duplicates = dialog.duplicates,
+                    onDismissRequest = screenModel::dismissDialog,
+                    onConfirm = { screenModel.addFavorite(dialog.anime) },
+                    onOpenAnime = { navigator.push(AnimeScreen(it.id)) },
+                    onMerge = { screenModel.openMergeEditorForDuplicate(it.anime.id) },
+                )
+            }
+            is AnimeBrowseSourceScreenModel.Dialog.SelectMergeTarget -> {
+                AnimeMergeTargetPickerDialog(
+                    title = stringResource(MR.strings.action_merge_into_library),
+                    query = dialog.query,
+                    visibleTargets = dialog.visibleTargets,
+                    onDismissRequest = screenModel::dismissDialog,
+                    onQueryChange = screenModel::updateMergeTargetQuery,
+                    onSelectTarget = screenModel::openMergeEditor,
+                )
+            }
+            is AnimeBrowseSourceScreenModel.Dialog.EditMerge -> {
+                BrowseMergeEditorDialog(
+                    entries = dialog.entries,
+                    targetId = dialog.targetId,
+                    targetLocked = dialog.targetLocked,
+                    removedIds = dialog.removedIds,
+                    libraryRemovalIds = dialog.libraryRemovalIds,
+                    confirmEnabled = dialog.enabled,
+                    onDismissRequest = screenModel::dismissDialog,
+                    onMove = screenModel::moveMergeEntry,
+                    onSelectTarget = screenModel::setMergeTarget,
+                    onToggleRemove = screenModel::toggleMergeEntryRemoval,
+                    onToggleLibraryRemove = screenModel::toggleMergeEntryLibraryRemoval,
+                    onConfirm = screenModel::confirmBrowseMerge,
                 )
             }
             null -> Unit

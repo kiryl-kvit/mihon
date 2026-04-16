@@ -24,13 +24,17 @@ import tachiyomi.core.common.preference.TriState
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.category.interactor.GetAnimeCategories
@@ -329,6 +333,54 @@ class AnimeScreenModelTest {
     }
 
     @Test
+    fun `merged detail start picks first episode in reading order`() = runTest(dispatcher) {
+        val target = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+            episodeFlags = AnimeTitle.EPISODE_SORT_DESC or AnimeTitle.EPISODE_SORTING_NUMBER,
+        )
+        val member = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/anime/2",
+        )
+        val episodes = listOf(
+            AnimeEpisode.create().copy(id = 10L, animeId = target.id, episodeNumber = 1.0, sourceOrder = 1L, completed = false, name = "Target 1"),
+            AnimeEpisode.create().copy(id = 20L, animeId = member.id, episodeNumber = 1.0, sourceOrder = 1L, completed = false, name = "Member 1"),
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+        val animeRepository = FakeAnimeRepository(listOf(target, member))
+
+        val model = createModel(
+            anime = target,
+            episodes = episodes,
+            animeRepository = animeRepository,
+            mergedRepository = mergedRepository,
+        )
+
+        advanceUntilIdle()
+
+        eventually(2.seconds) {
+            val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+            state.episodes.map { it.id } shouldContainExactly listOf(10L, 20L)
+            state.primaryEpisodeId shouldBe 20L
+            state.primaryEpisode?.id shouldBe 20L
+        }
+    }
+
+    @Test
     fun `set sorting updates repository episode flags`() = runTest(dispatcher) {
         val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
         val animeRepository = FakeAnimeRepository(listOf(anime))
@@ -418,6 +470,7 @@ class AnimeScreenModelTest {
         playbackRepository: AnimePlaybackStateRepository = FakeAnimePlaybackStateRepository(emptyMap()),
         animeSourceManager: AnimeSourceManager = FakeAnimeSourceManager(),
         libraryPreferences: LibraryPreferences = testLibraryPreferences(),
+        mergedRepository: MergedAnimeRepository = FakeMergedAnimeRepository(emptyList()),
     ): AnimeScreenModel {
         val setAnimeEpisodeFlags = SetAnimeEpisodeFlags(animeRepository)
         return AnimeScreenModel(
@@ -430,6 +483,8 @@ class AnimeScreenModelTest {
             getCategories = GetCategories(FakeCategoryRepository()),
             getAnimeCategories = fakeGetAnimeCategories(),
             setAnimeCategories = fakeSetAnimeCategories(),
+            getMergedAnime = GetMergedAnime(mergedRepository),
+            updateMergedAnime = UpdateMergedAnime(mergedRepository),
             setAnimeEpisodeFlags = setAnimeEpisodeFlags,
             setAnimeDefaultEpisodeFlags = SetAnimeDefaultEpisodeFlags(libraryPreferences, setAnimeEpisodeFlags),
             libraryPreferences = libraryPreferences,
@@ -578,6 +633,27 @@ class AnimeScreenModelTest {
             episode: SEpisode,
             selection: VideoPlaybackSelection,
         ): VideoPlaybackData = error("Not used")
+    }
+
+    private class FakeMergedAnimeRepository(
+        private val merges: List<AnimeMerge>,
+    ) : MergedAnimeRepository {
+        override suspend fun getAll(): List<AnimeMerge> = merges
+        override fun subscribeAll(): Flow<List<AnimeMerge>> = flowOf(merges)
+        override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> {
+            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return emptyList()
+            return merges.filter { it.targetId == targetId }
+        }
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(run {
+            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return@run emptyList()
+            merges.filter { it.targetId == targetId }
+        })
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
+        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
+        override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
+        override suspend fun deleteGroup(targetAnimeId: Long) = Unit
     }
 
     private class FakeScheduleAnimeSource(

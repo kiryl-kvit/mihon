@@ -20,7 +20,10 @@ import eu.kanade.presentation.anime.EpisodeSettingsDialog
 import eu.kanade.presentation.anime.ManageAnimeMergeDialog
 import eu.kanade.presentation.anime.AnimeScreen
 import eu.kanade.presentation.anime.AnimeScheduleSheet
+import eu.kanade.presentation.anime.AnimeMergeTargetPickerDialog
+import eu.kanade.presentation.anime.DuplicateAnimeDialog
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.manga.components.EditDisplayNameDialog
@@ -38,6 +41,7 @@ import mihon.domain.anime.model.toSAnime
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
+import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
@@ -45,6 +49,7 @@ import kotlinx.coroutines.launch
 
 data class AnimeScreen(
     private val animeId: Long,
+    val fromSource: Boolean = false,
     private val bypassMerge: Boolean = false,
 ) : Screen() {
 
@@ -59,7 +64,7 @@ data class AnimeScreen(
         val navigator = LocalNavigator.currentOrThrow
         val scope = rememberCoroutineScope()
         val screenModel = rememberScreenModel {
-            AnimeScreenModel(context.applicationContext, animeId, bypassMerge = bypassMerge)
+            AnimeScreenModel(context.applicationContext, animeId, fromSource = fromSource, bypassMerge = bypassMerge)
         }
         val state by screenModel.state.collectAsState()
 
@@ -88,6 +93,9 @@ data class AnimeScreen(
                     navigateUp = navigator::pop,
                     onRefresh = screenModel::refresh,
                     onAddToLibraryClicked = screenModel::toggleFavorite,
+                    onAddToMergeClicked = screenModel::showMergeTargetPicker.takeIf {
+                        !current.isPartOfMerge && (current.isFromSource || current.anime.favorite)
+                    },
                     onEditCategoryClicked = screenModel::showChangeCategoryDialog.takeIf { current.anime.favorite },
                     onEditDisplayNameClicked = screenModel::showEditDisplayNameDialog.takeIf { current.anime.favorite },
                     onShareClicked = {
@@ -110,9 +118,15 @@ data class AnimeScreen(
                         }
                     },
                     onScheduleClicked = screenModel::showScheduleDialog.takeIf { current.showScheduleButton },
+                    onDuplicatesClicked = screenModel::showDuplicateDialog.takeIf {
+                        current.isFromSource && current.anime.initialized && current.duplicateCandidates.isNotEmpty()
+                    },
                     onCoverClicked = screenModel::showCoverDialog,
                     onFilterClicked = screenModel::showSettingsDialog,
-                    onManageMergeClicked = screenModel::showManageMergeDialog.takeIf { current.isMerged },
+                    onManageMergeClicked = screenModel::showManageMergeDialog.takeIf { current.isPartOfMerge },
+                    onOpenMergedEntryClicked = {
+                        navigator.push(AnimeScreen(current.mergeTargetId))
+                    }.takeIf { current.showMergeNotice },
                     onEpisodeClick = { episode ->
                         scope.launch {
                             context.startAnimeEpisode(
@@ -146,6 +160,15 @@ data class AnimeScreen(
                         } else {
                             LoadingScreen(Modifier.systemBarsPadding())
                         }
+                    }
+                    is AnimeScreenModel.Dialog.DuplicateAnime -> {
+                        DuplicateAnimeDialog(
+                            duplicates = dialog.duplicates,
+                            onDismissRequest = screenModel::dismissDialog,
+                            onConfirm = { screenModel.toggleFavorite(checkDuplicate = false) },
+                            onOpenAnime = { navigator.push(AnimeScreen(it.id)) },
+                            onMerge = { screenModel.openMergeEditorForDuplicate(it.anime.id) },
+                        )
                     }
                     AnimeScreenModel.Dialog.Schedule -> {
                         AnimeScheduleSheet(
@@ -186,16 +209,40 @@ data class AnimeScreen(
                             targetId = dialog.targetId,
                             members = dialog.members,
                             removableIds = dialog.removableIds,
+                            libraryRemovalIds = dialog.libraryRemovalIds,
                             onDismissRequest = screenModel::dismissDialog,
                             onMove = screenModel::reorderMergeMembers,
                             onSaveOrder = screenModel::saveMergeOrder,
                             onOpenAnime = { animeIdToOpen ->
                                 screenModel.dismissDialog()
-                                navigator.push(AnimeScreen(animeIdToOpen, bypassMerge = true))
+                                navigator.push(
+                                    AnimeScreen(
+                                        animeIdToOpen,
+                                        bypassMerge = animeIdToOpen != dialog.savedTargetId,
+                                    ),
+                                )
                             },
+                            onSelectTarget = screenModel::setManageMergeTarget,
                             onToggleRemoveMember = screenModel::toggleMergedMemberRemoval,
+                            onToggleRemoveMemberFromLibrary = screenModel::toggleMergedMemberLibraryRemoval,
                             onRemoveMembers = screenModel::removeMergedMembers,
                             onUnmergeAll = screenModel::unmergeAll,
+                        )
+                    }
+                    is AnimeScreenModel.Dialog.EditMerge -> {
+                        BrowseMergeEditorDialog(
+                            entries = dialog.entries,
+                            targetId = dialog.targetId,
+                            targetLocked = dialog.targetLocked,
+                            removedIds = dialog.removedIds,
+                            libraryRemovalIds = dialog.libraryRemovalIds,
+                            confirmEnabled = dialog.enabled,
+                            onDismissRequest = screenModel::dismissDialog,
+                            onMove = screenModel::moveMergeEntry,
+                            onSelectTarget = screenModel::setMergeTarget,
+                            onToggleRemove = screenModel::toggleMergeEntryRemoval,
+                            onToggleLibraryRemove = screenModel::toggleMergeEntryLibraryRemoval,
+                            onConfirm = screenModel::confirmMerge,
                         )
                     }
                     is AnimeScreenModel.Dialog.RemoveMergedAnime -> {
@@ -210,6 +257,16 @@ data class AnimeScreen(
                                     screenModel.dismissDialog()
                                 }
                             },
+                        )
+                    }
+                    is AnimeScreenModel.Dialog.SelectMergeTarget -> {
+                        AnimeMergeTargetPickerDialog(
+                            title = context.contextStringResource(MR.strings.action_merge_into_library),
+                            query = dialog.query,
+                            visibleTargets = dialog.visibleTargets,
+                            onDismissRequest = screenModel::dismissDialog,
+                            onQueryChange = screenModel::updateMergeTargetQuery,
+                            onSelectTarget = screenModel::openMergeEditor,
                         )
                     }
                     null -> Unit

@@ -41,20 +41,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DoneAll
-import androidx.compose.material.icons.outlined.DragHandle
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
@@ -63,8 +60,6 @@ import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -119,6 +114,8 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.AppBarTitle
 import eu.kanade.presentation.components.AdaptiveSheet
+import eu.kanade.presentation.manga.components.MergeEditorDialog
+import eu.kanade.presentation.manga.components.MergeEditorEntry
 import eu.kanade.presentation.manga.components.MangaBottomActionMenu
 import eu.kanade.presentation.manga.components.DotSeparatorText
 import eu.kanade.presentation.manga.components.DISALLOWED_MARKDOWN_TYPES
@@ -137,6 +134,7 @@ import eu.kanade.tachiyomi.util.system.copyToClipboard
 import com.mikepenz.markdown.model.markdownAnnotator
 import com.mikepenz.markdown.model.markdownAnnotatorConfig
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.findChildOfType
@@ -160,9 +158,6 @@ import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clickableNoIndication
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import tachiyomi.presentation.core.util.shouldExpandFAB
-import sh.calvin.reorderable.ReorderableCollectionItemScope
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.time.LocalDate
@@ -177,6 +172,7 @@ fun AnimeScreen(
     navigateUp: () -> Unit,
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onShareClicked: (() -> Unit)?,
@@ -185,9 +181,11 @@ fun AnimeScreen(
     onSearch: (String, Boolean) -> Unit,
     onTagSearch: (String) -> Unit,
     onScheduleClicked: (() -> Unit)?,
+    onDuplicatesClicked: (() -> Unit)?,
     onCoverClicked: () -> Unit,
     onFilterClicked: (() -> Unit)?,
     onManageMergeClicked: (() -> Unit)?,
+    onOpenMergedEntryClicked: (() -> Unit)?,
     onEpisodeClick: (AnimeEpisode) -> Unit,
     onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
     onAllEpisodesSelected: (Boolean) -> Unit,
@@ -201,6 +199,7 @@ fun AnimeScreen(
             navigateUp = navigateUp,
             onRefresh = onRefresh,
             onAddToLibraryClicked = onAddToLibraryClicked,
+            onAddToMergeClicked = onAddToMergeClicked,
             onEditCategoryClicked = onEditCategoryClicked,
             onEditDisplayNameClicked = onEditDisplayNameClicked,
             onShareClicked = onShareClicked,
@@ -209,9 +208,11 @@ fun AnimeScreen(
             onSearch = onSearch,
             onTagSearch = onTagSearch,
             onScheduleClicked = onScheduleClicked,
+            onDuplicatesClicked = onDuplicatesClicked,
             onCoverClicked = onCoverClicked,
             onFilterClicked = onFilterClicked,
             onManageMergeClicked = onManageMergeClicked,
+            onOpenMergedEntryClicked = onOpenMergedEntryClicked,
             onEpisodeClick = onEpisodeClick,
             onEpisodeSelected = onEpisodeSelected,
             onAllEpisodesSelected = onAllEpisodesSelected,
@@ -225,6 +226,7 @@ fun AnimeScreen(
             navigateUp = navigateUp,
             onRefresh = onRefresh,
             onAddToLibraryClicked = onAddToLibraryClicked,
+            onAddToMergeClicked = onAddToMergeClicked,
             onEditCategoryClicked = onEditCategoryClicked,
             onEditDisplayNameClicked = onEditDisplayNameClicked,
             onShareClicked = onShareClicked,
@@ -233,9 +235,11 @@ fun AnimeScreen(
             onSearch = onSearch,
             onTagSearch = onTagSearch,
             onScheduleClicked = onScheduleClicked,
+            onDuplicatesClicked = onDuplicatesClicked,
             onCoverClicked = onCoverClicked,
             onFilterClicked = onFilterClicked,
             onManageMergeClicked = onManageMergeClicked,
+            onOpenMergedEntryClicked = onOpenMergedEntryClicked,
             onEpisodeClick = onEpisodeClick,
             onEpisodeSelected = onEpisodeSelected,
             onAllEpisodesSelected = onAllEpisodesSelected,
@@ -252,6 +256,7 @@ private fun AnimeScreenSmallImpl(
     navigateUp: () -> Unit,
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onShareClicked: (() -> Unit)?,
@@ -260,9 +265,11 @@ private fun AnimeScreenSmallImpl(
     onSearch: (String, Boolean) -> Unit,
     onTagSearch: (String) -> Unit,
     onScheduleClicked: (() -> Unit)?,
+    onDuplicatesClicked: (() -> Unit)?,
     onCoverClicked: () -> Unit,
     onFilterClicked: (() -> Unit)?,
     onManageMergeClicked: (() -> Unit)?,
+    onOpenMergedEntryClicked: (() -> Unit)?,
     onEpisodeClick: (AnimeEpisode) -> Unit,
     onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
     onAllEpisodesSelected: (Boolean) -> Unit,
@@ -378,17 +385,27 @@ private fun AnimeScreenSmallImpl(
                             onCoverClick = onCoverClicked,
                         )
                     }
+                    if (state.showMergeNotice) {
+                        item {
+                            AnimeMergeNotice(
+                                onOpenMergedEntry = onOpenMergedEntryClicked,
+                                onManageMerge = onManageMergeClicked,
+                            )
+                        }
+                    }
                     item {
                         AnimeActionRow(
                             favorite = state.anime.favorite,
                             scheduleSummary = state.scheduleSummary,
                             showScheduleButton = state.showScheduleButton,
                             onAddToLibraryClicked = onAddToLibraryClicked,
+                            onAddToMergeClicked = onAddToMergeClicked,
                             onRefresh = onRefresh,
                             onEditCategoryClicked = onEditCategoryClicked,
                             onScheduleClicked = onScheduleClicked,
                             onWebViewClicked = onWebViewClicked,
                             onWebViewLongClicked = onWebViewLongClicked,
+                            onDuplicatesClicked = onDuplicatesClicked,
                         )
                     }
                     item {
@@ -431,6 +448,7 @@ private fun AnimeScreenLargeImpl(
     navigateUp: () -> Unit,
     onRefresh: () -> Unit,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onEditCategoryClicked: (() -> Unit)?,
     onEditDisplayNameClicked: (() -> Unit)?,
     onShareClicked: (() -> Unit)?,
@@ -439,9 +457,11 @@ private fun AnimeScreenLargeImpl(
     onSearch: (String, Boolean) -> Unit,
     onTagSearch: (String) -> Unit,
     onScheduleClicked: (() -> Unit)?,
+    onDuplicatesClicked: (() -> Unit)?,
     onCoverClicked: () -> Unit,
     onFilterClicked: (() -> Unit)?,
     onManageMergeClicked: (() -> Unit)?,
+    onOpenMergedEntryClicked: (() -> Unit)?,
     onEpisodeClick: (AnimeEpisode) -> Unit,
     onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
     onAllEpisodesSelected: (Boolean) -> Unit,
@@ -541,16 +561,24 @@ private fun AnimeScreenLargeImpl(
                             onSearch = onSearch,
                             onCoverClick = onCoverClicked,
                         )
+                        if (state.showMergeNotice) {
+                            AnimeMergeNotice(
+                                onOpenMergedEntry = onOpenMergedEntryClicked,
+                                onManageMerge = onManageMergeClicked,
+                            )
+                        }
                         AnimeActionRow(
                             favorite = state.anime.favorite,
                             scheduleSummary = state.scheduleSummary,
                             showScheduleButton = state.showScheduleButton,
                             onAddToLibraryClicked = onAddToLibraryClicked,
+                            onAddToMergeClicked = onAddToMergeClicked,
                             onRefresh = onRefresh,
                             onEditCategoryClicked = onEditCategoryClicked,
                             onScheduleClicked = onScheduleClicked,
                             onWebViewClicked = onWebViewClicked,
                             onWebViewLongClicked = onWebViewLongClicked,
+                            onDuplicatesClicked = onDuplicatesClicked,
                         )
                         ExpandableAnimeDescription(
                             description = state.anime.description,
@@ -868,11 +896,13 @@ private fun AnimeActionRow(
     scheduleSummary: AnimeScreenModel.ScheduleSummary,
     showScheduleButton: Boolean,
     onAddToLibraryClicked: () -> Unit,
+    onAddToMergeClicked: (() -> Unit)?,
     onRefresh: () -> Unit,
     onEditCategoryClicked: (() -> Unit)?,
     onScheduleClicked: (() -> Unit)?,
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
+    onDuplicatesClicked: (() -> Unit)?,
 ) {
     val defaultActionButtonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
     val scheduleTitle = when (scheduleSummary) {
@@ -900,6 +930,14 @@ private fun AnimeActionRow(
             onClick = onAddToLibraryClicked,
             onLongClick = onEditCategoryClicked,
         )
+        if (onAddToMergeClicked != null) {
+            AnimeActionButton(
+                title = stringResource(MR.strings.action_add_to_merge),
+                icon = Icons.AutoMirrored.Outlined.CallSplit,
+                color = defaultActionButtonColor,
+                onClick = onAddToMergeClicked,
+            )
+        }
         if (showScheduleButton) {
             AnimeActionButton(
                 title = scheduleTitle,
@@ -924,6 +962,53 @@ private fun AnimeActionRow(
                 color = MaterialTheme.colorScheme.primary,
                 onClick = onRefresh,
             )
+        }
+        if (onDuplicatesClicked != null) {
+            AnimeActionButton(
+                title = stringResource(MR.strings.action_duplicates),
+                icon = Icons.Filled.Warning,
+                color = MaterialTheme.colorScheme.error,
+                onClick = onDuplicatesClicked,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnimeMergeNotice(
+    onOpenMergedEntry: (() -> Unit)?,
+    onManageMerge: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    ElevatedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(MR.strings.merge_member_notice),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            onOpenMergedEntry?.let {
+                androidx.compose.material3.FilledTonalButton(
+                    onClick = it,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(MR.strings.action_open_merged_entry))
+                }
+            }
+            onManageMerge?.let {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = it,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(text = stringResource(MR.strings.action_manage_merge))
+                }
+            }
         }
     }
 }
@@ -1788,56 +1873,37 @@ fun ManageAnimeMergeDialog(
     targetId: Long,
     members: List<AnimeScreenModel.MergeMember>,
     removableIds: List<Long>,
+    libraryRemovalIds: List<Long>,
     onDismissRequest: () -> Unit,
     onMove: (Int, Int) -> Unit,
     onSaveOrder: () -> Unit,
     onOpenAnime: (Long) -> Unit,
+    onSelectTarget: (Long) -> Unit,
     onToggleRemoveMember: (Long) -> Unit,
+    onToggleRemoveMemberFromLibrary: (Long) -> Unit,
     onRemoveMembers: (List<Long>) -> Unit,
     onUnmergeAll: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
-    val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
-        val fromIndex = members.indexOfFirst { it.id == from.key }
-        val toIndex = members.indexOfFirst { it.id == to.key }
-        if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
-        onMove(fromIndex, toIndex)
-    }
-    AlertDialog(
+    MergeEditorDialog(
+        title = stringResource(MR.strings.action_manage_merge),
+        entries = members.map(AnimeScreenModel.MergeMember::toMergeEditorEntry).toImmutableList(),
+        targetId = targetId,
+        targetLocked = false,
         onDismissRequest = onDismissRequest,
-        title = { Text(text = stringResource(MR.strings.action_manage_merge)) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-            ) {
-                Text(
-                    text = "Top to bottom = merged entry order",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-                ) {
-                    items(
-                        items = members,
-                        key = { it.id },
-                    ) { member ->
-                        ReorderableItem(reorderableState, member.id, enabled = members.size > 1) {
-                            ManageAnimeMergeItem(
-                                member = member,
-                                isTarget = member.id == targetId,
-                                markedForRemoval = member.id in removableIds,
-                                onToggleRemove = { onToggleRemoveMember(member.id) },
-                                onOpenAnime = onOpenAnime,
-                            )
-                        }
-                    }
-                }
+        onMove = onMove,
+        onConfirm = onSaveOrder,
+        removableIds = removableIds.toSet(),
+        libraryRemovalIds = libraryRemovalIds.toSet(),
+        onSelectTarget = onSelectTarget,
+        onToggleRemove = onToggleRemoveMember,
+        onToggleLibraryRemove = onToggleRemoveMemberFromLibrary,
+        onOpenManga = onOpenAnime,
+        confirmContent = {
+            TextButton(onClick = onSaveOrder) {
+                Text(text = stringResource(MR.strings.action_save))
             }
         },
-        dismissButton = {
+        dismissContent = {
             Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
                 TextButton(onClick = onUnmergeAll) {
                     Text(text = stringResource(MR.strings.action_unmerge))
@@ -1847,144 +1913,12 @@ fun ManageAnimeMergeDialog(
                 }
             }
         },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
-                TextButton(onClick = onSaveOrder) {
-                    Text(text = stringResource(MR.strings.action_save))
-                }
-                TextButton(
-                    enabled = removableIds.isNotEmpty(),
-                    onClick = { onRemoveMembers(removableIds) },
-                ) {
-                    Text(text = stringResource(MR.strings.action_remove))
-                }
-            }
-        },
     )
 }
 
-@Composable
-private fun ReorderableCollectionItemScope.ManageAnimeMergeItem(
-    member: AnimeScreenModel.MergeMember,
-    isTarget: Boolean,
-    markedForRemoval: Boolean,
-    onToggleRemove: () -> Unit,
-    onOpenAnime: (Long) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ElevatedCard(
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = if (markedForRemoval) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.surfaceContainerLow
-            },
-        ),
-    ) {
-        Box {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MaterialTheme.padding.small, vertical = MaterialTheme.padding.small),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-            ) {
-                MangaCover.Square(
-                    data = member.anime.toMangaCover(),
-                    modifier = Modifier.size(64.dp),
-                )
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.extraSmall),
-                ) {
-                    Text(
-                        text = member.anime.displayTitle,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        text = member.subtitle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (markedForRemoval) {
-                            MaterialTheme.colorScheme.onErrorContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                    if (markedForRemoval) {
-                        Text(
-                            text = stringResource(MR.strings.action_remove),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
-                }
-
-                Box {
-                    IconButton(onClick = { expanded = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.MoreVert,
-                            contentDescription = stringResource(MR.strings.label_more),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false },
-                    ) {
-                        if (!isTarget) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(
-                                            if (markedForRemoval) MR.strings.action_keep else MR.strings.action_remove,
-                                        ),
-                                    )
-                                },
-                                onClick = {
-                                    onToggleRemove()
-                                    expanded = false
-                                },
-                            )
-                        }
-                        DropdownMenuItem(
-                            text = { Text(stringResource(MR.strings.action_open)) },
-                            onClick = {
-                                onOpenAnime(member.id)
-                                expanded = false
-                            },
-                        )
-                    }
-                }
-
-                Icon(
-                    imageVector = Icons.Outlined.DragHandle,
-                    contentDescription = null,
-                    modifier = Modifier.draggableHandle(),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-
-            if (isTarget) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(MaterialTheme.padding.extraSmall),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                ) {
-                    Text(
-                        text = "Root",
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-            }
-        }
-    }
+private fun AnimeScreenModel.MergeMember.toMergeEditorEntry(): MergeEditorEntry {
+    return anime.toMergeEditorEntry(
+        subtitle = subtitle,
+        isRemovable = true,
+    )
 }

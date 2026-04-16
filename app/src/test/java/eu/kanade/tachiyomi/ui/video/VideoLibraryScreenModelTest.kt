@@ -25,9 +25,13 @@ import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeHistory
 import tachiyomi.domain.anime.model.AnimeHistoryUpdate
 import tachiyomi.domain.anime.model.AnimeHistoryWithRelations
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
@@ -581,6 +585,126 @@ class AnimeLibraryScreenModelTest {
 
             shownWhenBothEnabled.state.value.libraryItems.single().showContinueWatching shouldBe true
             shownWhenBothEnabled.state.value.libraryItems.single().unwatchedBadgeCount shouldBe 1L
+        }
+    }
+
+    @Test
+    fun `merged library continue uses reading order across members`() = runTest(dispatcher) {
+        val target = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+            episodeFlags = AnimeTitle.EPISODE_SORT_DESC or AnimeTitle.EPISODE_SORTING_NUMBER,
+        )
+        val member = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
+        val targetEpisode = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = target.id,
+            episodeNumber = 1.0,
+            sourceOrder = 1L,
+            completed = false,
+        )
+        val memberEpisode = AnimeEpisode.create().copy(
+            id = 20L,
+            animeId = member.id,
+            episodeNumber = 1.0,
+            sourceOrder = 1L,
+            completed = false,
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+
+        val model = AnimeLibraryScreenModel(
+            animeRepository = FakeAnimeRepository(listOf(target, member)),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(listOf(targetEpisode, memberEpisode)),
+            animePlaybackStateRepository = FakeAnimePlaybackStateRepository(emptyMap()),
+            animeHistoryRepository = FakeAnimeHistoryRepository(),
+            animeSourceManager = FakeAnimeSourceManager(sourceIds = listOf(99L, 100L)),
+            getAnimeCategories = fakeGetAnimeCategories(),
+            getCategories = GetCategories(FakeCategoryRepository()),
+            setAnimeCategories = fakeSetAnimeCategories(),
+            getMergedAnime = GetMergedAnime(mergedRepository),
+            updateMergedAnime = UpdateMergedAnime(mergedRepository),
+            categoryRepository = FakeCategoryRepository(),
+            libraryPreferences = LibraryPreferences(InMemoryPreferenceStore()),
+            setSortModeForCategory = fakeSetSortModeForCategory(),
+            profileStore = FakeProfileAwareStore(),
+            application = mockk<Application>(relaxed = true),
+        )
+
+        advanceUntilIdle()
+
+        eventually(2.seconds) {
+            val item = model.state.value.libraryItems.single()
+            item.animeId shouldBe target.id
+            item.memberAnimeIds shouldBe listOf(target.id, member.id)
+            item.primaryEpisodeId shouldBe memberEpisode.id
+            item.primaryEpisodeAnimeId shouldBe member.id
+        }
+    }
+
+    @Test
+    fun `library merge dialog flattens existing merged selection into member entries`() = runTest(dispatcher) {
+        val target = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Target", favorite = true, initialized = true, url = "/video/1")
+        val member = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Member", favorite = true, initialized = true, url = "/video/2")
+        val extra = AnimeTitle.create().copy(id = 3L, source = 101L, title = "Extra", favorite = true, initialized = true, url = "/video/3")
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+
+        val model = AnimeLibraryScreenModel(
+            animeRepository = FakeAnimeRepository(listOf(target, member, extra)),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(emptyList()),
+            animePlaybackStateRepository = FakeAnimePlaybackStateRepository(emptyMap()),
+            animeHistoryRepository = FakeAnimeHistoryRepository(),
+            animeSourceManager = FakeAnimeSourceManager(sourceIds = listOf(99L, 100L, 101L)),
+            getAnimeCategories = fakeGetAnimeCategories(),
+            getCategories = GetCategories(FakeCategoryRepository()),
+            setAnimeCategories = fakeSetAnimeCategories(),
+            getMergedAnime = GetMergedAnime(mergedRepository),
+            updateMergedAnime = UpdateMergedAnime(mergedRepository),
+            categoryRepository = FakeCategoryRepository(),
+            libraryPreferences = LibraryPreferences(InMemoryPreferenceStore()),
+            setSortModeForCategory = fakeSetSortModeForCategory(),
+            profileStore = FakeProfileAwareStore(),
+            application = mockk<Application>(relaxed = true),
+        )
+
+        advanceUntilIdle()
+
+        eventually(2.seconds) {
+            model.state.value.pages.single().itemIds shouldBe listOf(extra.id, target.id)
+        }
+
+        val page = model.state.value.pages.single()
+        model.state.value.getItemsForPage(page).forEach { item ->
+            model.toggleSelection(page, item)
+        }
+        model.openMergeDialog()
+
+        eventually(2.seconds) {
+            val dialog = model.state.value.dialog as AnimeLibraryScreenModel.Dialog.MergeAnime
+            dialog.entries.map { it.id } shouldBe listOf(target.id, member.id, extra.id)
+            dialog.targetId shouldBe target.id
+            dialog.targetLocked shouldBe false
+            dialog.entries.count { it.isFromExistingMerge } shouldBe 2
         }
     }
 
@@ -1427,6 +1551,35 @@ class AnimeLibraryScreenModelTest {
             episode: eu.kanade.tachiyomi.source.model.SEpisode,
             selection: eu.kanade.tachiyomi.source.model.VideoPlaybackSelection,
         ) = error("Not used")
+    }
+
+    private class FakeMergedAnimeRepository(
+        private var merges: List<AnimeMerge>,
+    ) : MergedAnimeRepository {
+        override suspend fun getAll(): List<AnimeMerge> = merges
+        override fun subscribeAll(): Flow<List<AnimeMerge>> = flowOf(merges)
+        override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> {
+            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return emptyList()
+            return merges.filter { it.targetId == targetId }
+        }
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(run {
+            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId
+            merges.filter { it.targetId == targetId }
+        })
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
+        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) {
+            merges = merges.filterNot { it.animeId in orderedAnimeIds } + orderedAnimeIds.mapIndexed { index, animeId ->
+                AnimeMerge(targetId = targetAnimeId, animeId = animeId, position = index.toLong())
+            }
+        }
+        override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) {
+            merges = merges.filterNot { it.targetId == targetAnimeId && it.animeId in animeIds }
+        }
+        override suspend fun deleteGroup(targetAnimeId: Long) {
+            merges = merges.filterNot { it.targetId == targetAnimeId }
+        }
     }
 
     private class FakeCategoryRepository(

@@ -133,6 +133,7 @@ import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
 import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.interactor.GetAnime
+import tachiyomi.domain.anime.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
 import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
@@ -167,6 +168,7 @@ class DomainModule : InjektModule {
         addSingletonFactory<MergedMangaRepository> { MergedMangaRepositoryImpl(get(), get()) }
         addFactory { GetAnimeWithEpisodes(get(), get(), get()) }
         addFactory { GetMergedAnime(get()) }
+        addFactory { GetDuplicateLibraryAnime(get(), get(), get(), get()) }
         addFactory { GetDuplicateLibraryManga(get(), get(), get(), get()) }
         addFactory { EnhanceDuplicateLibraryManga(get(), get()) }
         addFactory { GetEnhancedDuplicateLibraryManga(get(), get(), get(), get()) }

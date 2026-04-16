@@ -29,6 +29,7 @@ import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
+import tachiyomi.domain.anime.service.sortedForReading
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -313,12 +314,13 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         visibleAnimeId: Long,
         episodeId: Long,
     ): EpisodeNavigation {
-        val sortedEpisodes = getAnimeWithEpisodes?.awaitEpisodes(
-            id = visibleAnimeId,
-            bypassMerge = bypassMerge,
-        ) ?: animeEpisodeRepository.getEpisodesByAnimeId(
-            if (bypassMerge) visibleAnimeId else ownerAnimeId,
-        ).sortedBy(AnimeEpisode::sourceOrder)
+        val mergedAnimeId = if (bypassMerge) ownerAnimeId else visibleAnimeId
+        val sortedEpisodes = getAnimeWithEpisodes?.let { getAnimeWithEpisodes ->
+            val anime = getAnimeWithEpisodes.awaitAnime(mergedAnimeId)
+            val episodes = getAnimeWithEpisodes.awaitEpisodes(id = mergedAnimeId, bypassMerge = bypassMerge)
+            episodes.sortedForReading(anime)
+        } ?: animeEpisodeRepository.getEpisodesByAnimeId(mergedAnimeId)
+            .sortedBy(AnimeEpisode::sourceOrder)
         val currentIndex = sortedEpisodes.indexOfFirst { it.id == episodeId }
         if (currentIndex == -1) return EpisodeNavigation()
 

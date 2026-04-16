@@ -59,6 +59,11 @@ DELETE FROM merged_animes
 WHERE profile_id = :profileId
 AND target_anime_id = :targetAnimeId;
 
+deleteByAnimeId:
+DELETE FROM merged_animes
+WHERE profile_id = :profileId
+AND anime_id = :animeId;
+
 deleteByProfile:
 DELETE FROM merged_animes
 WHERE profile_id = :profileId;

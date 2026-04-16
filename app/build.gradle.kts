@@ -26,7 +26,7 @@ android {
     defaultConfig {
         applicationId = "app.mihon"
 
-        versionCode = 49
+        versionCode = 50
         versionName = "2.0.0"
 
         buildConfigField("String", "COMMIT_COUNT", "\"${getLatestCommitCount()}\"")
@@ -174,6 +174,11 @@ kotlin {
 }
 
 dependencies {
+    constraints {
+        implementation(libs.androidx.concurrent.futures)
+        implementation(libs.androidx.concurrent.futures.ktx)
+    }
+
     implementation(projects.i18n)
     implementation(projects.core.archive)
     implementation(projects.core.common)
@@ -290,6 +295,10 @@ dependencies {
     // Tests
     testImplementation(libs.bundles.test)
     testRuntimeOnly(libs.junit.platform.launcher)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.uiTestJunit4)
+    androidTestImplementation(libs.androidx.test.junit)
+    debugImplementation(libs.androidx.compose.uiTestManifest)
 
     // For detecting memory leaks; see https://square.github.io/leakcanary/
     // debugImplementation(libs.leakCanary.android)

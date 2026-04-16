@@ -191,10 +191,17 @@ class VideoPlayerViewModelTest {
         val historyRepository = FakeAnimeHistoryRepository()
         val resolver = RecordingVideoStreamResolver()
         val getAnimeWithEpisodes = mockk<GetAnimeWithEpisodes>()
+        coEvery { getAnimeWithEpisodes.awaitAnime(100L) } returns AnimeTitle.create().copy(
+            id = 100L,
+            title = "Merged",
+            url = "/anime/100",
+            episodeFlags = tachiyomi.domain.anime.model.AnimeTitle.EPISODE_SORT_DESC or
+                tachiyomi.domain.anime.model.AnimeTitle.EPISODE_SORTING_NUMBER,
+        )
         coEvery { getAnimeWithEpisodes.awaitEpisodes(id = 100L, bypassMerge = false) } returns listOf(
-            videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
-            videoEpisode(id = 20L, animeId = 2L, sourceOrder = 1L),
-            videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L),
+            videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L, episodeNumber = 1.0),
+            videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L, episodeNumber = 2.0),
+            videoEpisode(id = 20L, animeId = 2L, sourceOrder = 1L, episodeNumber = 1.0),
         )
 
         val viewModel = VideoPlayerViewModel(
@@ -220,11 +227,11 @@ class VideoPlayerViewModelTest {
         viewModel.playNextEpisode()
         advanceUntilIdle()
 
-        resolver.requests shouldBe listOf(10L, 20L)
+        resolver.requests shouldBe listOf(10L, 30L)
         val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
-        state.episodeId shouldBe 20L
+        state.episodeId shouldBe 30L
         state.previousEpisodeId shouldBe 10L
-        state.nextEpisodeId shouldBe 30L
+        state.nextEpisodeId shouldBe null
     }
 
     @Test
@@ -233,7 +240,12 @@ class VideoPlayerViewModelTest {
         val historyRepository = FakeAnimeHistoryRepository()
         val resolver = RecordingVideoStreamResolver()
         val getAnimeWithEpisodes = mockk<GetAnimeWithEpisodes>()
-        coEvery { getAnimeWithEpisodes.awaitEpisodes(id = 100L, bypassMerge = true) } returns listOf(
+        coEvery { getAnimeWithEpisodes.awaitAnime(1L) } returns AnimeTitle.create().copy(
+            id = 1L,
+            title = "Owner",
+            url = "/anime/1",
+        )
+        coEvery { getAnimeWithEpisodes.awaitEpisodes(id = 1L, bypassMerge = true) } returns listOf(
             videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
             videoEpisode(id = 30L, animeId = 1L, sourceOrder = 2L),
         )
@@ -517,14 +529,19 @@ class VideoPlayerViewModelTest {
         finalState.isSourceSwitching shouldBe false
     }
 
-    private fun videoEpisode(id: Long, animeId: Long, sourceOrder: Long): AnimeEpisode {
+    private fun videoEpisode(
+        id: Long,
+        animeId: Long,
+        sourceOrder: Long,
+        episodeNumber: Double = sourceOrder.toDouble(),
+    ): AnimeEpisode {
         return AnimeEpisode.create().copy(
             id = id,
             animeId = animeId,
             url = "/episode/$id",
             name = "Episode $id",
             sourceOrder = sourceOrder,
-            episodeNumber = sourceOrder.toDouble(),
+            episodeNumber = episodeNumber,
         )
     }
 

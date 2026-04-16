@@ -20,7 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.automirrored.outlined.CallSplit
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -41,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -74,6 +76,7 @@ fun BrowseMangaPreviewSheet(
     mangaId: Long,
     previewSize: MangaPreviewSizeUi,
     onLibraryAction: (Manga) -> Unit,
+    onMergeAction: (Manga) -> Unit,
     onOpenManga: (Long) -> Unit,
     onDismissRequest: () -> Unit,
 ) {
@@ -141,6 +144,7 @@ fun BrowseMangaPreviewSheet(
                     snackbarHostState = screenModel.snackbarHostState,
                     onDismissRequest = onDismissRequest,
                     onLibraryAction = onLibraryAction,
+                    onMergeAction = onMergeAction,
                     onOpenManga = {
                         onDismissRequest()
                         onOpenManga(currentState.manga.id)
@@ -170,6 +174,7 @@ private fun BrowseMangaPreviewDialogContent(
     snackbarHostState: SnackbarHostState,
     onDismissRequest: () -> Unit,
     onLibraryAction: (Manga) -> Unit,
+    onMergeAction: (Manga) -> Unit,
     onOpenManga: () -> Unit,
     onRetry: () -> Unit,
     onPageLoad: (Int) -> Unit,
@@ -204,6 +209,7 @@ private fun BrowseMangaPreviewDialogContent(
                 favorite = state.manga.favorite,
                 onOpenManga = onOpenManga,
                 onLibraryAction = { onLibraryAction(state.manga) },
+                onMergeAction = { onMergeAction(state.manga) },
             )
         },
     ) { contentPadding ->
@@ -270,49 +276,111 @@ private fun BrowseMangaPreviewBottomBar(
     favorite: Boolean,
     onOpenManga: () -> Unit,
     onLibraryAction: () -> Unit,
+    onMergeAction: () -> Unit,
 ) {
+    val spacing = MaterialTheme.padding.small
+    val openLabel = stringResource(MR.strings.action_open)
+    val libraryLabel = stringResource(if (favorite) MR.strings.remove_from_library else MR.strings.add_to_library)
+    val mergeLabel = stringResource(MR.strings.action_add_to_merge)
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
         HorizontalDivider()
-        Row(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = MaterialTheme.padding.medium, vertical = MaterialTheme.padding.small),
-            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
         ) {
-            FilledTonalButton(
-                onClick = onOpenManga,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                )
-                Spacer(modifier = Modifier.width(MaterialTheme.padding.small))
-                Text(text = stringResource(MR.strings.action_open))
-            }
+            val useCompactLayout = maxWidth < 480.dp
 
-            Button(
-                onClick = onLibraryAction,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    imageVector = if (favorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = null,
-                )
-                Spacer(modifier = Modifier.width(MaterialTheme.padding.small))
-                Text(
-                    text = stringResource(
-                        if (favorite) MR.strings.in_library else MR.strings.add_to_library,
-                    ),
-                )
+            if (useCompactLayout) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    FilledTonalButton(
+                        onClick = onOpenManga,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        PreviewBottomBarActionContent(
+                            icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                            label = openLabel,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(spacing),
+                    ) {
+                        Button(
+                            onClick = onLibraryAction,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            PreviewBottomBarActionContent(
+                                icon = if (favorite) Icons.Outlined.Delete else Icons.Outlined.FavoriteBorder,
+                                label = libraryLabel,
+                            )
+                        }
+                        FilledTonalButton(
+                            onClick = onMergeAction,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            PreviewBottomBarActionContent(
+                                icon = Icons.AutoMirrored.Outlined.CallSplit,
+                                label = mergeLabel,
+                            )
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                ) {
+                    FilledTonalButton(
+                        onClick = onOpenManga,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        PreviewBottomBarActionContent(
+                            icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                            label = openLabel,
+                        )
+                    }
+                    Button(
+                        onClick = onLibraryAction,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        PreviewBottomBarActionContent(
+                            icon = if (favorite) Icons.Outlined.Delete else Icons.Outlined.FavoriteBorder,
+                            label = libraryLabel,
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = onMergeAction,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        PreviewBottomBarActionContent(
+                            icon = Icons.AutoMirrored.Outlined.CallSplit,
+                            label = mergeLabel,
+                        )
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun PreviewBottomBarActionContent(icon: ImageVector, label: String) {
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+    )
+    Spacer(modifier = Modifier.width(MaterialTheme.padding.small))
+    Text(text = label)
 }
 
 private suspend fun openChapter(

@@ -10,6 +10,7 @@ class CustomSettingsScreenTest {
     fun `anime profiles only expose anime-safe custom settings sections`() {
         visibleCustomSettingsSectionsForProfileType(ProfileType.ANIME) shouldBe setOf(
             CustomSettingsSection.General,
+            CustomSettingsSection.DuplicateDetection,
             CustomSettingsSection.Profiles,
             CustomSettingsSection.Advanced,
         )

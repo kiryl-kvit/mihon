@@ -18,25 +18,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.DragHandle
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -65,6 +55,7 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.core.preference.PreferenceMutableState
 import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.core.util.ifAnimeSourcesLoaded
+import eu.kanade.presentation.anime.toMergeEditorEntry
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.TabbedDialog
 import eu.kanade.presentation.components.TabbedDialogPaddings
@@ -74,6 +65,8 @@ import eu.kanade.presentation.library.components.LazyLibraryGrid
 import eu.kanade.presentation.library.components.LibraryPageEmptyScreen
 import eu.kanade.presentation.library.components.SharedLibraryContent
 import eu.kanade.presentation.library.components.LibraryToolbar
+import eu.kanade.presentation.manga.components.MergeEditorDialog
+import eu.kanade.presentation.manga.components.MergeEditorEntry
 import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.library.components.MangaCompactGridItem
@@ -90,13 +83,11 @@ import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import dev.icerock.moko.resources.StringResource
-import sh.calvin.reorderable.ReorderableCollectionItemScope
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
@@ -370,151 +361,23 @@ private fun MergeLibraryAnimeDialog(
     onSelectTarget: (Long) -> Unit,
     onConfirm: () -> Unit,
 ) {
-    val listState = rememberLazyListState()
-    val reorderableState = rememberReorderableLazyListState(listState, PaddingValues()) { from, to ->
-        val fromIndex = dialog.entries.indexOfFirst { it.id == from.key }
-        val toIndex = dialog.entries.indexOfFirst { it.id == to.key }
-        if (fromIndex == -1 || toIndex == -1) return@rememberReorderableLazyListState
-        onMove(fromIndex, toIndex)
-    }
-
-    AlertDialog(
+    MergeEditorDialog(
+        title = stringResource(MR.strings.action_merge),
+        entries = dialog.entries.map { it.toMergeEditorEntry() }.toPersistentList(),
+        targetId = dialog.targetId,
+        targetLocked = dialog.targetLocked,
         onDismissRequest = onDismissRequest,
-        dismissButton = {
-            TextButton(onClick = onDismissRequest) {
-                Text(text = stringResource(MR.strings.action_cancel))
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = dialog.entries.size >= 2,
-                onClick = onConfirm,
-            ) {
-                Text(text = stringResource(MR.strings.action_ok))
-            }
-        },
-        title = {
-            Text(text = stringResource(MR.strings.action_merge))
-        },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = "Top to bottom = merged entry order",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(
-                        items = dialog.entries,
-                        key = { it.id },
-                    ) { entry ->
-                        ReorderableItem(reorderableState, entry.id, enabled = dialog.entries.size > 1) {
-                            MergeLibraryAnimeItem(
-                                entry = entry,
-                                isTarget = entry.id == dialog.targetId,
-                                targetLocked = dialog.targetLocked,
-                                onSelectTarget = onSelectTarget,
-                            )
-                        }
-                    }
-                }
-                if (dialog.targetLocked) {
-                    Row {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = stringResource(MR.strings.merge_existing_target_locked))
-                    }
-                }
-            }
-        },
+        onMove = onMove,
+        onConfirm = onConfirm,
+        onSelectTarget = onSelectTarget.takeUnless { dialog.targetLocked },
     )
 }
 
-@Composable
-private fun ReorderableCollectionItemScope.MergeLibraryAnimeItem(
-    entry: AnimeLibraryScreenModel.MergeEntry,
-    isTarget: Boolean,
-    targetLocked: Boolean,
-    onSelectTarget: (Long) -> Unit,
-) {
-    ElevatedCard {
-        ListItem(
-            headlineContent = {
-                Text(
-                    text = entry.title,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            supportingContent = {
-                Text(
-                    text = if (entry.isExistingMerge) {
-                        buildString {
-                            append(entry.subtitle)
-                            append(" • ")
-                            append(stringResource(MR.strings.merge_members_count, entry.memberAnimes.size))
-                        }
-                    } else {
-                        entry.subtitle
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            leadingContent = {
-                Box {
-                    MangaCover.Square(
-                        data = entry.anime.toMangaCover(),
-                        modifier = Modifier.size(48.dp),
-                    )
-                    if (targetLocked && isTarget) {
-                        Icon(
-                            imageVector = Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(2.dp),
-                        )
-                    }
-                }
-            },
-            trailingContent = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    if (!targetLocked) {
-                        RadioButton(
-                            selected = isTarget,
-                            onClick = { onSelectTarget(entry.id) },
-                        )
-                    } else if (isTarget) {
-                        Icon(
-                            imageVector = Icons.Filled.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Outlined.DragHandle,
-                        contentDescription = null,
-                        modifier = Modifier.draggableHandle(),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            },
-            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        )
-    }
+private fun AnimeLibraryScreenModel.MergeEntry.toMergeEditorEntry(): MergeEditorEntry {
+    return anime.toMergeEditorEntry(
+        subtitle = subtitle,
+        isMember = isFromExistingMerge,
+    )
 }
 
 @Composable

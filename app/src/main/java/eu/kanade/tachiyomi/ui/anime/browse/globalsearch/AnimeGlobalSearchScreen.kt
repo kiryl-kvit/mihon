@@ -23,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -48,9 +50,11 @@ import eu.kanade.presentation.library.components.CommonMangaItemDefaults
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
-import eu.kanade.tachiyomi.ui.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.anime.pushSourceAnimeScreen
 import eu.kanade.tachiyomi.ui.anime.browse.AnimeBrowseSourceScreen
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import kotlinx.coroutines.launch
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -58,6 +62,8 @@ import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class AnimeGlobalSearchScreen(
     private val searchQuery: String = "",
@@ -71,6 +77,8 @@ class AnimeGlobalSearchScreen(
         }
 
         val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
+        val getMergedAnime = remember { Injekt.get<GetMergedAnime>() }
         val screenModel = rememberScreenModel { AnimeGlobalSearchScreenModel(initialQuery = searchQuery) }
         val state by screenModel.state.collectAsState()
 
@@ -86,10 +94,14 @@ class AnimeGlobalSearchScreen(
                 navigator.push(AnimeBrowseSourceScreen(source.id, state.searchQuery))
             },
             onClickItem = { anime ->
-                navigator.push(AnimeScreen(anime.id))
+                scope.launch {
+                    navigator.pushSourceAnimeScreen(anime.id, getMergedAnime)
+                }
             },
             onLongClickItem = { anime ->
-                navigator.push(AnimeScreen(anime.id))
+                scope.launch {
+                    navigator.pushSourceAnimeScreen(anime.id, getMergedAnime)
+                }
             },
         )
     }

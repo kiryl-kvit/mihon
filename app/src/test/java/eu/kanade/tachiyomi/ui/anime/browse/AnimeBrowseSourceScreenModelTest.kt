@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.anime.browse
 
+import android.app.Application
 import eu.kanade.domain.source.service.SourcePreferences
 import io.mockk.every
 import io.mockk.mockk
@@ -28,11 +29,18 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.domain.anime.interactor.GetDuplicateLibraryAnime
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.interactor.GetAnime
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
+import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
@@ -64,7 +72,7 @@ class AnimeBrowseSourceScreenModelTest {
     }
 
     @Test
-    fun `long press on favorite opens remove dialog`() = runTest(dispatcher) {
+    fun `long press on favorite opens library action chooser`() = runTest(dispatcher) {
         val anime = anime(id = 1L, favorite = true)
 
         val model = createModel(anime = anime)
@@ -72,14 +80,18 @@ class AnimeBrowseSourceScreenModelTest {
         model.onAnimeLongClick(anime) shouldBe true
 
         eventually(2.seconds) {
-            model.state.value.dialog shouldBe AnimeBrowseSourceScreenModel.Dialog.RemoveAnime(anime)
+            model.state.value.dialog shouldBe AnimeBrowseSourceScreenModel.Dialog.LibraryActionChooser(anime)
         }
     }
 
     @Test
-    fun `long press on non favorite with default category adds to library`() = runTest(dispatcher) {
+    fun `long press on non favorite with default category uses chooser then adds to library`() = runTest(dispatcher) {
         val anime = anime(id = 2L, favorite = false)
-        val animeRepository = FakeAnimeRepository(listOf(anime))
+        val existing = anime(id = 22L, favorite = true, title = "Existing")
+        val animeRepository = FakeAnimeRepository(
+            anime = listOf(anime, existing),
+            favorites = listOf(existing),
+        )
         val categoryRepository = FakeCategoryRepository(
             categories = listOf(
                 Category(0L, "Default", 0L, 0L),
@@ -100,6 +112,13 @@ class AnimeBrowseSourceScreenModelTest {
         model.onAnimeLongClick(anime) shouldBe true
 
         eventually(2.seconds) {
+            model.state.value.dialog shouldBe AnimeBrowseSourceScreenModel.Dialog.LibraryActionChooser(anime)
+        }
+
+        model.dismissDialog()
+        model.confirmBrowseLibraryAction(anime)
+
+        eventually(2.seconds) {
             animeRepository.updates.size shouldBe 2
             animeRepository.updates.first().id shouldBe anime.id
             animeRepository.updates.first().episodeFlags shouldBe 0L
@@ -114,8 +133,9 @@ class AnimeBrowseSourceScreenModelTest {
     }
 
     @Test
-    fun `long press on non favorite without default category opens category dialog`() = runTest(dispatcher) {
+    fun `long press on non favorite without default category uses chooser then opens category dialog`() = runTest(dispatcher) {
         val anime = anime(id = 3L, favorite = false)
+        val existing = anime(id = 23L, favorite = true, title = "Existing")
         val categoryRepository = FakeCategoryRepository(
             categories = listOf(
                 Category(0L, "Default", 0L, 0L),
@@ -128,6 +148,45 @@ class AnimeBrowseSourceScreenModelTest {
 
         val model = createModel(
             anime = anime,
+            animeRepository = FakeAnimeRepository(
+                anime = listOf(anime, existing),
+                favorites = listOf(existing),
+            ),
+            categoryRepository = categoryRepository,
+            libraryPreferences = libraryPreferences,
+        )
+
+        model.onAnimeLongClick(anime) shouldBe true
+
+        eventually(2.seconds) {
+            model.state.value.dialog shouldBe AnimeBrowseSourceScreenModel.Dialog.LibraryActionChooser(anime)
+        }
+
+        model.confirmBrowseLibraryAction(anime)
+
+        eventually(2.seconds) {
+            val dialog = model.state.value.dialog as AnimeBrowseSourceScreenModel.Dialog.ChangeAnimeCategory
+            dialog.anime shouldBe anime
+            dialog.initialSelection.map { it.value.id } shouldContainExactly listOf(2L)
+        }
+    }
+
+    @Test
+    fun `long press with empty library bypasses chooser and opens category dialog`() = runTest(dispatcher) {
+        val anime = anime(id = 4L, favorite = false)
+        val categoryRepository = FakeCategoryRepository(
+            categories = listOf(
+                Category(0L, "Default", 0L, 0L),
+                Category(2L, "Seasonal", 1L, 0L),
+            ),
+        )
+        val libraryPreferences = LibraryPreferences(InMemoryPreferenceStore()).apply {
+            defaultCategory.set(-1)
+        }
+
+        val model = createModel(
+            anime = anime,
+            animeRepository = FakeAnimeRepository(listOf(anime), favorites = emptyList()),
             categoryRepository = categoryRepository,
             libraryPreferences = libraryPreferences,
         )
@@ -137,7 +196,69 @@ class AnimeBrowseSourceScreenModelTest {
         eventually(2.seconds) {
             val dialog = model.state.value.dialog as AnimeBrowseSourceScreenModel.Dialog.ChangeAnimeCategory
             dialog.anime shouldBe anime
-            dialog.initialSelection.map { it.value.id } shouldContainExactly listOf(2L)
+        }
+    }
+
+    @Test
+    fun `confirm browse library action opens duplicate dialog when duplicates exist`() = runTest(dispatcher) {
+        val anime = anime(id = 5L, favorite = false)
+        val duplicate = anime(id = 6L, favorite = true).copy(title = anime.title)
+        val animeRepository = FakeAnimeRepository(
+            anime = listOf(anime, duplicate),
+            favorites = listOf(duplicate),
+        )
+        val duplicateInteractor = GetDuplicateLibraryAnime(
+            animeRepository = animeRepository,
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(),
+            mergedAnimeRepository = FakeMergedAnimeRepository(),
+            duplicatePreferences = tachiyomi.domain.manga.service.DuplicatePreferences(InMemoryPreferenceStore()),
+        )
+
+        val model = createModel(
+            anime = anime,
+            animeRepository = animeRepository,
+            getDuplicateLibraryAnime = duplicateInteractor,
+        )
+
+        model.confirmBrowseLibraryAction(anime)
+
+        eventually(2.seconds) {
+            val dialog = model.state.value.dialog as AnimeBrowseSourceScreenModel.Dialog.DuplicateAnime
+            dialog.anime shouldBe anime
+            dialog.duplicates.map { it.anime.id } shouldContainExactly listOf(duplicate.id)
+        }
+    }
+
+    @Test
+    fun `show merge target picker excludes current anime and its merge members`() = runTest(dispatcher) {
+        val current = anime(id = 10L, favorite = false)
+        val mergedRoot = anime(id = 20L, favorite = true, title = "Merged Root")
+        val mergedChild = anime(id = 21L, favorite = true, title = "Merged Child")
+        val other = anime(id = 30L, favorite = true, title = "Other Target")
+        val animeRepository = FakeAnimeRepository(
+            anime = listOf(current, mergedRoot, mergedChild, other),
+            favorites = listOf(mergedRoot, mergedChild, other),
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            merges = listOf(
+                AnimeMerge(targetId = 20L, animeId = 20L, position = 0),
+                AnimeMerge(targetId = 20L, animeId = 21L, position = 1),
+                AnimeMerge(targetId = 10L, animeId = 10L, position = 0),
+                AnimeMerge(targetId = 10L, animeId = 21L, position = 1),
+            ),
+        )
+
+        val model = createModel(
+            anime = current,
+            animeRepository = animeRepository,
+            getMergedAnime = GetMergedAnime(mergedRepository),
+        )
+
+        model.showMergeTargetPicker(current)
+
+        eventually(2.seconds) {
+            val dialog = model.state.value.dialog as AnimeBrowseSourceScreenModel.Dialog.SelectMergeTarget
+            dialog.visibleTargets.map { it.id } shouldContainExactly listOf(30L)
         }
     }
 
@@ -146,6 +267,13 @@ class AnimeBrowseSourceScreenModelTest {
         animeRepository: FakeAnimeRepository = FakeAnimeRepository(listOf(anime)),
         categoryRepository: FakeCategoryRepository = FakeCategoryRepository(),
         libraryPreferences: LibraryPreferences = LibraryPreferences(InMemoryPreferenceStore()),
+        getDuplicateLibraryAnime: GetDuplicateLibraryAnime = GetDuplicateLibraryAnime(
+            animeRepository = animeRepository,
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(),
+            mergedAnimeRepository = FakeMergedAnimeRepository(),
+            duplicatePreferences = tachiyomi.domain.manga.service.DuplicatePreferences(InMemoryPreferenceStore()),
+        ),
+        getMergedAnime: GetMergedAnime = GetMergedAnime(FakeMergedAnimeRepository()),
     ): AnimeBrowseSourceScreenModel {
         val sourcePreferences = SourcePreferences(InMemoryPreferenceStore(), testJson)
         val getIncognitoState = mockk<GetIncognitoState>()
@@ -159,21 +287,26 @@ class AnimeBrowseSourceScreenModelTest {
             libraryPreferences = libraryPreferences,
             getRemoteAnime = GetRemoteAnime(FakeAnimeSourceRepository()),
             getAnime = GetAnime(animeRepository),
+            getDuplicateLibraryAnime = getDuplicateLibraryAnime,
             getCategories = GetCategories(categoryRepository),
             getAnimeCategories = GetAnimeCategories(categoryRepository),
+            getMergedAnime = getMergedAnime,
+            networkToLocalAnime = NetworkToLocalAnime(animeRepository),
             setAnimeCategories = SetAnimeCategories(animeRepository),
             animeRepository = animeRepository,
             setAnimeDefaultEpisodeFlags = SetAnimeDefaultEpisodeFlags(libraryPreferences, setAnimeEpisodeFlags),
+            updateMergedAnime = UpdateMergedAnime(FakeMergedAnimeRepository()),
             getIncognitoState = getIncognitoState,
+            application = mockk<Application>(relaxed = true),
         )
     }
 
-    private fun anime(id: Long, favorite: Boolean): AnimeTitle {
+    private fun anime(id: Long, favorite: Boolean, title: String = "Anime $id"): AnimeTitle {
         return AnimeTitle.create().copy(
             id = id,
             source = 99L,
             favorite = favorite,
-            title = "Anime $id",
+            title = title,
             url = "/anime/$id",
             initialized = true,
         )
@@ -181,6 +314,7 @@ class AnimeBrowseSourceScreenModelTest {
 
     private class FakeAnimeRepository(
         private val anime: List<AnimeTitle>,
+        private val favorites: List<AnimeTitle> = anime.filter { it.favorite },
     ) : AnimeRepository {
         val updates = mutableListOf<AnimeTitleUpdate>()
         val categoryUpdates = mutableListOf<Pair<Long, List<Long>>>()
@@ -191,8 +325,8 @@ class AnimeBrowseSourceScreenModelTest {
         override fun getAnimeByUrlAndSourceIdAsFlow(url: String, sourceId: Long): Flow<AnimeTitle?> = flowOf(
             anime.firstOrNull { it.url == url && it.source == sourceId },
         )
-        override suspend fun getFavorites(): List<AnimeTitle> = anime.filter { it.favorite }
-        override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(anime.filter { it.favorite })
+        override suspend fun getFavorites(): List<AnimeTitle> = favorites
+        override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(favorites)
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = anime
         override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = true
         override suspend fun update(update: AnimeTitleUpdate): Boolean {
@@ -261,6 +395,45 @@ class AnimeBrowseSourceScreenModelTest {
         override fun getPopular(sourceId: Long): AnimeSourcePagingSource = error("Not used")
         override fun getLatest(sourceId: Long): AnimeSourcePagingSource = error("Not used")
         override fun search(sourceId: Long, query: String, filterList: FilterList): AnimeSourcePagingSource = error("Not used")
+    }
+
+    private class FakeAnimeEpisodeRepository(
+        private val episodesByAnimeId: Map<Long, List<tachiyomi.domain.anime.model.AnimeEpisode>> = emptyMap(),
+    ) : AnimeEpisodeRepository {
+        override suspend fun addAll(episodes: List<tachiyomi.domain.anime.model.AnimeEpisode>): List<tachiyomi.domain.anime.model.AnimeEpisode> = episodes
+        override suspend fun update(episodeUpdate: tachiyomi.domain.anime.model.AnimeEpisodeUpdate) = Unit
+        override suspend fun updateAll(episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>) = Unit
+        override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<tachiyomi.domain.anime.model.AnimeEpisode> = episodesByAnimeId[animeId].orEmpty()
+        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<tachiyomi.domain.anime.model.AnimeEpisode>> = flowOf(episodesByAnimeId[animeId].orEmpty())
+        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<tachiyomi.domain.anime.model.AnimeEpisode>> {
+            return flowOf(animeIds.flatMap { episodesByAnimeId[it].orEmpty() })
+        }
+        override suspend fun getEpisodeById(id: Long): tachiyomi.domain.anime.model.AnimeEpisode? = episodesByAnimeId.values.flatten().firstOrNull { it.id == id }
+        override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): tachiyomi.domain.anime.model.AnimeEpisode? {
+            return episodesByAnimeId[animeId].orEmpty().firstOrNull { it.url == url }
+        }
+    }
+
+    private class FakeMergedAnimeRepository(
+        private val merges: List<AnimeMerge> = emptyList(),
+    ) : MergedAnimeRepository {
+        override suspend fun getAll(): List<AnimeMerge> = merges
+        override fun subscribeAll(): Flow<List<AnimeMerge>> = flowOf(merges)
+        override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> {
+            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return emptyList()
+            return merges.filter { it.targetId == targetId }
+        }
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> {
+            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId
+            return flowOf(targetId?.let { id -> merges.filter { it.targetId == id } }.orEmpty())
+        }
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
+        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
+        override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
+        override suspend fun deleteGroup(targetAnimeId: Long) = Unit
     }
     companion object {
         private val testJson = Json {

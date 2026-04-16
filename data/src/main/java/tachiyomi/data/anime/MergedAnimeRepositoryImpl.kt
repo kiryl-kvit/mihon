@@ -66,6 +66,9 @@ class MergedAnimeRepositoryImpl(
 
         handler.await(inTransaction = true) {
             val profileId = profileProvider.activeProfileId
+            orderedAnimeIds.forEach { animeId ->
+                merged_animesQueries.deleteByAnimeId(profileId, animeId)
+            }
             merged_animesQueries.deleteByTargetId(profileId, targetAnimeId)
             orderedAnimeIds.forEachIndexed { index, animeId ->
                 merged_animesQueries.insert(profileId, targetAnimeId, animeId, index.toLong())

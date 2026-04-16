@@ -6,18 +6,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.browse.migration.search.MigrateSearchScreen
-import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.ui.manga.pushSourceMangaScreen
 import eu.kanade.tachiyomi.util.system.toast
+import kotlinx.coroutines.launch
 import mihon.feature.migration.list.components.MigrationExitDialog
 import mihon.feature.migration.list.components.MigrationMangaDialog
 import mihon.feature.migration.list.components.MigrationProgressDialog
+import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.i18n.MR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 class MigrationListScreen(private val mangaIds: Collection<Long>, private val extraSearchQuery: String?) : Screen() {
 
@@ -33,6 +39,8 @@ class MigrationListScreen(private val mangaIds: Collection<Long>, private val ex
         val screenModel = rememberScreenModel { MigrationListScreenModel(mangaIds, extraSearchQuery) }
         val state by screenModel.state.collectAsState()
         val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val getMergedManga = remember { Injekt.get<GetMergedManga>() }
 
         LaunchedEffect(matchOverride) {
             val (current, target) = matchOverride ?: return@LaunchedEffect
@@ -56,7 +64,9 @@ class MigrationListScreen(private val mangaIds: Collection<Long>, private val ex
             migrationComplete = state.migrationComplete,
             finishedCount = state.finishedCount,
             onItemClick = {
-                navigator.push(MangaScreen(it.id, true))
+                scope.launch {
+                    navigator.pushSourceMangaScreen(it.id, getMergedManga)
+                }
             },
             onSearchManually = { migrationItem ->
                 navigator push MigrateSearchScreen(migrationItem.manga.id)

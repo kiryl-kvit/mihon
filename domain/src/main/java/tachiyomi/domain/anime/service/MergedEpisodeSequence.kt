@@ -22,6 +22,26 @@ fun List<AnimeEpisode>.sortedForMergedDisplay(
         }
 }
 
+fun List<AnimeEpisode>.sortedForReading(
+    anime: AnimeTitle,
+    mergedAnimeIds: List<Long> = map(AnimeEpisode::animeId).distinct(),
+): List<AnimeEpisode> {
+    val readingSort = anime.episodeSortComparator(sortDescending = false)
+    if (mergedAnimeIds.size <= 1) {
+        return sortedWith(readingSort)
+    }
+
+    val orderedMergedIds = mergedAnimeIds.orderedPresentIds(this, AnimeEpisode::animeId).let { ids ->
+        if (anime.sortDescending()) ids.asReversed() else ids
+    }
+    return orderedMergedIds.flatMap { animeId ->
+        asSequence()
+            .filter { it.animeId == animeId }
+            .sortedWith(readingSort)
+            .toList()
+    }
+}
+
 fun List<AnimeEpisode>.groupedByMergedMember(
     mergedAnimeIds: List<Long> = map(AnimeEpisode::animeId).distinct(),
 ): List<Pair<Long, List<AnimeEpisode>>> {
@@ -32,7 +52,9 @@ fun List<AnimeEpisode>.groupedByMergedMember(
         }
 }
 
-fun AnimeTitle.episodeSortComparator(): Comparator<AnimeEpisode> {
+fun AnimeTitle.episodeSortComparator(
+    sortDescending: Boolean = this.sortDescending(),
+): Comparator<AnimeEpisode> {
     val comparator = when (sorting) {
         AnimeTitle.EPISODE_SORTING_NUMBER -> compareBy<AnimeEpisode> {
             it.episodeNumber.takeIf { number -> number >= 0.0 } ?: Double.MAX_VALUE
@@ -44,5 +66,5 @@ fun AnimeTitle.episodeSortComparator(): Comparator<AnimeEpisode> {
         else -> compareBy<AnimeEpisode> { it.sourceOrder }
     }
 
-    return if (sortDescending()) comparator.reversed() else comparator
+    return if (sortDescending) comparator.reversed() else comparator
 }

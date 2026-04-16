@@ -54,12 +54,14 @@ import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.effectiveLibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.anime.service.sortedForReading
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.i18n.MR
@@ -75,8 +77,10 @@ class AnimeLibraryScreenModel(
     private val getAnimeCategories: GetAnimeCategories = Injekt.get(),
     private val getCategories: GetCategories = Injekt.get(),
     private val setAnimeCategories: SetAnimeCategories = Injekt.get(),
-    private val getMergedAnime: GetMergedAnime = Injekt.get(),
-    private val updateMergedAnime: UpdateMergedAnime = Injekt.get(),
+    private val getMergedAnime: GetMergedAnime = runCatching { Injekt.get<GetMergedAnime>() }
+        .getOrElse { GetMergedAnime(NoOpLibraryMergedAnimeRepository) },
+    private val updateMergedAnime: UpdateMergedAnime = runCatching { Injekt.get<UpdateMergedAnime>() }
+        .getOrElse { UpdateMergedAnime(NoOpLibraryMergedAnimeRepository) },
     private val categoryRepository: tachiyomi.domain.category.repository.CategoryRepository = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     private val setSortModeForCategory: SetSortModeForCategory = Injekt.get(),
@@ -249,21 +253,17 @@ class AnimeLibraryScreenModel(
             val animeEpisodes = episodesByAnimeId[anime.id].orEmpty()
             val unwatchedCount = animeEpisodes.count { !it.completed }
             val hasUnwatched = animeEpisodes.any { !it.completed }
-            val inProgressPlayback = animeEpisodes
-                .asSequence()
-                .mapNotNull { episode -> playbackStateByEpisodeId[episode.id] }
-                .filter { !it.completed && it.positionMs > 0L && it.durationMs > 0L }
-                .maxByOrNull(AnimePlaybackState::lastWatchedAt)
+            val readingEpisodes = animeEpisodes.sortedForReading(anime)
+            val inProgressPlayback = readingEpisodes.latestInProgressPlayback(playbackStateByEpisodeId)
             val hasStarted = inProgressPlayback != null || animeEpisodes.any { it.watched || it.completed }
-            val primaryEpisode = inProgressPlayback
-                ?.let { playbackState -> animeEpisodes.firstOrNull { it.id == playbackState.episodeId } }
-                ?: animeEpisodes.firstOrNull { !it.completed }
-                ?: animeEpisodes.firstOrNull()
+            val primaryEpisode = readingEpisodes.selectPrimaryEpisode(playbackStateByEpisodeId)
 
             anime.id to AnimeLibraryItem(
                 animeId = anime.id,
                 anime = anime,
                 memberAnimes = listOf(anime),
+                episodes = animeEpisodes,
+                playbackStates = animeEpisodes.mapNotNull { episode -> playbackStateByEpisodeId[episode.id] },
                 title = anime.displayTitle,
                 coverData = anime.toMangaCover(),
                 sourceId = anime.source,
@@ -333,13 +333,15 @@ class AnimeLibraryScreenModel(
         } else {
             members.firstOrNull { displaySourceId in it.sourceIds }?.sourceName.orEmpty()
         }
-        val primaryEntry = members.firstOrNull { it.hasInProgress && it.primaryEpisodeId != null }
-            ?: members.firstOrNull { it.hasUnwatched && it.primaryEpisodeId != null }
-            ?: members.firstOrNull { it.primaryEpisodeId != null }
+        val playbackStateByEpisodeId = members.associatePlaybackStateByEpisodeId()
+        val readingEpisodes = members.flatMap { it.episodes }.sortedForReading(target.anime, members.map(AnimeLibraryItem::animeId))
+        val primaryEpisode = readingEpisodes.selectPrimaryEpisode(playbackStateByEpisodeId)
         val unwatchedCount = members.sumOf(AnimeLibraryItem::unwatchedCount)
 
         return target.copy(
             memberAnimes = members.flatMap(AnimeLibraryItem::memberAnimes),
+            episodes = members.flatMap(AnimeLibraryItem::episodes),
+            playbackStates = members.flatMap(AnimeLibraryItem::playbackStates),
             displaySourceId = displaySourceId,
             sourceIds = sourceIds,
             sourceName = displaySourceName,
@@ -349,14 +351,18 @@ class AnimeLibraryScreenModel(
                 displaySourceId == LibraryManga.MULTI_SOURCE_ID -> LibraryManga.MULTI_SOURCE_ID.toString()
                 else -> members.firstOrNull { displaySourceId in it.sourceIds }?.sourceLanguage.orEmpty()
             },
-            primaryEpisodeAnimeId = primaryEntry?.primaryEpisodeAnimeId,
-            primaryEpisodeId = primaryEntry?.primaryEpisodeId,
+            primaryEpisodeAnimeId = primaryEpisode?.animeId,
+            primaryEpisodeId = primaryEpisode?.id,
             hasUnwatched = members.any(AnimeLibraryItem::hasUnwatched),
             unwatchedCount = unwatchedCount,
             unwatchedBadgeCount = if (showUnwatchedBadge) unwatchedCount else 0L,
             hasStarted = members.any(AnimeLibraryItem::hasStarted),
-            hasInProgress = members.any(AnimeLibraryItem::hasInProgress),
-            progressFraction = primaryEntry?.progressFraction,
+            hasInProgress = primaryEpisode?.let { episode ->
+                playbackStateByEpisodeId[episode.id]?.let(::isInProgressPlayback)
+            } == true,
+            progressFraction = primaryEpisode?.let { episode ->
+                playbackStateByEpisodeId[episode.id]?.progressFraction()
+            },
             favoriteModifiedAt = members.maxOfOrNull(AnimeLibraryItem::favoriteModifiedAt) ?: target.favoriteModifiedAt,
             lastUpdate = members.maxOfOrNull(AnimeLibraryItem::lastUpdate) ?: target.lastUpdate,
             categoryIds = members.flatMap(AnimeLibraryItem::categoryIds).distinct(),
@@ -632,17 +638,20 @@ class AnimeLibraryScreenModel(
             val mergedSelections = selection.filter(AnimeLibraryItem::isMerged)
             if (mergedSelections.size > 1) return@launchIO
 
-            val entries = selection.map { item ->
-                MergeEntry(
-                    id = item.animeId,
-                    anime = item.anime,
-                    memberAnimes = item.memberAnimes.toImmutableList(),
-                    isExistingMerge = item.isMerged,
-                    title = item.title,
-                    subtitle = buildMergeSubtitle(item.anime),
-                )
-            }
+            val entries = selection
+                .flatMap { item ->
+                    item.memberAnimes.map { memberAnime ->
+                        MergeEntry(
+                            id = memberAnime.id,
+                            anime = memberAnime,
+                            isFromExistingMerge = item.isMerged,
+                            subtitle = buildMergeSubtitle(memberAnime),
+                        )
+                    }
+                }
+                .distinctBy(MergeEntry::id)
                 .toImmutableList()
+            if (entries.size < 2) return@launchIO
 
             val existingMerge = mergedSelections.firstOrNull()
             mutableState.update {
@@ -650,7 +659,7 @@ class AnimeLibraryScreenModel(
                     dialog = Dialog.MergeAnime(
                         entries = entries,
                         targetId = existingMerge?.animeId ?: entries.first().id,
-                        targetLocked = existingMerge != null,
+                        targetLocked = false,
                     ),
                 )
             }
@@ -683,9 +692,7 @@ class AnimeLibraryScreenModel(
             val targetId = dialog.targetId.takeIf { targetAnimeId -> dialog.entries.any { it.id == targetAnimeId } }
                 ?: dialog.entries.firstOrNull()?.id
                 ?: return@launchNonCancellable
-            val mergedIds = dialog.entries
-                .flatMap { entry -> entry.memberAnimes.map(AnimeTitle::id) }
-                .distinct()
+            val mergedIds = orderedMergeIds(dialog.entries)
 
             if (mergedIds.size > 1) {
                 updateMergedAnime.awaitMerge(targetId, mergedIds)
@@ -898,6 +905,8 @@ class AnimeLibraryScreenModel(
         val animeId: Long,
         val anime: AnimeTitle,
         val memberAnimes: List<AnimeTitle>,
+        val episodes: List<AnimeEpisode>,
+        val playbackStates: List<AnimePlaybackState>,
         val title: String,
         val coverData: tachiyomi.domain.manga.model.MangaCover,
         val sourceId: Long,
@@ -1003,9 +1012,7 @@ class AnimeLibraryScreenModel(
     data class MergeEntry(
         val id: Long,
         val anime: AnimeTitle,
-        val memberAnimes: ImmutableList<AnimeTitle>,
-        val isExistingMerge: Boolean,
-        val title: String,
+        val isFromExistingMerge: Boolean,
         val subtitle: String,
     )
 
@@ -1105,6 +1112,53 @@ class AnimeLibraryScreenModel(
         val hasActiveFilters: Boolean
             get() = filterUnwatched != TriState.DISABLED || filterStarted != TriState.DISABLED
     }
+}
+
+private fun List<AnimeEpisode>.latestInProgressPlayback(
+    playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
+): AnimePlaybackState? {
+    return asSequence()
+        .mapNotNull { episode -> playbackStateByEpisodeId[episode.id] }
+        .filter(::isInProgressPlayback)
+        .maxByOrNull(AnimePlaybackState::lastWatchedAt)
+}
+
+private fun List<AnimeEpisode>.selectPrimaryEpisode(
+    playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
+): AnimeEpisode? {
+    val inProgressEpisode = latestInProgressPlayback(playbackStateByEpisodeId)
+        ?.let { playbackState -> firstOrNull { episode -> episode.id == playbackState.episodeId } }
+    if (inProgressEpisode != null) {
+        return inProgressEpisode
+    }
+
+    return firstOrNull { !it.completed } ?: firstOrNull()
+}
+
+private fun List<AnimeLibraryScreenModel.AnimeLibraryItem>.associatePlaybackStateByEpisodeId(): Map<Long, AnimePlaybackState> {
+    return flatMap(AnimeLibraryScreenModel.AnimeLibraryItem::playbackStates)
+        .associateBy(AnimePlaybackState::episodeId)
+}
+
+private fun orderedMergeIds(entries: List<AnimeLibraryScreenModel.MergeEntry>): List<Long> {
+    return entries.map(AnimeLibraryScreenModel.MergeEntry::id).distinct()
+}
+
+private object NoOpLibraryMergedAnimeRepository : MergedAnimeRepository {
+    override suspend fun getAll(): List<AnimeMerge> = emptyList()
+    override fun subscribeAll() = kotlinx.coroutines.flow.flowOf(emptyList<AnimeMerge>())
+    override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> = emptyList()
+    override fun subscribeGroupByAnimeId(animeId: Long) = kotlinx.coroutines.flow.flowOf(emptyList<AnimeMerge>())
+    override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = emptyList()
+    override suspend fun getTargetId(animeId: Long): Long? = null
+    override fun subscribeTargetId(animeId: Long) = kotlinx.coroutines.flow.flowOf(null)
+    override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
+    override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
+    override suspend fun deleteGroup(targetAnimeId: Long) = Unit
+}
+
+private fun isInProgressPlayback(playbackState: AnimePlaybackState): Boolean {
+    return !playbackState.completed && playbackState.positionMs > 0L && playbackState.durationMs > 0L
 }
 
 private fun AnimePlaybackState.progressFraction(): Float {

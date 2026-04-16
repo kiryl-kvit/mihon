@@ -71,6 +71,55 @@ class LibraryScreenModelTest {
 
         job.cancel()
     }
+
+    @Test
+    fun `buildMergeDialog expands existing merge into individual ordered rows`() {
+        val existingMerge = libraryManga(
+            id = 1L,
+            title = "Root",
+            memberMangas = listOf(
+                manga(id = 1L, title = "Root"),
+                manga(id = 2L, title = "Middle"),
+                manga(id = 3L, title = "Bottom"),
+            ),
+        )
+        val newSelection = libraryManga(id = 4L, title = "New")
+
+        val dialog = buildMergeDialog(listOf(existingMerge, newSelection))
+
+        dialog?.targetLocked shouldBe false
+        dialog?.targetId shouldBe 1L
+        dialog?.entries?.map { it.id } shouldBe listOf(1L, 2L, 3L, 4L)
+        dialog?.entries?.map { it.isFromExistingMerge } shouldBe listOf(true, true, true, false)
+    }
+
+    @Test
+    fun `buildMergeDialog keeps existing merge root but allows changing it`() {
+        val existingMerge = libraryManga(
+            id = 10L,
+            title = "Current Root",
+            memberMangas = listOf(
+                manga(id = 10L, title = "Current Root"),
+                manga(id = 11L, title = "Candidate Root"),
+            ),
+        )
+        val dialog = buildMergeDialog(listOf(existingMerge, libraryManga(id = 12L, title = "New")))
+
+        dialog?.targetId shouldBe 10L
+        dialog?.targetLocked shouldBe false
+    }
+
+    @Test
+    fun `orderedMergeIds preserves arbitrary insertion into existing merge`() {
+        val entries = listOf(
+            LibraryScreenModel.MergeEntry(id = 1L, manga = manga(1L, "Root"), isFromExistingMerge = true),
+            LibraryScreenModel.MergeEntry(id = 4L, manga = manga(4L, "New"), isFromExistingMerge = false),
+            LibraryScreenModel.MergeEntry(id = 2L, manga = manga(2L, "Middle"), isFromExistingMerge = true),
+            LibraryScreenModel.MergeEntry(id = 3L, manga = manga(3L, "Bottom"), isFromExistingMerge = true),
+        )
+
+        orderedMergeIds(entries) shouldBe listOf(1L, 4L, 2L, 3L)
+    }
 }
 
 private fun List<LibraryItem>.applyGrouping(
@@ -133,23 +182,38 @@ private fun List<LibraryPage>.applySortForTest(
 
 private fun libraryItem(id: Long, title: String, dateAdded: Long): LibraryItem {
     return LibraryItem(
-        libraryManga = LibraryManga(
-            manga = Manga.create().copy(
-                id = id,
-                source = 1L,
-                favorite = true,
-                title = title,
-                dateAdded = dateAdded,
-                updateStrategy = UpdateStrategy.ALWAYS_UPDATE,
-            ),
-            categories = listOf(0L),
-            totalChapters = 0L,
-            readCount = 0L,
-            bookmarkCount = 0L,
-            latestUpload = 0L,
-            chapterFetchedAt = 0L,
-            lastRead = 0L,
-        ),
+        libraryManga = libraryManga(id = id, title = title, dateAdded = dateAdded),
         sourceName = "Source",
+    )
+}
+
+private fun libraryManga(
+    id: Long,
+    title: String,
+    dateAdded: Long = 0L,
+    memberMangas: List<Manga> = listOf(manga(id = id, title = title, dateAdded = dateAdded)),
+): LibraryManga {
+    return LibraryManga(
+        manga = manga(id = id, title = title, dateAdded = dateAdded),
+        categories = listOf(0L),
+        totalChapters = 0L,
+        readCount = 0L,
+        bookmarkCount = 0L,
+        latestUpload = 0L,
+        chapterFetchedAt = 0L,
+        lastRead = 0L,
+        memberMangaIds = memberMangas.map(Manga::id),
+        memberMangas = memberMangas,
+    )
+}
+
+private fun manga(id: Long, title: String, dateAdded: Long = 0L): Manga {
+    return Manga.create().copy(
+        id = id,
+        source = 1L,
+        favorite = true,
+        title = title,
+        dateAdded = dateAdded,
+        updateStrategy = UpdateStrategy.ALWAYS_UPDATE,
     )
 }

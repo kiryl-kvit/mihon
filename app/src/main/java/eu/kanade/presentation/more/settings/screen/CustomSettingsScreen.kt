@@ -82,6 +82,7 @@ internal fun visibleCustomSettingsSectionsForProfileType(profileType: ProfileTyp
         ProfileType.MANGA -> CustomSettingsSection.entries.toSet()
         ProfileType.ANIME -> setOf(
             CustomSettingsSection.General,
+            CustomSettingsSection.DuplicateDetection,
             CustomSettingsSection.Profiles,
             CustomSettingsSection.Advanced,
         )

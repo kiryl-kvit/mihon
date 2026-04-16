@@ -930,30 +930,10 @@ class LibraryScreenModel(
 
     fun openMergeDialog() {
         screenModelScope.launchIO {
-            val selection = state.value.selectedLibraryManga
-            if (selection.size < 2) return@launchIO
-
-            val mergedSelections = selection.filter { it.isMerged }
-            if (mergedSelections.size > 1) return@launchIO
-
-            val entries = selection.map { libraryManga ->
-                MergeEntry(
-                    id = libraryManga.manga.id,
-                    manga = libraryManga.manga,
-                    memberMangas = libraryManga.memberMangas.toImmutableList(),
-                    isExistingMerge = libraryManga.isMerged,
-                )
-            }
-                .toImmutableList()
-
-            val existingMerge = mergedSelections.firstOrNull()
+            val dialog = buildMergeDialog(state.value.selectedLibraryManga) ?: return@launchIO
             mutableState.update {
                 it.copy(
-                    dialog = Dialog.MergeManga(
-                        entries = entries,
-                        targetId = existingMerge?.manga?.id ?: entries.first().id,
-                        targetLocked = existingMerge != null,
-                    ),
+                    dialog = dialog,
                 )
             }
         }
@@ -985,8 +965,7 @@ class LibraryScreenModel(
             val targetId = dialog.targetId.takeIf { targetId -> dialog.entries.any { it.id == targetId } }
                 ?: dialog.entries.firstOrNull()?.id
                 ?: return@launchNonCancellable
-            val mergedIds = dialog.entries.flatMap { entry -> entry.memberMangas.map(Manga::id) }
-                .distinct()
+            val mergedIds = orderedMergeIds(dialog.entries)
 
             if (mergedIds.size > 1) {
                 updateMergedManga.awaitMerge(targetId, mergedIds)
@@ -1028,8 +1007,7 @@ class LibraryScreenModel(
     data class MergeEntry(
         val id: Long,
         val manga: Manga,
-        val memberMangas: ImmutableList<Manga>,
-        val isExistingMerge: Boolean,
+        val isFromExistingMerge: Boolean,
     ) {
         val title: String
             get() = manga.presentationTitle()
@@ -1186,4 +1164,37 @@ internal fun observeGroupedLibraryPages(
         val pages = applyGrouping(data, groupType)
         groupType to applySort(pages, data, groupType, sortingMode, randomSortSeed)
     }
+}
+
+internal fun buildMergeDialog(selection: List<LibraryManga>): LibraryScreenModel.Dialog.MergeManga? {
+    if (selection.size < 2) return null
+
+    val mergedSelections = selection.filter { it.isMerged }
+    if (mergedSelections.size > 1) return null
+
+    val existingMerge = mergedSelections.firstOrNull()
+    val entries = selection
+        .flatMap { libraryManga ->
+            libraryManga.memberMangas.map { memberManga ->
+                LibraryScreenModel.MergeEntry(
+                    id = memberManga.id,
+                    manga = memberManga,
+                    isFromExistingMerge = libraryManga.isMerged,
+                )
+            }
+        }
+        .distinctBy(LibraryScreenModel.MergeEntry::id)
+        .toImmutableList()
+
+    if (entries.size < 2) return null
+
+    return LibraryScreenModel.Dialog.MergeManga(
+        entries = entries,
+        targetId = existingMerge?.manga?.id ?: entries.first().id,
+        targetLocked = false,
+    )
+}
+
+internal fun orderedMergeIds(entries: List<LibraryScreenModel.MergeEntry>): List<Long> {
+    return entries.map(LibraryScreenModel.MergeEntry::id).distinct()
 }
