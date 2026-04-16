@@ -854,7 +854,6 @@ class BrowseSourceScreenModel(
     ) {
         val isUserQuery get() = listing is Listing.Search && !listing.query.isNullOrEmpty()
     }
-
 }
 
 internal fun BrowseSourceScreenModel.State.initializeForSource(

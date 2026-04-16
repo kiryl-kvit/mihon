@@ -31,10 +31,10 @@ import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
-import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.presentation.manga.components.MergeEditorEntry
 import eu.kanade.presentation.manga.components.MergeTarget
 import eu.kanade.presentation.manga.components.buildMergeTargets
+import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.DownloadProvider
@@ -1716,7 +1716,13 @@ class MangaScreenModel(
             }
                 .toImmutableList()
             updateSuccessState {
-                it.copy(dialog = Dialog.ManageMerge(targetId = state.mergeTargetId, savedTargetId = state.mergeTargetId, members = members))
+                it.copy(
+                    dialog = Dialog.ManageMerge(
+                        targetId = state.mergeTargetId,
+                        savedTargetId = state.mergeTargetId,
+                        members = members,
+                    ),
+                )
             }
         }
     }

@@ -8,9 +8,9 @@ import eu.kanade.domain.source.model.snapshot
 import eu.kanade.domain.source.model.toListing
 import eu.kanade.presentation.manga.components.buildMergeTargets
 import eu.kanade.tachiyomi.source.Source
-import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.Filter
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.model.SManga
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -204,7 +204,9 @@ private fun manga(id: Long, title: String, sourceId: Long): Manga {
 private fun fakeSourceManager(): SourceManager {
     return object : SourceManager {
         override val isInitialized = MutableStateFlow(true)
-        override val catalogueSources = MutableStateFlow(emptyList<eu.kanade.tachiyomi.source.CatalogueSource>()).asStateFlow()
+        override val catalogueSources = MutableStateFlow(
+            emptyList<eu.kanade.tachiyomi.source.CatalogueSource>(),
+        ).asStateFlow()
 
         override fun get(sourceKey: Long): Source? = object : Source {
             override val id: Long = sourceKey

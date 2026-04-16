@@ -26,6 +26,8 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.manga.model.toSManga
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
+import eu.kanade.presentation.browse.components.MergeTargetPickerDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
@@ -33,8 +35,6 @@ import eu.kanade.presentation.manga.ChapterSettingsDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.manga.EditCoverAction
 import eu.kanade.presentation.manga.MangaScreen
-import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
-import eu.kanade.presentation.browse.components.MergeTargetPickerDialog
 import eu.kanade.presentation.manga.components.DeleteChaptersDialog
 import eu.kanade.presentation.manga.components.EditDisplayNameDialog
 import eu.kanade.presentation.manga.components.ManageMergeDialog

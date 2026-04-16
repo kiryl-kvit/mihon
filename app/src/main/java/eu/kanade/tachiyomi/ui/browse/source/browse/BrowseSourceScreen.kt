@@ -43,8 +43,8 @@ import eu.kanade.presentation.browse.BrowseSourceContent
 import eu.kanade.presentation.browse.MissingSourceScreen
 import eu.kanade.presentation.browse.components.BrowseFeedNameDialog
 import eu.kanade.presentation.browse.components.BrowseLibraryActionDialog
-import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.browse.components.BrowseMangaPreviewSheet
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.browse.components.BrowseSourceToolbar
 import eu.kanade.presentation.browse.components.DeleteBrowsePresetDialog
 import eu.kanade.presentation.browse.components.MergeTargetPickerDialog
@@ -70,9 +70,9 @@ import mihon.presentation.core.util.collectAsLazyPagingItems
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.manga.interactor.GetMergedManga
+import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
-import tachiyomi.domain.manga.model.presentationTitle
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource

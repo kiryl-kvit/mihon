@@ -1,8 +1,8 @@
 package eu.kanade.presentation.manga.components
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -33,8 +33,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.ui.manga.MangaScreenModel
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
-import kotlinx.collections.immutable.toPersistentList
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toPersistentList
 import tachiyomi.domain.manga.interactor.FetchInterval
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.domain.manga.model.presentationTitle
