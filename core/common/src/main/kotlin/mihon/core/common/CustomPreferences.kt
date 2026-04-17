@@ -52,6 +52,11 @@ class CustomPreferences(
         true,
     )
 
+    val enableAnimePictureInPicture: Preference<Boolean> = preferenceStore.getBoolean(
+        Preference.appStateKey("enable_anime_picture_in_picture"),
+        false,
+    )
+
     val browseLongPressAction: Preference<BrowseLongPressAction> = preferenceStore.getEnum(
         Preference.appStateKey("browse_long_press_action"),
         BrowseLongPressAction.LIBRARY_ACTION,

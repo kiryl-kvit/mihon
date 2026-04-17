@@ -1,13 +1,20 @@
 package eu.kanade.tachiyomi.ui.video.player
 
 import android.app.Activity
-import android.content.ActivityNotFoundException
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
-import android.provider.Browser
+import android.util.Rational
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ViewGroup
@@ -36,7 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.net.toUri
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -47,12 +54,14 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import eu.kanade.tachiyomi.R
+import mihon.core.common.CustomPreferences
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerLoadingOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSettingsSheet
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSwitchingOverlay
+import tachiyomi.core.common.i18n.stringResource
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
 import kotlinx.coroutines.Job
@@ -60,7 +69,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -69,9 +77,23 @@ class VideoPlayerActivity : BaseActivity() {
 
     private val viewModel by viewModels<VideoPlayerViewModel>()
     private val networkHelper: NetworkHelper by lazy { Injekt.get() }
+    private val customPreferences: CustomPreferences by lazy { Injekt.get() }
     private val windowInsetsController by lazy { WindowInsetsControllerCompat(window, window.decorView) }
     private var player by mutableStateOf<ExoPlayer?>(null)
     private var progressSaveJob: Job? = null
+    private var supportsPictureInPicture = false
+    private var pictureInPictureEnabled = false
+    private var isInPictureInPictureModeState by mutableStateOf(false)
+    private var pendingPictureInPictureOnPause = false
+    private var latestPlaybackSnapshot = VideoPlayerPlaybackSnapshot()
+    private var pictureInPictureActionReceiverRegistered = false
+    private val pictureInPictureActionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                ACTION_PICTURE_IN_PICTURE_TOGGLE_PLAYBACK -> togglePlaybackFromPictureInPicture()
+            }
+        }
+    }
 
     init {
         registerSecureActivity(this)
@@ -105,6 +127,15 @@ class VideoPlayerActivity : BaseActivity() {
         hideSystemUi()
 
         super.onCreate(savedInstanceState)
+
+        supportsPictureInPicture = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        pictureInPictureEnabled = customPreferences.enableAnimePictureInPicture.get()
+        isInPictureInPictureModeState = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            isInPictureInPictureMode
+        } else {
+            false
+        }
+        registerPictureInPictureActionReceiverIfNeeded()
 
         val animeId = intent.extras?.getLong(EXTRA_VIDEO_ID, INVALID_ID) ?: INVALID_ID
         val ownerAnimeId = intent.extras?.getLong(EXTRA_OWNER_VIDEO_ID, animeId) ?: animeId
@@ -142,6 +173,8 @@ class VideoPlayerActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        pictureInPictureEnabled = customPreferences.enableAnimePictureInPicture.get()
+        pendingPictureInPictureOnPause = false
         hideSystemUi()
     }
 
@@ -200,7 +233,9 @@ class VideoPlayerActivity : BaseActivity() {
                 var ignoreNextGestureSeekTapUp by remember(current.episodeId, current.streamUrl) {
                     mutableStateOf(false)
                 }
+                val isInPictureInPictureMode = isInPictureInPictureModeState
                 val shouldHideChromeForSeekFeedback = seekFeedbackState?.hidePlayerChrome == true
+                val hidePlayerChrome = shouldHideChromeForSeekFeedback || isInPictureInPictureMode
 
                 val onPreviousEpisode = {
                     controlsVisible = true
@@ -236,6 +271,8 @@ class VideoPlayerActivity : BaseActivity() {
                                     }
                                     scrubPositionMs = newPosition.positionMs.coerceAtLeast(0L)
                                     playbackSnapshot = exoPlayer.capturePlaybackSnapshot()
+                                    latestPlaybackSnapshot = playbackSnapshot
+                                    updatePictureInPictureParams(playbackSnapshot)
                                 }
 
                                 override fun onRenderedFirstFrame() {
@@ -245,10 +282,14 @@ class VideoPlayerActivity : BaseActivity() {
                                 override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                                     viewModel.updateAdaptiveQualities(exoPlayer.availableAdaptiveQualities())
                                     playbackSnapshot = exoPlayer.capturePlaybackSnapshot()
+                                    latestPlaybackSnapshot = playbackSnapshot
+                                    updatePictureInPictureParams(playbackSnapshot)
                                 }
 
                                 override fun onEvents(player: Player, events: Player.Events) {
                                     playbackSnapshot = exoPlayer.capturePlaybackSnapshot()
+                                    latestPlaybackSnapshot = playbackSnapshot
+                                    updatePictureInPictureParams(playbackSnapshot)
                                 }
                             },
                         )
@@ -256,6 +297,8 @@ class VideoPlayerActivity : BaseActivity() {
                             exoPlayer.seekTo(current.resumePositionMs)
                         }
                         playbackSnapshot = exoPlayer.capturePlaybackSnapshot()
+                        latestPlaybackSnapshot = playbackSnapshot
+                        updatePictureInPictureParams(playbackSnapshot)
                     }
                 }
                 val controllerPlayer = remember(
@@ -343,7 +386,7 @@ class VideoPlayerActivity : BaseActivity() {
                 LaunchedEffect(current.episodeId, current.streamUrl) {
                     startupOverlayVisible = true
                     settingsVisible = false
-                    controlsVisible = true
+                    controlsVisible = !isInPictureInPictureMode
                     isScrubbing = false
                     ignoreNextGestureSeekTapUp = false
                     seekFeedbackState = null
@@ -357,6 +400,8 @@ class VideoPlayerActivity : BaseActivity() {
                     currentPlayer.playWhenReady = true
                     currentPlayer.prepare()
                     playbackSnapshot = currentPlayer.capturePlaybackSnapshot()
+                    latestPlaybackSnapshot = playbackSnapshot
+                    updatePictureInPictureParams(playbackSnapshot)
                 }
 
                 LaunchedEffect(current.playback.currentAdaptiveQuality, currentPlayer) {
@@ -366,6 +411,8 @@ class VideoPlayerActivity : BaseActivity() {
                 LaunchedEffect(currentPlayer) {
                     while (isActive) {
                         playbackSnapshot = currentPlayer.capturePlaybackSnapshot()
+                        latestPlaybackSnapshot = playbackSnapshot
+                        updatePictureInPictureParams(playbackSnapshot)
                         if (!isScrubbing) {
                             scrubPositionMs = playbackSnapshot.positionMs
                         }
@@ -416,6 +463,17 @@ class VideoPlayerActivity : BaseActivity() {
                 val latestSeekBy by rememberUpdatedState(seekBy)
                 val latestSeekGestureModeActive by rememberUpdatedState(shouldHideChromeForSeekFeedback)
                 val latestTriggerSeekFeedback by rememberUpdatedState(triggerSeekFeedback)
+                LaunchedEffect(isInPictureInPictureMode) {
+                    if (isInPictureInPictureMode) {
+                        controlsVisible = false
+                        settingsVisible = false
+                        isScrubbing = false
+                        ignoreNextGestureSeekTapUp = false
+                        seekFeedbackState = null
+                    } else {
+                        hideSystemUi()
+                    }
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -497,67 +555,70 @@ class VideoPlayerActivity : BaseActivity() {
                         },
                     )
 
-                    VideoPlayerOverlay(
-                        visible = controlsVisible,
-                        videoTitle = current.videoTitle,
-                        episodeName = current.episodeName,
-                        playbackSnapshot = playbackSnapshot,
-                        displayedPositionMs = displayedPositionMs,
-                        isScrubbing = isScrubbing,
-                        hasPreviousEpisode = current.previousEpisodeId != null,
-                        hasNextEpisode = current.nextEpisodeId != null,
-                        seekFeedbackState = seekFeedbackState,
-                        hideChromeForSeekFeedback = shouldHideChromeForSeekFeedback,
-                        onSeekFeedbackDismissed = {
-                            ignoreNextGestureSeekTapUp = false
-                            seekFeedbackState = null
-                        },
-                        onBack = ::finish,
-                        onOpenSettings = {
-                            settingsVisible = true
-                            registerControllerInteraction(true)
-                        },
-                        onPreviousEpisode = onPreviousEpisode,
-                        onSeekBackward = {
-                            registerControllerInteraction(true)
-                            seekBy(-SEEK_INCREMENT_MS)
-                            triggerSeekFeedback(VideoPlayerSeekDirection.Backward, false)
-                        },
-                        onTogglePlayback = togglePlayback,
-                        onSeekForward = {
-                            registerControllerInteraction(true)
-                            seekBy(SEEK_INCREMENT_MS)
-                            triggerSeekFeedback(VideoPlayerSeekDirection.Forward, false)
-                        },
-                        onNextEpisode = onNextEpisode,
-                        onScrubStarted = {
-                            registerControllerInteraction(true)
-                            isScrubbing = true
-                            scrubPositionMs = playbackSnapshot.positionMs
-                        },
-                        onScrubPositionChange = { positionMs ->
-                            scrubPositionMs = positionMs.coerceToPlaybackDuration(playbackSnapshot.durationMs)
-                        },
-                        onScrubFinished = {
-                            val targetPositionMs = scrubPositionMs.coerceToPlaybackDuration(playbackSnapshot.durationMs)
-                            isScrubbing = false
-                            scrubPositionMs = targetPositionMs
-                            playbackSnapshot = playbackSnapshot.copy(positionMs = targetPositionMs)
-                            currentPlayer.seekTo(targetPositionMs)
-                            registerControllerInteraction(true)
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (!isInPictureInPictureMode) {
+                        VideoPlayerOverlay(
+                            visible = controlsVisible,
+                            videoTitle = current.videoTitle,
+                            episodeName = current.episodeName,
+                            playbackSnapshot = playbackSnapshot,
+                            displayedPositionMs = displayedPositionMs,
+                            isScrubbing = isScrubbing,
+                            hasPreviousEpisode = current.previousEpisodeId != null,
+                            hasNextEpisode = current.nextEpisodeId != null,
+                            seekFeedbackState = seekFeedbackState,
+                            hideChromeForSeekFeedback = hidePlayerChrome,
+                            onSeekFeedbackDismissed = {
+                                ignoreNextGestureSeekTapUp = false
+                                seekFeedbackState = null
+                            },
+                            onBack = ::finish,
+                            onOpenSettings = {
+                                settingsVisible = true
+                                registerControllerInteraction(true)
+                            },
+                            onPreviousEpisode = onPreviousEpisode,
+                            onSeekBackward = {
+                                registerControllerInteraction(true)
+                                seekBy(-SEEK_INCREMENT_MS)
+                                triggerSeekFeedback(VideoPlayerSeekDirection.Backward, false)
+                            },
+                            onTogglePlayback = togglePlayback,
+                            onSeekForward = {
+                                registerControllerInteraction(true)
+                                seekBy(SEEK_INCREMENT_MS)
+                                triggerSeekFeedback(VideoPlayerSeekDirection.Forward, false)
+                            },
+                            onNextEpisode = onNextEpisode,
+                            onScrubStarted = {
+                                registerControllerInteraction(true)
+                                isScrubbing = true
+                                scrubPositionMs = playbackSnapshot.positionMs
+                            },
+                            onScrubPositionChange = { positionMs ->
+                                scrubPositionMs = positionMs.coerceToPlaybackDuration(playbackSnapshot.durationMs)
+                            },
+                            onScrubFinished = {
+                                val targetPositionMs = scrubPositionMs.coerceToPlaybackDuration(playbackSnapshot.durationMs)
+                                isScrubbing = false
+                                scrubPositionMs = targetPositionMs
+                                playbackSnapshot = playbackSnapshot.copy(positionMs = targetPositionMs)
+                                latestPlaybackSnapshot = playbackSnapshot
+                                currentPlayer.seekTo(targetPositionMs)
+                                registerControllerInteraction(true)
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
 
-                    if (startupOverlayVisible) {
+                    if (startupOverlayVisible && !isInPictureInPictureMode) {
                         VideoPlayerLoadingOverlay(modifier = Modifier.fillMaxSize())
                     }
 
-                    if (current.isSourceSwitching) {
+                    if (current.isSourceSwitching && !isInPictureInPictureMode) {
                         VideoPlayerSwitchingOverlay(modifier = Modifier.align(Alignment.TopCenter))
                     }
 
-                    if (settingsVisible) {
+                    if (settingsVisible && !isInPictureInPictureMode) {
                         VideoPlayerSettingsSheet(
                             playback = current.playback,
                             onDismissRequest = {
@@ -593,17 +654,38 @@ class VideoPlayerActivity : BaseActivity() {
     }
 
     override fun onPause() {
-        player?.pause()
         flushPlaybackState()
         super.onPause()
     }
 
+    override fun onUserLeaveHint() {
+        pendingPictureInPictureOnPause = canEnterPictureInPicture()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !enterPictureInPictureIfEligible()) {
+            pendingPictureInPictureOnPause = false
+        }
+        super.onUserLeaveHint()
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPictureInPictureModeState = isInPictureInPictureMode
+        pendingPictureInPictureOnPause = false
+        if (!isInPictureInPictureMode) {
+            hideSystemUi()
+        }
+    }
+
     override fun onStop() {
+        if (!isInPictureInPictureModeState && !pendingPictureInPictureOnPause) {
+            pendingPictureInPictureOnPause = false
+            player?.pause()
+        }
         flushPlaybackState()
         super.onStop()
     }
 
     override fun onDestroy() {
+        unregisterPictureInPictureActionReceiver()
         releasePlayer(persistState = false)
         super.onDestroy()
     }
@@ -652,7 +734,119 @@ class VideoPlayerActivity : BaseActivity() {
         )
     }
 
+    private fun registerPictureInPictureActionReceiverIfNeeded() {
+        if (pictureInPictureActionReceiverRegistered) return
+
+        ContextCompat.registerReceiver(
+            this,
+            pictureInPictureActionReceiver,
+            IntentFilter(ACTION_PICTURE_IN_PICTURE_TOGGLE_PLAYBACK),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        pictureInPictureActionReceiverRegistered = true
+    }
+
+    private fun unregisterPictureInPictureActionReceiver() {
+        if (!pictureInPictureActionReceiverRegistered) return
+
+        unregisterReceiver(pictureInPictureActionReceiver)
+        pictureInPictureActionReceiverRegistered = false
+    }
+
+    private fun togglePlaybackFromPictureInPicture() {
+        val currentPlayer = player ?: return
+
+        if (latestPlaybackSnapshot.playbackEnded) {
+            currentPlayer.seekTo(0L)
+        }
+
+        if (currentPlayer.isPlaying) {
+            currentPlayer.pause()
+        } else {
+            currentPlayer.play()
+        }
+
+        latestPlaybackSnapshot = currentPlayer.capturePlaybackSnapshot()
+        updatePictureInPictureParams(latestPlaybackSnapshot)
+    }
+
+    private fun enterPictureInPictureIfEligible(): Boolean {
+        if (!canEnterPictureInPicture()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+
+        val params = buildPictureInPictureParams(latestPlaybackSnapshot)
+        setPictureInPictureParams(params)
+        return enterPictureInPictureMode(params)
+    }
+
+    private fun canEnterPictureInPicture(): Boolean {
+        return supportsPictureInPicture &&
+            pictureInPictureEnabled &&
+            !isInPictureInPictureModeState &&
+            latestPlaybackSnapshot.isPlaying &&
+            !latestPlaybackSnapshot.isLoading
+    }
+
+    private fun updatePictureInPictureParams(snapshot: VideoPlayerPlaybackSnapshot) {
+        if (!supportsPictureInPicture || !pictureInPictureEnabled) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        setPictureInPictureParams(buildPictureInPictureParams(snapshot))
+    }
+
+    private fun buildPictureInPictureParams(snapshot: VideoPlayerPlaybackSnapshot): PictureInPictureParams {
+        val paramsBuilder = PictureInPictureParams.Builder()
+            .setAspectRatio(resolvePictureInPictureAspectRatio(snapshot))
+            .setActions(buildPictureInPictureActions(snapshot))
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            paramsBuilder.setAutoEnterEnabled(snapshot.isPlaying && !snapshot.isLoading)
+        }
+
+        return paramsBuilder.build()
+    }
+
+    private fun resolvePictureInPictureAspectRatio(snapshot: VideoPlayerPlaybackSnapshot): Rational {
+        val videoSize = player?.videoSize
+        val width = videoSize?.width ?: 0
+        val height = videoSize?.height ?: 0
+
+        return if (width > 0 && height > 0) {
+            Rational(width, height)
+        } else if (snapshot.durationMs > 0L) {
+            DEFAULT_PICTURE_IN_PICTURE_ASPECT_RATIO
+        } else {
+            DEFAULT_PICTURE_IN_PICTURE_ASPECT_RATIO
+        }
+    }
+
+    private fun buildPictureInPictureActions(snapshot: VideoPlayerPlaybackSnapshot): List<RemoteAction> {
+        val isPlaying = snapshot.isPlaying && !snapshot.playbackEnded
+        val title = if (isPlaying) {
+            stringResource(MR.strings.action_pause)
+        } else {
+            stringResource(MR.strings.action_play)
+        }
+        val iconRes = if (isPlaying) R.drawable.ic_pause_24dp else R.drawable.ic_play_arrow_24dp
+        val pendingIntent = PendingIntent.getBroadcast(
+            this,
+            0,
+            Intent(ACTION_PICTURE_IN_PICTURE_TOGGLE_PLAYBACK).setPackage(packageName),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        return listOf(
+            RemoteAction(
+                Icon.createWithResource(this, iconRes),
+                title,
+                title,
+                pendingIntent,
+            ),
+        )
+    }
+
     companion object {
+        private const val ACTION_PICTURE_IN_PICTURE_TOGGLE_PLAYBACK = "eu.kanade.tachiyomi.ui.video.player.action.TOGGLE_PLAYBACK"
         private const val EXTRA_VIDEO_ID = "video_id"
         private const val EXTRA_OWNER_VIDEO_ID = "owner_video_id"
         private const val EXTRA_EPISODE_ID = "episode_id"
@@ -664,6 +858,7 @@ class VideoPlayerActivity : BaseActivity() {
         private const val PAUSED_PLAYBACK_SNAPSHOT_INTERVAL_MS = 750L
         private const val SEEK_INCREMENT_MS = 5_000L
         private const val SEEK_FEEDBACK_BURST_WINDOW_MS = 900L
+        private val DEFAULT_PICTURE_IN_PICTURE_ASPECT_RATIO = Rational(16, 9)
 
         fun newIntent(
             context: Context,

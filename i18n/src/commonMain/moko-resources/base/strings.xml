@@ -110,6 +110,7 @@
     <string name="action_edit_cover">Edit cover</string>
     <string name="action_view_chapters">View chapters</string>
     <string name="action_view_episodes">View episodes</string>
+    <string name="action_play">Play</string>
     <string name="action_pause">Pause</string>
     <string name="action_previous_chapter">Previous chapter</string>
     <string name="action_next_chapter">Next chapter</string>
@@ -784,6 +785,9 @@
     <string name="anime_playback_stream">Stream</string>
     <string name="anime_playback_source_quality">Source quality</string>
     <string name="anime_playback_quality">Playback quality</string>
+    <string name="pref_category_player">Player</string>
+    <string name="pref_enable_anime_picture_in_picture">Picture-in-Picture</string>
+    <string name="pref_enable_anime_picture_in_picture_summary">Automatically keep anime playback in a floating window when leaving the app</string>
     <string name="anime_no_global_search_results">No anime sources returned results</string>
     <string name="anime_no_pinned_sources_results">Pin one or more anime sources to search only pinned sources.</string>
     <string name="notification_incognito_text">Disable incognito mode</string>

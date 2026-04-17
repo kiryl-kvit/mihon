@@ -42,6 +42,7 @@ import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import mihon.core.common.CustomPreferences
 import mihon.core.common.GlobalCustomPreferences
@@ -288,17 +289,36 @@ object CustomSettingsScreen : SearchableSettings {
                 add(
                     Preference.PreferenceGroup(
                         title = stringResource(MR.strings.pref_category_general),
+                        preferenceItems = buildList {
+                            add(
+                                Preference.PreferenceItem.TextPreference(
+                                    title = homeScreenTabsTitle,
+                                    subtitle = homeTabsSubtitle,
+                                    isProfileSpecific = true,
+                                    onClick = { showHomeTabsDialog = true },
+                                ),
+                            )
+                            add(
+                                Preference.PreferenceItem.SwitchPreference(
+                                    preference = customPreferences.enableFeeds,
+                                    title = stringResource(MR.strings.pref_enable_feeds),
+                                    subtitle = stringResource(MR.strings.pref_enable_feeds_summary),
+                                ),
+                            )
+                        }.toImmutableList(),
+                    ),
+                )
+            }
+
+            if (activeProfileType == ProfileType.ANIME) {
+                add(
+                    Preference.PreferenceGroup(
+                        title = stringResource(MR.strings.pref_category_player),
                         preferenceItems = persistentListOf(
-                            Preference.PreferenceItem.TextPreference(
-                                title = homeScreenTabsTitle,
-                                subtitle = homeTabsSubtitle,
-                                isProfileSpecific = true,
-                                onClick = { showHomeTabsDialog = true },
-                            ),
                             Preference.PreferenceItem.SwitchPreference(
-                                preference = customPreferences.enableFeeds,
-                                title = stringResource(MR.strings.pref_enable_feeds),
-                                subtitle = stringResource(MR.strings.pref_enable_feeds_summary),
+                                preference = customPreferences.enableAnimePictureInPicture,
+                                title = stringResource(MR.strings.pref_enable_anime_picture_in_picture),
+                                subtitle = stringResource(MR.strings.pref_enable_anime_picture_in_picture_summary),
                             ),
                         ),
                     ),
