@@ -9,6 +9,12 @@ CREATE TABLE anime_playback_preferences(
     source_quality_key TEXT,
     player_quality_mode TEXT NOT NULL DEFAULT 'auto',
     player_quality_height INTEGER,
+    subtitle_offset_x REAL,
+    subtitle_offset_y REAL,
+    subtitle_text_size REAL,
+    subtitle_text_color INTEGER,
+    subtitle_background_color INTEGER,
+    subtitle_background_opacity REAL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(anime_id) REFERENCES animes (_id)
     ON DELETE CASCADE,
@@ -36,6 +42,12 @@ SET dub_key = :dubKey,
     source_quality_key = :sourceQualityKey,
     player_quality_mode = :playerQualityMode,
     player_quality_height = :playerQualityHeight,
+    subtitle_offset_x = :subtitleOffsetX,
+    subtitle_offset_y = :subtitleOffsetY,
+    subtitle_text_size = :subtitleTextSize,
+    subtitle_text_color = :subtitleTextColor,
+    subtitle_background_color = :subtitleBackgroundColor,
+    subtitle_background_opacity = :subtitleBackgroundOpacity,
     updated_at = :updatedAt
 WHERE profile_id = :profileId
 AND anime_id = :animeId;
@@ -49,6 +61,12 @@ INSERT OR IGNORE INTO anime_playback_preferences(
     source_quality_key,
     player_quality_mode,
     player_quality_height,
+    subtitle_offset_x,
+    subtitle_offset_y,
+    subtitle_text_size,
+    subtitle_text_color,
+    subtitle_background_color,
+    subtitle_background_opacity,
     updated_at
 )
 VALUES (
@@ -59,5 +77,11 @@ VALUES (
     :sourceQualityKey,
     :playerQualityMode,
     :playerQualityHeight,
+    :subtitleOffsetX,
+    :subtitleOffsetY,
+    :subtitleTextSize,
+    :subtitleTextColor,
+    :subtitleBackgroundColor,
+    :subtitleBackgroundOpacity,
     :updatedAt
 );

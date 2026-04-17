@@ -633,6 +633,95 @@ class VideoPlayerViewModelTest {
     }
 
     @Test
+    fun `subtitle appearance persistence keeps existing source preferences`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val preferencesRepository = RecordingAnimePlaybackPreferencesRepository(
+            existing = AnimePlaybackPreferences(
+                animeId = 1L,
+                dubKey = "dub-1",
+                streamKey = "stream-1",
+                sourceQualityKey = "1080p",
+                playerQualityMode = PlayerQualityMode.AUTO,
+                playerQualityHeight = null,
+                updatedAt = 0L,
+            ),
+        )
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = fakeResolver(animeId = 1L, episodeId = 2L),
+            animePlaybackPreferencesRepository = preferencesRepository,
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(episodes = emptyList()),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 2L)
+        advanceUntilIdle()
+
+        viewModel.updateSubtitleAppearance(
+            VideoSubtitleAppearance(
+                offsetX = 0.12f,
+                offsetY = -0.18f,
+                textSize = 0.07f,
+            ),
+        )
+        advanceUntilIdle()
+
+        preferencesRepository.upserts.last().dubKey shouldBe null
+        preferencesRepository.upserts.last().streamKey shouldBe "Auto"
+        preferencesRepository.upserts.last().sourceQualityKey shouldBe null
+        preferencesRepository.upserts.last().subtitleOffsetX?.toFloat() shouldBe 0.12f
+        preferencesRepository.upserts.last().subtitleOffsetY?.toFloat() shouldBe -0.18f
+    }
+
+    @Test
+    fun `source selection persistence keeps existing subtitle appearance`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val preferencesRepository = RecordingAnimePlaybackPreferencesRepository(
+            existing = AnimePlaybackPreferences(
+                animeId = 1L,
+                dubKey = null,
+                streamKey = null,
+                sourceQualityKey = "720p",
+                playerQualityMode = PlayerQualityMode.AUTO,
+                playerQualityHeight = null,
+                subtitleOffsetX = 0.15,
+                subtitleOffsetY = -0.2,
+                subtitleTextSize = 0.08,
+                subtitleTextColor = 0xFFFFFF99.toInt(),
+                subtitleBackgroundColor = android.graphics.Color.BLACK,
+                subtitleBackgroundOpacity = 0.5,
+                updatedAt = 0L,
+            ),
+        )
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = fakeResolver(animeId = 1L, episodeId = 2L),
+            animePlaybackPreferencesRepository = preferencesRepository,
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(episodes = emptyList()),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 2L)
+        advanceUntilIdle()
+
+        viewModel.applySourceSelection(VideoPlaybackSelection(dubKey = "dub-2", sourceQualityKey = "1080p"))
+        advanceUntilIdle()
+
+        preferencesRepository.upserts.last().subtitleOffsetX?.toFloat() shouldBe 0.15f
+        preferencesRepository.upserts.last().subtitleOffsetY?.toFloat() shouldBe -0.2f
+        preferencesRepository.upserts.last().subtitleTextSize?.toFloat() shouldBe 0.08f
+        preferencesRepository.upserts.last().subtitleBackgroundOpacity?.toFloat() shouldBe 0.5f
+    }
+
+    @Test
     fun `apply source selection keeps ready state while switching`() = runTest(dispatcher) {
         val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
         val historyRepository = FakeAnimeHistoryRepository()

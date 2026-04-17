@@ -209,6 +209,12 @@ class AnimeRestorer(
                 sourceQualityKey = preferences.sourceQualityKey,
                 playerQualityMode = preferences.playerQualityMode,
                 playerQualityHeight = preferences.playerQualityHeight,
+                subtitleOffsetX = preferences.subtitleOffsetX,
+                subtitleOffsetY = preferences.subtitleOffsetY,
+                subtitleTextSize = preferences.subtitleTextSize,
+                subtitleTextColor = preferences.subtitleTextColor,
+                subtitleBackgroundColor = preferences.subtitleBackgroundColor,
+                subtitleBackgroundOpacity = preferences.subtitleBackgroundOpacity,
                 updatedAt = preferences.updatedAt,
             ),
         )

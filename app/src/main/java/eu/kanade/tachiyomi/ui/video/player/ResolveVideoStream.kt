@@ -170,6 +170,12 @@ class ResolveVideoStream(
             sourceQualityKey = null,
             playerQualityMode = PlayerQualityMode.AUTO,
             playerQualityHeight = null,
+            subtitleOffsetX = null,
+            subtitleOffsetY = null,
+            subtitleTextSize = null,
+            subtitleTextColor = null,
+            subtitleBackgroundColor = null,
+            subtitleBackgroundOpacity = null,
             updatedAt = 0L,
         )
     }

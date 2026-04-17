@@ -7,6 +7,12 @@ data class AnimePlaybackPreferences(
     val sourceQualityKey: String?,
     val playerQualityMode: PlayerQualityMode,
     val playerQualityHeight: Int?,
+    val subtitleOffsetX: Double? = null,
+    val subtitleOffsetY: Double? = null,
+    val subtitleTextSize: Double? = null,
+    val subtitleTextColor: Int? = null,
+    val subtitleBackgroundColor: Int? = null,
+    val subtitleBackgroundOpacity: Double? = null,
     val updatedAt: Long,
 )
 

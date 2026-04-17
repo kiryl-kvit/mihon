@@ -15,6 +15,12 @@ object AnimePlaybackPreferencesMapper {
         sourceQualityKey: String?,
         playerQualityMode: String,
         playerQualityHeight: Long?,
+        subtitleOffsetX: Double?,
+        subtitleOffsetY: Double?,
+        subtitleTextSize: Double?,
+        subtitleTextColor: Long?,
+        subtitleBackgroundColor: Long?,
+        subtitleBackgroundOpacity: Double?,
         updatedAt: Long,
     ): AnimePlaybackPreferences {
         return AnimePlaybackPreferences(
@@ -24,6 +30,12 @@ object AnimePlaybackPreferencesMapper {
             sourceQualityKey = sourceQualityKey,
             playerQualityMode = playerQualityMode.fromDatabaseValue(),
             playerQualityHeight = playerQualityHeight?.toInt(),
+            subtitleOffsetX = subtitleOffsetX,
+            subtitleOffsetY = subtitleOffsetY,
+            subtitleTextSize = subtitleTextSize,
+            subtitleTextColor = subtitleTextColor?.toInt(),
+            subtitleBackgroundColor = subtitleBackgroundColor?.toInt(),
+            subtitleBackgroundOpacity = subtitleBackgroundOpacity,
             updatedAt = updatedAt,
         )
     }

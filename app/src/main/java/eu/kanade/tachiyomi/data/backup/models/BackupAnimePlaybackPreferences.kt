@@ -13,6 +13,12 @@ data class BackupAnimePlaybackPreferences(
     @ProtoNumber(4) var playerQualityMode: String = "auto",
     @ProtoNumber(5) var playerQualityHeight: Int? = null,
     @ProtoNumber(6) var updatedAt: Long = 0,
+    @ProtoNumber(7) var subtitleOffsetX: Double? = null,
+    @ProtoNumber(8) var subtitleOffsetY: Double? = null,
+    @ProtoNumber(9) var subtitleTextSize: Double? = null,
+    @ProtoNumber(10) var subtitleTextColor: Int? = null,
+    @ProtoNumber(11) var subtitleBackgroundColor: Int? = null,
+    @ProtoNumber(12) var subtitleBackgroundOpacity: Double? = null,
 ) {
     fun toPlaybackPreferences(): AnimePlaybackPreferences {
         return AnimePlaybackPreferences(
@@ -25,6 +31,12 @@ data class BackupAnimePlaybackPreferences(
                 else -> PlayerQualityMode.AUTO
             },
             playerQualityHeight = playerQualityHeight,
+            subtitleOffsetX = subtitleOffsetX,
+            subtitleOffsetY = subtitleOffsetY,
+            subtitleTextSize = subtitleTextSize,
+            subtitleTextColor = subtitleTextColor,
+            subtitleBackgroundColor = subtitleBackgroundColor,
+            subtitleBackgroundOpacity = subtitleBackgroundOpacity,
             updatedAt = updatedAt,
         )
     }

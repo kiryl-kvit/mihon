@@ -786,6 +786,15 @@
     <string name="anime_playback_source_quality">Source quality</string>
     <string name="anime_playback_quality">Playback quality</string>
     <string name="anime_playback_subtitles">Subtitles</string>
+    <string name="anime_playback_subtitle_settings">Subtitle settings</string>
+    <string name="anime_playback_subtitle_position">Position</string>
+    <string name="anime_playback_subtitle_style">Style</string>
+    <string name="anime_playback_subtitle_size">Size</string>
+    <string name="anime_playback_subtitle_text_color">Text color</string>
+    <string name="anime_playback_subtitle_background_color">Background color</string>
+    <string name="anime_playback_subtitle_background_opacity">Background opacity</string>
+    <string name="anime_playback_subtitle_recenter">Recenter</string>
+    <string name="anime_playback_subtitle_sample">Subtitle preview</string>
     <string name="pref_category_player">Player</string>
     <string name="pref_enable_anime_picture_in_picture">Picture-in-Picture</string>
     <string name="pref_enable_anime_picture_in_picture_summary">Automatically keep anime playback in a floating window when leaving the app</string>

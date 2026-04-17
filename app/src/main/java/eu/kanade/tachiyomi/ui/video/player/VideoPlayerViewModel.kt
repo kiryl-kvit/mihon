@@ -215,6 +215,23 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         }
     }
 
+    fun updateSubtitleAppearance(appearance: VideoSubtitleAppearance) {
+        val current = mutableState.value as? State.Ready ?: return
+        val normalizedAppearance = appearance.normalized()
+        if (current.playback.subtitleAppearance == normalizedAppearance) return
+        mutableState.value = current.copy(
+            playback = current.playback.copy(subtitleAppearance = normalizedAppearance),
+        )
+        viewModelScope.launch {
+            persistPlaybackPreferences(
+                animeId = current.ownerAnimeId,
+                sourceSelection = current.playback.persistedSourceSelection,
+                adaptiveQuality = current.playback.currentAdaptiveQuality,
+                subtitleAppearance = normalizedAppearance,
+            )
+        }
+    }
+
     fun updateAdaptiveQualities(options: List<VideoAdaptiveQualityOption>) {
         val current = mutableState.value as? State.Ready ?: return
         mutableState.value = current.copy(
@@ -421,13 +438,6 @@ class VideoPlayerViewModel @JvmOverloads constructor(
                 )
             }
 
-        val adaptivePreference = when (savedPreferences.playerQualityMode) {
-            PlayerQualityMode.AUTO -> VideoAdaptiveQualityPreference.Auto
-            PlayerQualityMode.SPECIFIC_HEIGHT -> savedPreferences.playerQualityHeight
-                ?.let(VideoAdaptiveQualityPreference::SpecificHeight)
-                ?: VideoAdaptiveQualityPreference.Auto
-        }
-
         return VideoPlaybackUiState(
             sourceSelection = playbackData.selection.copy(
                 streamKey = currentStream.key.ifBlank { currentStream.label.ifBlank { currentStream.request.url } },
@@ -438,7 +448,8 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             currentStreamLabel = currentStream.label.ifBlank { currentStream.request.url },
             streamOptions = streamOptions,
             playbackData = playbackData,
-            currentAdaptiveQuality = adaptivePreference,
+            currentAdaptiveQuality = savedPreferences.toAdaptiveQualityPreference(),
+            subtitleAppearance = savedPreferences.toSubtitleAppearance(),
         )
     }
 
@@ -471,19 +482,47 @@ class VideoPlayerViewModel @JvmOverloads constructor(
 
     private suspend fun persistPlaybackPreferences(
         animeId: Long,
-        sourceSelection: VideoPlaybackSelection,
-        adaptiveQuality: VideoAdaptiveQualityPreference,
+        sourceSelection: VideoPlaybackSelection? = null,
+        adaptiveQuality: VideoAdaptiveQualityPreference? = null,
+        subtitleAppearance: VideoSubtitleAppearance? = null,
     ) {
+        val existingPreferences = animePlaybackPreferencesRepository.getByAnimeId(animeId)
+            ?: defaultPlaybackPreferences(animeId)
+        val resolvedSourceSelection = sourceSelection ?: VideoPlaybackSelection(
+            dubKey = existingPreferences.dubKey,
+            streamKey = existingPreferences.streamKey,
+            sourceQualityKey = existingPreferences.sourceQualityKey,
+        )
+        val resolvedAdaptiveQuality = adaptiveQuality ?: existingPreferences.toAdaptiveQualityPreference()
+        val resolvedSubtitleAppearance = (subtitleAppearance ?: existingPreferences.toSubtitleAppearance()).normalized()
         animePlaybackPreferencesRepository.upsert(
             AnimePlaybackPreferences(
                 animeId = animeId,
-                dubKey = sourceSelection.dubKey,
-                streamKey = sourceSelection.streamKey,
-                sourceQualityKey = sourceSelection.sourceQualityKey,
-                playerQualityMode = adaptiveQuality.toPlayerQualityMode(),
-                playerQualityHeight = adaptiveQuality.heightOrNull(),
+                dubKey = resolvedSourceSelection.dubKey,
+                streamKey = resolvedSourceSelection.streamKey,
+                sourceQualityKey = resolvedSourceSelection.sourceQualityKey,
+                playerQualityMode = resolvedAdaptiveQuality.toPlayerQualityMode(),
+                playerQualityHeight = resolvedAdaptiveQuality.heightOrNull(),
+                subtitleOffsetX = resolvedSubtitleAppearance.toPersistedOffsetX(),
+                subtitleOffsetY = resolvedSubtitleAppearance.toPersistedOffsetY(),
+                subtitleTextSize = resolvedSubtitleAppearance.toPersistedTextSize(),
+                subtitleTextColor = resolvedSubtitleAppearance.toPersistedTextColor(),
+                subtitleBackgroundColor = resolvedSubtitleAppearance.toPersistedBackgroundColor(),
+                subtitleBackgroundOpacity = resolvedSubtitleAppearance.toPersistedBackgroundOpacity(),
                 updatedAt = System.currentTimeMillis(),
             ),
+        )
+    }
+
+    private fun defaultPlaybackPreferences(animeId: Long): AnimePlaybackPreferences {
+        return AnimePlaybackPreferences(
+            animeId = animeId,
+            dubKey = null,
+            streamKey = null,
+            sourceQualityKey = null,
+            playerQualityMode = PlayerQualityMode.AUTO,
+            playerQualityHeight = null,
+            updatedAt = 0L,
         )
     }
 

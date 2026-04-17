@@ -50,6 +50,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.Player
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -60,6 +61,7 @@ import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerLoadingOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSettingsSheet
+import eu.kanade.tachiyomi.ui.video.player.components.VideoSubtitleEditorOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSwitchingOverlay
 import tachiyomi.core.common.i18n.stringResource
 import eu.kanade.tachiyomi.util.system.toast
@@ -217,6 +219,11 @@ class VideoPlayerActivity : BaseActivity() {
                 var controlsVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(true) }
                 var startupOverlayVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(true) }
                 var settingsVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
+                var subtitleEditorVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
+                var subtitleEditorDraft by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
+                    mutableStateOf(current.playback.subtitleAppearance)
+                }
+                var resumePlaybackAfterSubtitleEditor by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
                 var isScrubbing by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
                 var scrubPositionMs by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(current.resumePositionMs.coerceAtLeast(0L))
@@ -239,10 +246,10 @@ class VideoPlayerActivity : BaseActivity() {
                 val isInPictureInPictureMode = isInPictureInPictureModeState
                 val shouldHideChromeForSeekFeedback = seekFeedbackState?.hidePlayerChrome == true
                 val hidePlayerChrome = shouldHideChromeForSeekFeedback || isInPictureInPictureMode
-
                 val onPreviousEpisode = {
                     controlsVisible = true
                     settingsVisible = false
+                    subtitleEditorVisible = false
                     isScrubbing = false
                     controllerInteractionSequence += 1L
                     flushPlaybackState()
@@ -251,6 +258,7 @@ class VideoPlayerActivity : BaseActivity() {
                 val onNextEpisode = {
                     controlsVisible = true
                     settingsVisible = false
+                    subtitleEditorVisible = false
                     isScrubbing = false
                     controllerInteractionSequence += 1L
                     flushPlaybackState()
@@ -401,6 +409,9 @@ class VideoPlayerActivity : BaseActivity() {
                 LaunchedEffect(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     startupOverlayVisible = true
                     settingsVisible = false
+                    subtitleEditorVisible = false
+                    subtitleEditorDraft = current.playback.subtitleAppearance
+                    resumePlaybackAfterSubtitleEditor = false
                     controlsVisible = !isInPictureInPictureMode
                     isScrubbing = false
                     ignoreNextGestureSeekTapUp = false
@@ -487,6 +498,7 @@ class VideoPlayerActivity : BaseActivity() {
                     if (isInPictureInPictureMode) {
                         controlsVisible = false
                         settingsVisible = false
+                        subtitleEditorVisible = false
                         isScrubbing = false
                         ignoreNextGestureSeekTapUp = false
                         seekFeedbackState = null
@@ -508,6 +520,7 @@ class VideoPlayerActivity : BaseActivity() {
                                 player = controllerPlayer
                                 setKeepContentOnPlayerReset(true)
                                 useController = false
+                                setEnableComposeSurfaceSyncWorkaround(true)
                                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                                 setBackgroundColor(android.graphics.Color.BLACK)
                                 layoutParams = ViewGroup.LayoutParams(
@@ -522,13 +535,17 @@ class VideoPlayerActivity : BaseActivity() {
                             playerView.player = controllerPlayer
                             playerView.setKeepContentOnPlayerReset(true)
                             playerView.useController = false
+                            playerView.applySubtitleAppearance(
+                                appearance = if (subtitleEditorVisible) subtitleEditorDraft else current.playback.subtitleAppearance,
+                                editorVisible = subtitleEditorVisible,
+                            )
                             val gestureDetector = GestureDetector(
                                 playerView.context,
                                 object : GestureDetector.SimpleOnGestureListener() {
                                     override fun onDown(e: MotionEvent): Boolean = true
 
                                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                                        if (!latestSettingsVisible) {
+                                        if (!latestSettingsVisible && !subtitleEditorVisible) {
                                             if (latestSeekGestureModeActive) {
                                                 return true
                                             }
@@ -542,7 +559,7 @@ class VideoPlayerActivity : BaseActivity() {
                                     }
 
                                     override fun onDoubleTap(e: MotionEvent): Boolean {
-                                        if (!latestSettingsVisible) {
+                                        if (!latestSettingsVisible && !subtitleEditorVisible) {
                                             val direction = latestResolveSeekDirectionFromTap(e.x, playerView.width)
                                             if (direction != null) {
                                                 ignoreNextGestureSeekTapUp = true
@@ -555,6 +572,9 @@ class VideoPlayerActivity : BaseActivity() {
                                 },
                             )
                             playerView.setOnTouchListener { _, motionEvent ->
+                                if (subtitleEditorVisible) {
+                                    return@setOnTouchListener true
+                                }
                                 val handled = gestureDetector.onTouchEvent(motionEvent)
                                 if (!latestSettingsVisible && latestSeekGestureModeActive && motionEvent.actionMasked == MotionEvent.ACTION_UP) {
                                     val direction = latestResolveSeekDirectionFromTap(motionEvent.x, playerView.width)
@@ -575,7 +595,7 @@ class VideoPlayerActivity : BaseActivity() {
                         },
                     )
 
-                    if (!isInPictureInPictureMode) {
+                    if (!isInPictureInPictureMode && !subtitleEditorVisible) {
                         VideoPlayerOverlay(
                             visible = controlsVisible,
                             videoTitle = current.videoTitle,
@@ -630,15 +650,15 @@ class VideoPlayerActivity : BaseActivity() {
                         )
                     }
 
-                    if (startupOverlayVisible && !isInPictureInPictureMode) {
+                    if (startupOverlayVisible && !isInPictureInPictureMode && !subtitleEditorVisible) {
                         VideoPlayerLoadingOverlay(modifier = Modifier.fillMaxSize())
                     }
 
-                    if (current.isSourceSwitching && !isInPictureInPictureMode) {
+                    if (current.isSourceSwitching && !isInPictureInPictureMode && !subtitleEditorVisible) {
                         VideoPlayerSwitchingOverlay(modifier = Modifier.align(Alignment.TopCenter))
                     }
 
-                    if (settingsVisible && !isInPictureInPictureMode) {
+                    if (settingsVisible && !isInPictureInPictureMode && !subtitleEditorVisible) {
                         VideoPlayerSettingsSheet(
                             playback = current.playback,
                             onDismissRequest = {
@@ -652,6 +672,45 @@ class VideoPlayerActivity : BaseActivity() {
                             onPreviewSourceSelection = viewModel::previewSourceSelection,
                             onSelectAdaptiveQuality = viewModel::selectAdaptiveQuality,
                             onSelectSubtitle = viewModel::selectSubtitle,
+                            onOpenSubtitleSettings = {
+                                settingsVisible = false
+                                subtitleEditorDraft = current.playback.subtitleAppearance
+                                resumePlaybackAfterSubtitleEditor = currentPlayer.isPlaying
+                                currentPlayer.pause()
+                                subtitleEditorVisible = true
+                            },
+                        )
+                    }
+
+                    if (subtitleEditorVisible && !isInPictureInPictureMode) {
+                        VideoSubtitleEditorOverlay(
+                            draftAppearance = subtitleEditorDraft,
+                            previewCues = currentPlayer.subtitlePreviewCues().ifEmpty {
+                                listOf(
+                                    Cue.Builder()
+                                        .setText(stringResource(MR.strings.anime_playback_subtitle_sample))
+                                        .build(),
+                                )
+                            },
+                            previewText = currentPlayer.subtitlePreviewText()
+                                ?: stringResource(MR.strings.anime_playback_subtitle_sample),
+                            onDraftChange = { subtitleEditorDraft = it.normalized() },
+                            onDismissRequest = {
+                                subtitleEditorVisible = false
+                                if (resumePlaybackAfterSubtitleEditor) {
+                                    currentPlayer.play()
+                                }
+                            },
+                            onReset = { subtitleEditorDraft = VideoSubtitleAppearance() },
+                            onDone = {
+                                val normalizedAppearance = subtitleEditorDraft.normalized()
+                                subtitleEditorVisible = false
+                                viewModel.updateSubtitleAppearance(normalizedAppearance)
+                                if (resumePlaybackAfterSubtitleEditor) {
+                                    currentPlayer.play()
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
