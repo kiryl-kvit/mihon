@@ -1,6 +1,7 @@
 package mihon.feature.profiles.ui
 
 import android.app.Activity
+import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -44,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -110,9 +112,19 @@ fun ProfilePickerScene(
     onOpenManagement: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val configuration = LocalConfiguration.current
     val context = LocalContext.current
     val view = LocalView.current
     val groupedProfiles = remember(profiles) { profiles.groupBy(Profile::type) }
+    val compactLayout = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val contentVerticalPadding = if (compactLayout) 12.dp else 20.dp
+    val titleTopPadding = when {
+        !compactLayout -> 44.dp
+        onOpenManagement == null -> 0.dp
+        else -> 12.dp
+    }
+    val titleBottomPadding = if (compactLayout) 20.dp else 28.dp
+    val sectionSpacing = if (compactLayout) 20.dp else 28.dp
 
     DisposableEffect(context, view) {
         val activity = context as? Activity
@@ -142,22 +154,33 @@ fun ProfilePickerScene(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 24.dp, vertical = contentVerticalPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ProfilePickerHeader(onOpenManagement = onOpenManagement)
-            Icon(
-                painter = painterResource(R.drawable.ic_mihon),
-                contentDescription = stringResource(MR.strings.app_name),
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(56.dp),
-            )
+            if (!compactLayout || onOpenManagement != null) {
+                ProfilePickerHeader(
+                    onOpenManagement = onOpenManagement,
+                    compactLayout = compactLayout,
+                )
+            }
+            if (!compactLayout) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mihon),
+                    contentDescription = stringResource(MR.strings.app_name),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(56.dp),
+                )
+            }
             Text(
                 text = stringResource(MR.strings.profiles_choose_profile),
                 color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.headlineSmall,
+                style = if (compactLayout) {
+                    MaterialTheme.typography.titleLarge
+                } else {
+                    MaterialTheme.typography.headlineSmall
+                },
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 44.dp, bottom = 28.dp),
+                modifier = Modifier.padding(top = titleTopPadding, bottom = titleBottomPadding),
             )
 
             Column(
@@ -165,7 +188,7 @@ fun ProfilePickerScene(
                     .weight(1f)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(28.dp),
+                verticalArrangement = Arrangement.spacedBy(sectionSpacing),
             ) {
                 ProfileType.entries.forEach { type ->
                     val typeProfiles = groupedProfiles[type].orEmpty()
@@ -175,6 +198,7 @@ fun ProfilePickerScene(
                             profiles = typeProfiles,
                             activeProfileId = activeProfileId,
                             onProfileSelected = onProfileSelected,
+                            compactLayout = compactLayout,
                         )
                     }
                 }
@@ -186,11 +210,12 @@ fun ProfilePickerScene(
 @Composable
 private fun ProfilePickerHeader(
     onOpenManagement: (() -> Unit)?,
+    compactLayout: Boolean,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(40.dp),
+            .height(if (compactLayout) 32.dp else 40.dp),
     ) {
         if (onOpenManagement != null) {
             Box(
@@ -198,7 +223,7 @@ private fun ProfilePickerHeader(
                     .align(Alignment.CenterEnd)
                     .clip(CircleShape)
                     .clickable(onClick = onOpenManagement)
-                    .padding(8.dp),
+                    .padding(if (compactLayout) 4.dp else 8.dp),
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
@@ -216,8 +241,9 @@ private fun ProfileTypeSection(
     profiles: List<Profile>,
     activeProfileId: Long?,
     onProfileSelected: (Profile) -> Unit,
+    compactLayout: Boolean,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(if (compactLayout) 12.dp else 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -237,9 +263,12 @@ private fun ProfileTypeSection(
         }
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
-            verticalArrangement = Arrangement.spacedBy(28.dp),
-            maxItemsInEachRow = 3,
+            horizontalArrangement = Arrangement.spacedBy(
+                space = if (compactLayout) 16.dp else 20.dp,
+                alignment = Alignment.CenterHorizontally,
+            ),
+            verticalArrangement = Arrangement.spacedBy(if (compactLayout) 20.dp else 28.dp),
+            maxItemsInEachRow = if (compactLayout) 4 else 3,
         ) {
             profiles.forEach { profile ->
                 ProfilePickerTile(

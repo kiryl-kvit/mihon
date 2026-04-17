@@ -8,6 +8,42 @@ import tachiyomi.domain.profile.model.ProfileType
 class MainActivityStartupGateTest {
 
     @Test
+    fun `startup restoration resumes pending picker flow after recreation`() {
+        resolveStartupRestorationDecision(
+            startupCompleted = false,
+            restoredAllowAppUnlockPrompt = false,
+            shouldShowPickerOnLaunch = false,
+        ) shouldBe StartupRestorationDecision(
+            shouldResumeStartup = true,
+            allowAppUnlockPrompt = false,
+        )
+    }
+
+    @Test
+    fun `startup restoration skips startup flow after completion`() {
+        resolveStartupRestorationDecision(
+            startupCompleted = true,
+            restoredAllowAppUnlockPrompt = false,
+            shouldShowPickerOnLaunch = true,
+        ) shouldBe StartupRestorationDecision(
+            shouldResumeStartup = false,
+            allowAppUnlockPrompt = true,
+        )
+    }
+
+    @Test
+    fun `startup restoration derives unlock prompt from picker visibility on fresh launch`() {
+        resolveStartupRestorationDecision(
+            startupCompleted = false,
+            restoredAllowAppUnlockPrompt = null,
+            shouldShowPickerOnLaunch = true,
+        ) shouldBe StartupRestorationDecision(
+            shouldResumeStartup = true,
+            allowAppUnlockPrompt = false,
+        )
+    }
+
+    @Test
     fun `initial startup shows picker before profile auth`() {
         val profile = profile(id = 2L, type = ProfileType.ANIME)
 
