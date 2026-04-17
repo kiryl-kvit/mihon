@@ -7,6 +7,7 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackOption
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.source.model.VideoStream
+import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +89,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         previewSelectionJob?.cancel()
         applySelectionJob?.cancel()
         applySelectionJob = viewModelScope.launch {
+            val preservedSubtitle = current.playback.currentSubtitle
             persistPlaybackPreferences(
                 animeId = current.ownerAnimeId,
                 sourceSelection = selection,
@@ -101,12 +103,14 @@ class VideoPlayerViewModel @JvmOverloads constructor(
                     preservePositionMs = current.resumePositionMs,
                     preview = VideoPlaybackPreviewState(),
                     isSourceSwitching = false,
+                    requestedSubtitle = preservedSubtitle,
                 )
             } else {
                 resolvePlayback(
                     selection = selection,
                     preservePositionMs = current.resumePositionMs,
                     showLoading = false,
+                    requestedSubtitle = preservedSubtitle,
                 )
             }
         }
@@ -132,6 +136,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
                     preview = VideoPlaybackPreviewState(
                         selection = selection,
                         playbackData = cachedPreview.playbackData,
+                        subtitles = cachedPreview.subtitles,
                         isLoading = false,
                     ),
                 ),
@@ -175,6 +180,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
                             preview = VideoPlaybackPreviewState(
                                 selection = selection,
                                 playbackData = result.playbackData,
+                                subtitles = result.subtitles,
                                 isLoading = false,
                             ),
                         ),
@@ -214,6 +220,22 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         mutableState.value = current.copy(
             playback = current.playback.copy(adaptiveQualities = options),
         )
+    }
+
+    fun updateSubtitleOptions(options: List<VideoPlayerSubtitleOption>) {
+        val current = mutableState.value as? State.Ready ?: return
+        if (current.playback.subtitleOptions == options) return
+        mutableState.value = current.copy(
+            playback = current.playback.copy(subtitleOptions = options),
+        )
+    }
+
+    fun selectSubtitle(selection: VideoPlayerSubtitleSelection) {
+        val current = mutableState.value as? State.Ready ?: return
+        if (current.playback.currentSubtitle == selection) return
+        mutableState.value = current.copy(
+                playback = current.playback.copy(currentSubtitle = selection),
+            )
     }
 
     fun persistPlayback(positionMs: Long, durationMs: Long) {
@@ -260,6 +282,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         preservePositionMs: Long? = null,
         initial: Boolean = false,
         showLoading: Boolean = true,
+        requestedSubtitle: VideoPlayerSubtitleSelection? = null,
     ) {
         val previousReady = mutableState.value as? State.Ready
         previewSelectionJob?.cancel()
@@ -286,6 +309,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
                     preservePositionMs = preservePositionMs,
                     preview = VideoPlaybackPreviewState(),
                     isSourceSwitching = false,
+                    requestedSubtitle = requestedSubtitle,
                 )
             }
             is ResolveVideoStream.Result.Error -> {
@@ -348,6 +372,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         preservePositionMs: Long?,
         preview: VideoPlaybackPreviewState,
         isSourceSwitching: Boolean,
+        requestedSubtitle: VideoPlayerSubtitleSelection? = null,
     ): State.Ready {
         val resumePositionMs = preservePositionMs
             ?: videoPlaybackStateRepository.getByEpisodeId(result.episode.id)?.positionMs
@@ -357,6 +382,10 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             episodeId = result.episode.id,
         )
         val playback = buildPlaybackUiState(result.playbackData, result.stream, result.savedPreferences)
+            .copy(
+                subtitles = result.subtitles,
+                currentSubtitle = resolveSourceSubtitleSelection(requestedSubtitle, result.subtitles),
+            )
             .copy(preview = preview)
         return State.Ready(
             visibleAnimeId = result.visibleAnime.id,
@@ -402,6 +431,7 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             ),
             preferredSourceQualityKey = savedPreferences.sourceQualityKey,
             currentStream = currentStream,
+            subtitles = emptyList(),
             currentStreamLabel = currentStream.label.ifBlank { currentStream.request.url },
             streamOptions = streamOptions,
             playbackData = playbackData,

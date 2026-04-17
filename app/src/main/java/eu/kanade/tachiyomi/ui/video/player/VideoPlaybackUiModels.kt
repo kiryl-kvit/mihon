@@ -4,18 +4,22 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackOption
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.source.model.VideoStream
+import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import tachiyomi.domain.anime.model.PlayerQualityMode
 
 data class VideoPlaybackUiState(
     val sourceSelection: VideoPlaybackSelection,
     val preferredSourceQualityKey: String?,
     val currentStream: VideoStream,
+    val subtitles: List<VideoSubtitle>,
     val currentStreamLabel: String,
     val streamOptions: List<VideoPlaybackOption>,
     val playbackData: VideoPlaybackData,
     val preview: VideoPlaybackPreviewState = VideoPlaybackPreviewState(),
     val adaptiveQualities: List<VideoAdaptiveQualityOption> = emptyList(),
     val currentAdaptiveQuality: VideoAdaptiveQualityPreference = VideoAdaptiveQualityPreference.Auto,
+    val subtitleOptions: List<VideoPlayerSubtitleOption> = emptyList(),
+    val currentSubtitle: VideoPlayerSubtitleSelection = VideoPlayerSubtitleSelection.None,
 ) {
     val showsAdaptiveQualitySelector: Boolean
         get() = playbackData.sourceQualities.isEmpty() && adaptiveQualities.size > 1
@@ -35,6 +39,7 @@ data class VideoPlaybackUiState(
 data class VideoPlaybackPreviewState(
     val selection: VideoPlaybackSelection? = null,
     val playbackData: VideoPlaybackData? = null,
+    val subtitles: List<VideoSubtitle>? = null,
     val isLoading: Boolean = false,
 )
 
@@ -62,6 +67,30 @@ data class VideoAdaptiveQualityOption(
     val label: String,
     val preference: VideoAdaptiveQualityPreference,
 )
+
+data class VideoPlayerSubtitleOption(
+    val key: String,
+    val label: String,
+    val selection: VideoPlayerSubtitleSelection,
+)
+
+sealed interface VideoPlayerSubtitleSelection {
+    data object None : VideoPlayerSubtitleSelection
+
+    data object Default : VideoPlayerSubtitleSelection
+
+    data class External(val subtitle: VideoSubtitle) : VideoPlayerSubtitleSelection
+
+    data class Embedded(
+        val groupIndex: Int,
+        val trackIndex: Int,
+        val key: String,
+        val label: String,
+        val language: String?,
+        val isDefault: Boolean,
+        val isForced: Boolean,
+    ) : VideoPlayerSubtitleSelection
+}
 
 internal fun VideoPlaybackSelection.withSelectedStream(streamKey: String?): VideoPlaybackSelection {
     return copy(streamKey = streamKey)
@@ -94,5 +123,74 @@ private fun VideoPlaybackSelection.restoringOriginalStreamIfCompatible(
         copy(streamKey = originalSelection.streamKey)
     } else {
         this
+    }
+}
+
+internal fun defaultSubtitleSelection(subtitles: List<VideoSubtitle>): VideoPlayerSubtitleSelection {
+    return when {
+        subtitles.isNotEmpty() -> {
+            val subtitle = subtitles.firstOrNull(VideoSubtitle::isDefault) ?: subtitles.first()
+            VideoPlayerSubtitleSelection.External(subtitle)
+        }
+        else -> VideoPlayerSubtitleSelection.None
+    }
+}
+
+internal fun resolveSourceSubtitleSelection(
+    requested: VideoPlayerSubtitleSelection?,
+    subtitles: List<VideoSubtitle>,
+): VideoPlayerSubtitleSelection {
+    return when (requested) {
+        null -> defaultSubtitleSelection(subtitles)
+        VideoPlayerSubtitleSelection.None -> VideoPlayerSubtitleSelection.None
+        VideoPlayerSubtitleSelection.Default -> defaultSubtitleSelection(subtitles)
+        is VideoPlayerSubtitleSelection.External -> {
+            subtitles.firstOrNull { subtitleChoiceKey(it) == subtitleChoiceKey(requested.subtitle) }
+                ?.let(VideoPlayerSubtitleSelection::External)
+                ?: defaultSubtitleSelection(subtitles)
+        }
+        is VideoPlayerSubtitleSelection.Embedded -> requested
+    }
+}
+
+internal fun resolvePreviewSubtitleSelection(
+    requested: VideoPlayerSubtitleSelection,
+    subtitles: List<VideoSubtitle>,
+): VideoPlayerSubtitleSelection {
+    return when (requested) {
+        is VideoPlayerSubtitleSelection.Embedded -> defaultSubtitleSelection(subtitles)
+        else -> resolveSourceSubtitleSelection(requested, subtitles)
+    }
+}
+
+internal fun externalSubtitleOptions(subtitles: List<VideoSubtitle>): List<VideoPlayerSubtitleOption> {
+    return buildList {
+        add(
+            VideoPlayerSubtitleOption(
+                key = OFF_SUBTITLE_KEY,
+                label = "Off",
+                selection = VideoPlayerSubtitleSelection.None,
+            ),
+        )
+        subtitles.forEach { subtitle ->
+            add(
+                VideoPlayerSubtitleOption(
+                    key = subtitleChoiceKey(subtitle),
+                    label = subtitle.label.ifBlank {
+                        subtitle.language?.takeIf(String::isNotBlank) ?: "Subtitle"
+                    },
+                    selection = VideoPlayerSubtitleSelection.External(subtitle),
+                ),
+            )
+        }
+    }.distinctBy(VideoPlayerSubtitleOption::key)
+}
+
+internal fun subtitleSelectionKey(selection: VideoPlayerSubtitleSelection): String {
+    return when (selection) {
+        VideoPlayerSubtitleSelection.None -> OFF_SUBTITLE_KEY
+        VideoPlayerSubtitleSelection.Default -> OFF_SUBTITLE_KEY
+        is VideoPlayerSubtitleSelection.External -> subtitleChoiceKey(selection.subtitle)
+        is VideoPlayerSubtitleSelection.Embedded -> selection.key
     }
 }

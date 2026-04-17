@@ -211,26 +211,29 @@ class VideoPlayerActivity : BaseActivity() {
                     }
                 }
 
-                var controlsVisible by remember(current.episodeId, current.streamUrl) { mutableStateOf(true) }
-                var startupOverlayVisible by remember(current.episodeId, current.streamUrl) { mutableStateOf(true) }
-                var settingsVisible by remember(current.episodeId, current.streamUrl) { mutableStateOf(false) }
-                var isScrubbing by remember(current.episodeId, current.streamUrl) { mutableStateOf(false) }
-                var scrubPositionMs by remember(current.episodeId, current.streamUrl) {
+                val subtitlePayloadKey = remember(current.playback.subtitles) {
+                    current.playback.subtitles.joinToString(separator = "||") { subtitleChoiceKey(it) }
+                }
+                var controlsVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(true) }
+                var startupOverlayVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(true) }
+                var settingsVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
+                var isScrubbing by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
+                var scrubPositionMs by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(current.resumePositionMs.coerceAtLeast(0L))
                 }
-                var playbackSnapshot by remember(current.episodeId, current.streamUrl) {
+                var playbackSnapshot by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(
                         VideoPlayerPlaybackSnapshot(
                             positionMs = current.resumePositionMs.coerceAtLeast(0L),
                         ),
                     )
                 }
-                var controllerInteractionSequence by remember(current.episodeId, current.streamUrl) { mutableStateOf(0L) }
-                var seekFeedbackSequence by remember(current.episodeId, current.streamUrl) { mutableStateOf(0L) }
-                var seekFeedbackState by remember(current.episodeId, current.streamUrl) {
+                var controllerInteractionSequence by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(0L) }
+                var seekFeedbackSequence by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(0L) }
+                var seekFeedbackState by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf<VideoPlayerSeekFeedbackState?>(null)
                 }
-                var ignoreNextGestureSeekTapUp by remember(current.episodeId, current.streamUrl) {
+                var ignoreNextGestureSeekTapUp by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(false)
                 }
                 val isInPictureInPictureMode = isInPictureInPictureModeState
@@ -253,11 +256,13 @@ class VideoPlayerActivity : BaseActivity() {
                     flushPlaybackState()
                     viewModel.playNextEpisode()
                 }
-                val currentPlayer = remember(current.episodeId, current.streamUrl) {
+                val latestPlayback by rememberUpdatedState(current.playback)
+                val currentPlayer = remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     buildVideoPlayer(
                         context = context,
                         networkHelper = networkHelper,
                         stream = current.stream,
+                        subtitles = current.playback.subtitles,
                     ).also { exoPlayer ->
                         exoPlayer.addListener(
                             object : Player.Listener {
@@ -280,7 +285,17 @@ class VideoPlayerActivity : BaseActivity() {
                                 }
 
                                 override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                                    val latestPlaybackState = latestPlayback
+                                    exoPlayer.applySubtitleSelection(latestPlaybackState.currentSubtitle)
                                     viewModel.updateAdaptiveQualities(exoPlayer.availableAdaptiveQualities())
+                                    viewModel.updateSubtitleOptions(exoPlayer.availableSubtitleTracks(latestPlaybackState.subtitles))
+                                    val resolvedSubtitleSelection = exoPlayer.resolveAppliedSubtitleSelection(
+                                        latestPlaybackState.currentSubtitle,
+                                        latestPlaybackState.subtitles,
+                                    )
+                                    if (resolvedSubtitleSelection != latestPlaybackState.currentSubtitle) {
+                                        viewModel.selectSubtitle(resolvedSubtitleSelection)
+                                    }
                                     playbackSnapshot = exoPlayer.capturePlaybackSnapshot()
                                     latestPlaybackSnapshot = playbackSnapshot
                                     updatePictureInPictureParams(playbackSnapshot)
@@ -383,7 +398,7 @@ class VideoPlayerActivity : BaseActivity() {
                     }
                 }
 
-                LaunchedEffect(current.episodeId, current.streamUrl) {
+                LaunchedEffect(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     startupOverlayVisible = true
                     settingsVisible = false
                     controlsVisible = !isInPictureInPictureMode
@@ -397,6 +412,7 @@ class VideoPlayerActivity : BaseActivity() {
                     player = currentPlayer
                     startProgressSaves(currentPlayer)
                     currentPlayer.applyAdaptiveQuality(current.playback.currentAdaptiveQuality)
+                    currentPlayer.applySubtitleSelection(current.playback.currentSubtitle)
                     currentPlayer.playWhenReady = true
                     currentPlayer.prepare()
                     playbackSnapshot = currentPlayer.capturePlaybackSnapshot()
@@ -406,6 +422,10 @@ class VideoPlayerActivity : BaseActivity() {
 
                 LaunchedEffect(current.playback.currentAdaptiveQuality, currentPlayer) {
                     currentPlayer.applyAdaptiveQuality(current.playback.currentAdaptiveQuality)
+                }
+
+                LaunchedEffect(current.playback.currentSubtitle, currentPlayer) {
+                    currentPlayer.applySubtitleSelection(current.playback.currentSubtitle)
                 }
 
                 LaunchedEffect(currentPlayer) {
@@ -628,6 +648,7 @@ class VideoPlayerActivity : BaseActivity() {
                             onApplySourceSelection = viewModel::applySourceSelection,
                             onPreviewSourceSelection = viewModel::previewSourceSelection,
                             onSelectAdaptiveQuality = viewModel::selectAdaptiveQuality,
+                            onSelectSubtitle = viewModel::selectSubtitle,
                         )
                     }
                 }

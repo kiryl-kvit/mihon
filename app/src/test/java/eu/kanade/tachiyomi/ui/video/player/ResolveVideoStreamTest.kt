@@ -1,11 +1,13 @@
 package eu.kanade.tachiyomi.ui.video.player
 
 import eu.kanade.tachiyomi.source.AnimeSource
+import eu.kanade.tachiyomi.source.AnimeSubtitleSource
 import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.source.model.VideoRequest
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoStreamType
+import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -156,6 +158,61 @@ class ResolveVideoStreamTest {
         result shouldBe ResolveVideoStream.Result.Error(ResolveVideoStream.Reason.EpisodeMismatch)
     }
 
+    @Test
+    fun `returns subtitles from subtitle-capable source`() = runTest {
+        val video = videoTitle(id = 1L, sourceId = 99L)
+        val episode = videoEpisode(id = 2L, animeId = 1L)
+        val stream = VideoStream(
+            request = VideoRequest(url = "https://cdn.example.com/first.m3u8"),
+            label = "Auto",
+            type = VideoStreamType.HLS,
+        )
+        val subtitle = VideoSubtitle(
+            request = VideoRequest(url = "https://cdn.example.com/subs.vtt"),
+            label = "Russian",
+            language = "ru",
+            isDefault = true,
+        )
+
+        val resolver = ResolveVideoStream(
+            videoRepository = FakeAnimeRepository(video),
+            videoEpisodeRepository = FakeAnimeEpisodeRepository(episode),
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            videoSourceManager = FakeAnimeSourceManager(
+                source = FakeSubtitleAnimeSource(video.source, listOf(stream), listOf(subtitle)),
+            ),
+        )
+
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
+
+        (result as ResolveVideoStream.Result.Success).subtitles shouldBe listOf(subtitle)
+    }
+
+    @Test
+    fun `ignores subtitle failures and still returns streams`() = runTest {
+        val video = videoTitle(id = 1L, sourceId = 99L)
+        val episode = videoEpisode(id = 2L, animeId = 1L)
+        val stream = VideoStream(
+            request = VideoRequest(url = "https://cdn.example.com/first.m3u8"),
+            label = "Auto",
+            type = VideoStreamType.HLS,
+        )
+
+        val resolver = ResolveVideoStream(
+            videoRepository = FakeAnimeRepository(video),
+            videoEpisodeRepository = FakeAnimeEpisodeRepository(episode),
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            videoSourceManager = FakeAnimeSourceManager(
+                source = FailingSubtitleAnimeSource(video.source, listOf(stream)),
+            ),
+        )
+
+        val result = resolver(video.id, episode.id, ownerAnimeId = video.id)
+
+        (result as ResolveVideoStream.Result.Success).stream shouldBe stream
+        result.subtitles shouldBe emptyList()
+    }
+
     private fun videoTitle(id: Long, sourceId: Long): AnimeTitle {
         return AnimeTitle.create().copy(
             id = id,
@@ -257,6 +314,63 @@ class ResolveVideoStreamTest {
                 selection = selection,
                 streams = streams(),
             )
+        }
+    }
+
+    private class FakeSubtitleAnimeSource(
+        override val id: Long,
+        private val streams: List<VideoStream>,
+        private val subtitles: List<VideoSubtitle>,
+    ) : AnimeSource, AnimeSubtitleSource {
+        override val name: String = "Fake"
+
+        override suspend fun getAnimeDetails(anime: eu.kanade.tachiyomi.source.model.SAnime) = error("Not used")
+
+        override suspend fun getEpisodeList(anime: eu.kanade.tachiyomi.source.model.SAnime) = error("Not used")
+
+        override suspend fun getPlaybackData(
+            episode: eu.kanade.tachiyomi.source.model.SEpisode,
+            selection: VideoPlaybackSelection,
+        ): VideoPlaybackData {
+            return VideoPlaybackData(
+                selection = selection,
+                streams = streams,
+            )
+        }
+
+        override suspend fun getSubtitles(
+            episode: eu.kanade.tachiyomi.source.model.SEpisode,
+            selection: VideoPlaybackSelection,
+        ): List<VideoSubtitle> {
+            return subtitles
+        }
+    }
+
+    private class FailingSubtitleAnimeSource(
+        override val id: Long,
+        private val streams: List<VideoStream>,
+    ) : AnimeSource, AnimeSubtitleSource {
+        override val name: String = "Fake"
+
+        override suspend fun getAnimeDetails(anime: eu.kanade.tachiyomi.source.model.SAnime) = error("Not used")
+
+        override suspend fun getEpisodeList(anime: eu.kanade.tachiyomi.source.model.SAnime) = error("Not used")
+
+        override suspend fun getPlaybackData(
+            episode: eu.kanade.tachiyomi.source.model.SEpisode,
+            selection: VideoPlaybackSelection,
+        ): VideoPlaybackData {
+            return VideoPlaybackData(
+                selection = selection,
+                streams = streams,
+            )
+        }
+
+        override suspend fun getSubtitles(
+            episode: eu.kanade.tachiyomi.source.model.SEpisode,
+            selection: VideoPlaybackSelection,
+        ): List<VideoSubtitle> {
+            error("subtitle parsing failed")
         }
     }
 

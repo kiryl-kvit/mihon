@@ -46,7 +46,7 @@ internal fun LoadingPlaybackOptionRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            Text(text = "Loading qualities...")
+            Text(text = "Loading...")
         }
     }
 }

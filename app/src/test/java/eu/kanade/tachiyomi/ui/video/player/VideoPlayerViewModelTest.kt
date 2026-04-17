@@ -6,6 +6,7 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.source.model.VideoRequest
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoStreamType
+import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -355,6 +356,7 @@ class VideoPlayerViewModelTest {
         state.playback.sourceSelection.dubKey shouldBe null
         state.playback.preview.selection shouldBe VideoPlaybackSelection(dubKey = "dub-2")
         state.playback.displayedPlaybackData.sourceQualities.map { it.key } shouldBe listOf("720p", "480p")
+        state.playback.preview.subtitles?.map(VideoSubtitle::label) shouldBe listOf("English")
     }
 
     @Test
@@ -415,12 +417,40 @@ class VideoPlayerViewModelTest {
         loadingState.playback.preview.selection shouldBe VideoPlaybackSelection(dubKey = "dub-2")
         loadingState.playback.preview.isLoading shouldBe true
         loadingState.playback.preview.playbackData shouldBe null
+        loadingState.playback.preview.subtitles shouldBe null
 
         advanceUntilIdle()
 
         val resolvedState = viewModel.state.value as VideoPlayerViewModel.State.Ready
         resolvedState.playback.preview.isLoading shouldBe false
         resolvedState.playback.preview.playbackData?.sourceQualities?.map { it.key } shouldBe listOf("720p", "480p")
+        resolvedState.playback.preview.subtitles?.map(VideoSubtitle::label) shouldBe listOf("English")
+    }
+
+    @Test
+    fun `preview source selection does not change active subtitle selection`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val resolver = PreviewAwareRecordingVideoStreamResolver()
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = resolver,
+            animePlaybackPreferencesRepository = RecordingAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(episodes = emptyList()),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 2L)
+        advanceUntilIdle()
+        viewModel.previewSourceSelection(VideoPlaybackSelection(dubKey = "dub-2"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.playback.currentSubtitle shouldBe VideoPlayerSubtitleSelection.None
+        state.playback.preview.subtitles?.map(VideoSubtitle::label) shouldBe listOf("English")
     }
 
     @Test
@@ -529,6 +559,68 @@ class VideoPlayerViewModelTest {
         finalState.isSourceSwitching shouldBe false
     }
 
+    @Test
+    fun `init defaults to source subtitle mode when available`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = subtitleAwareResolver(),
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(episodes = emptyList()),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 2L)
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.playback.currentSubtitle shouldBe VideoPlayerSubtitleSelection.External(
+            VideoSubtitle(
+                request = VideoRequest(url = "https://cdn.example.com/subtitles-ru.vtt"),
+                label = "Russian",
+                language = "ru",
+                isDefault = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `apply source selection preserves drafted external subtitle`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val resolver = PreviewAwareRecordingVideoStreamResolver()
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = resolver,
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(episodes = emptyList()),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 2L)
+        advanceUntilIdle()
+
+        val subtitle = VideoSubtitle(
+            request = VideoRequest(url = "https://cdn.example.com/english.vtt"),
+            label = "English",
+            language = "en",
+            isDefault = true,
+        )
+        viewModel.selectSubtitle(VideoPlayerSubtitleSelection.External(subtitle))
+        viewModel.applySourceSelection(VideoPlaybackSelection(dubKey = "dub-2"))
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.playback.currentSubtitle shouldBe VideoPlayerSubtitleSelection.External(subtitle)
+    }
+
     private fun videoEpisode(
         id: Long,
         animeId: Long,
@@ -582,6 +674,7 @@ class VideoPlayerViewModelTest {
                         streams = listOf(stream),
                     ),
                     stream = stream,
+                    subtitles = emptyList(),
                     savedPreferences = AnimePlaybackPreferences(
                         animeId = animeId,
                         dubKey = null,
@@ -640,11 +733,70 @@ class VideoPlayerViewModelTest {
                         streams = listOf(fallbackStream),
                     ),
                     stream = fallbackStream,
+                    subtitles = emptyList(),
                     savedPreferences = AnimePlaybackPreferences(
                         animeId = animeId,
                         dubKey = null,
                         streamKey = null,
                         sourceQualityKey = "1080p",
+                        playerQualityMode = PlayerQualityMode.AUTO,
+                        playerQualityHeight = null,
+                        updatedAt = 0L,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun subtitleAwareResolver(): VideoStreamResolver {
+        val video = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Video 1",
+            initialized = true,
+            url = "/video/1",
+        )
+        val episode = AnimeEpisode.create().copy(
+            id = 2L,
+            animeId = 1L,
+            url = "/episode/2",
+            name = "Episode 2",
+            episodeNumber = 1.0,
+        )
+        val stream = VideoStream(
+            request = VideoRequest(url = "https://cdn.example.com/video.m3u8"),
+            label = "Auto",
+            type = VideoStreamType.HLS,
+        )
+        val subtitle = VideoSubtitle(
+            request = VideoRequest(url = "https://cdn.example.com/subtitles-ru.vtt"),
+            label = "Russian",
+            language = "ru",
+            isDefault = true,
+        )
+
+        return object : VideoStreamResolver {
+            override suspend fun invoke(
+                animeId: Long,
+                episodeId: Long,
+                ownerAnimeId: Long,
+                selection: VideoPlaybackSelection?,
+            ): ResolveVideoStream.Result {
+                return ResolveVideoStream.Result.Success(
+                    visibleAnime = video,
+                    ownerAnime = video,
+                    episode = episode,
+                    playbackData = VideoPlaybackData(
+                        selection = selection ?: VideoPlaybackSelection(),
+                        streams = listOf(stream),
+                    ),
+                    stream = stream,
+                    subtitles = listOf(subtitle),
+                    savedPreferences = AnimePlaybackPreferences(
+                        animeId = animeId,
+                        dubKey = null,
+                        streamKey = null,
+                        sourceQualityKey = null,
                         playerQualityMode = PlayerQualityMode.AUTO,
                         playerQualityHeight = null,
                         updatedAt = 0L,
@@ -795,6 +947,7 @@ class VideoPlayerViewModelTest {
                     streams = listOf(stream),
                 ),
                 stream = stream,
+                subtitles = emptyList(),
                 savedPreferences = AnimePlaybackPreferences(
                     animeId = animeId,
                     dubKey = null,
@@ -849,6 +1002,18 @@ class VideoPlayerViewModelTest {
                     eu.kanade.tachiyomi.source.model.VideoPlaybackOption(key = "720p", label = "720p"),
                 )
             }
+            val subtitles = if (selection?.dubKey == "dub-2") {
+                listOf(
+                    VideoSubtitle(
+                        request = VideoRequest(url = "https://cdn.example.com/english.vtt"),
+                        label = "English",
+                        language = "en",
+                        isDefault = true,
+                    ),
+                )
+            } else {
+                emptyList()
+            }
 
             return ResolveVideoStream.Result.Success(
                 visibleAnime = video,
@@ -863,6 +1028,7 @@ class VideoPlayerViewModelTest {
                     streams = listOf(stream),
                 ),
                 stream = stream,
+                subtitles = subtitles,
                 savedPreferences = AnimePlaybackPreferences(
                     animeId = animeId,
                     dubKey = null,
@@ -931,6 +1097,7 @@ class VideoPlayerViewModelTest {
                     streams = listOf(stream),
                 ),
                 stream = stream,
+                subtitles = emptyList(),
                 savedPreferences = AnimePlaybackPreferences(
                     animeId = animeId,
                     dubKey = selection?.dubKey,

@@ -785,6 +785,7 @@
     <string name="anime_playback_stream">Stream</string>
     <string name="anime_playback_source_quality">Source quality</string>
     <string name="anime_playback_quality">Playback quality</string>
+    <string name="anime_playback_subtitles">Subtitles</string>
     <string name="pref_category_player">Player</string>
     <string name="pref_enable_anime_picture_in_picture">Picture-in-Picture</string>
     <string name="pref_enable_anime_picture_in_picture_summary">Automatically keep anime playback in a floating window when leaving the app</string>

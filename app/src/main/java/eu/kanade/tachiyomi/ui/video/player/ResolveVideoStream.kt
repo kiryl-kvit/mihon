@@ -1,10 +1,12 @@
 package eu.kanade.tachiyomi.ui.video.player
 
 import eu.kanade.domain.anime.model.toSEpisode
+import eu.kanade.tachiyomi.source.AnimeSubtitleSource
 import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoStreamType
+import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
@@ -62,13 +64,23 @@ class ResolveVideoStream(
             streamKey = savedPreferences.streamKey,
             sourceQualityKey = savedPreferences.sourceQualityKey,
         )
+        val sourceEpisode = episode.toSEpisode()
 
         val playbackData = runCatching {
             withTimeoutOrNull(streamFetchTimeoutMs) {
-                source.getPlaybackData(episode.toSEpisode(), requestedSelection)
+                source.getPlaybackData(sourceEpisode, requestedSelection)
             } ?: return Result.Error(Reason.StreamFetchTimeout)
         }.getOrElse {
             return Result.Error(Reason.StreamFetchFailed(it))
+        }
+
+        val subtitles = runCatching {
+            val subtitleSource = source as? AnimeSubtitleSource ?: return@runCatching emptyList()
+            withTimeoutOrNull(streamFetchTimeoutMs) {
+                subtitleSource.getSubtitles(sourceEpisode, playbackData.selection)
+            } ?: emptyList()
+        }.getOrElse {
+            emptyList()
         }
 
         val validStreams = playbackData.streams.filter { it.request.url.isNotBlank() }
@@ -89,6 +101,7 @@ class ResolveVideoStream(
             episode = episode,
             playbackData = resolvedPlaybackData,
             stream = stream,
+            subtitles = subtitles.filter { it.request.url.isNotBlank() },
             savedPreferences = savedPreferences,
         )
     }
@@ -100,6 +113,7 @@ class ResolveVideoStream(
             val episode: AnimeEpisode,
             val playbackData: VideoPlaybackData,
             val stream: VideoStream,
+            val subtitles: List<VideoSubtitle>,
             val savedPreferences: AnimePlaybackPreferences,
         ) : Result
 
