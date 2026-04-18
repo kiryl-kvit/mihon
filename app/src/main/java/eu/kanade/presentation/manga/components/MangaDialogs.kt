@@ -21,12 +21,17 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.DpSize
@@ -173,7 +178,20 @@ fun EditDisplayNameDialog(
     onDismissRequest: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var value by rememberSaveable { mutableStateOf(initialValue) }
+    val focusRequester = remember { FocusRequester() }
+    var value by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(
+            TextFieldValue(
+                text = initialValue,
+                selection = TextRange(initialValue.length),
+            ),
+        )
+    }
+
+    LaunchedEffect(focusRequester) {
+        focusRequester.requestFocus()
+    }
+
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text(text = stringResource(MR.strings.action_set_display_name)) },
@@ -182,7 +200,9 @@ fun EditDisplayNameDialog(
                 value = value,
                 onValueChange = { value = it },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
             )
         },
         dismissButton = {
@@ -196,7 +216,7 @@ fun EditDisplayNameDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(value) }) {
+            TextButton(onClick = { onConfirm(value.text) }) {
                 Text(text = stringResource(MR.strings.action_ok))
             }
         },
