@@ -84,7 +84,7 @@ class VideoPlayerActivity : BaseActivity() {
     private var player by mutableStateOf<ExoPlayer?>(null)
     private var progressSaveJob: Job? = null
     private var supportsPictureInPicture = false
-    private var pictureInPictureEnabled = false
+    private var pictureInPictureEnabled by mutableStateOf(false)
     private var isInPictureInPictureModeState by mutableStateOf(false)
     private var pendingPictureInPictureOnPause = false
     private var latestPlaybackSnapshot = VideoPlayerPlaybackSnapshot()
@@ -278,6 +278,9 @@ class VideoPlayerActivity : BaseActivity() {
                 val isInPictureInPictureMode = isInPictureInPictureModeState
                 val shouldHideChromeForSeekFeedback = seekFeedbackState?.hidePlayerChrome == true
                 val hidePlayerChrome = shouldHideChromeForSeekFeedback || isInPictureInPictureMode
+                val showPictureInPictureButton =
+                    pictureInPictureEnabled && supportsPictureInPicture &&
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 val onPreviousEpisode = {
                     controlsVisible = true
                     settingsVisible = false
@@ -654,6 +657,8 @@ class VideoPlayerActivity : BaseActivity() {
                                 seekFeedbackState = null
                             },
                             onBack = ::finish,
+                            showPictureInPictureButton = showPictureInPictureButton,
+                            onEnterPictureInPicture = ::enterPictureInPictureFromControls,
                             onOpenSettings = {
                                 settingsVisible = true
                                 registerControllerInteraction(true)
@@ -786,8 +791,12 @@ class VideoPlayerActivity : BaseActivity() {
     }
 
     override fun onUserLeaveHint() {
-        pendingPictureInPictureOnPause = canEnterPictureInPicture()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && !enterPictureInPictureIfEligible()) {
+        pendingPictureInPictureOnPause = canAutoEnterPictureInPicture()
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
+            pendingPictureInPictureOnPause &&
+            !enterPictureInPictureIfAvailable()
+        ) {
             pendingPictureInPictureOnPause = false
         }
         super.onUserLeaveHint()
@@ -897,21 +906,34 @@ class VideoPlayerActivity : BaseActivity() {
         updatePictureInPictureParams(latestPlaybackSnapshot)
     }
 
-    private fun enterPictureInPictureIfEligible(): Boolean {
-        if (!canEnterPictureInPicture()) return false
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
-
-        val params = buildPictureInPictureParams(latestPlaybackSnapshot)
-        setPictureInPictureParams(params)
-        return enterPictureInPictureMode(params)
+    private fun enterPictureInPictureFromControls() {
+        enterPictureInPictureIfAvailable()
     }
 
-    private fun canEnterPictureInPicture(): Boolean {
-        return supportsPictureInPicture &&
-            pictureInPictureEnabled &&
-            !isInPictureInPictureModeState &&
+    private fun enterPictureInPictureIfAvailable(): Boolean {
+        if (!canUsePictureInPicture()) return false
+
+        val params = buildPictureInPictureParams(latestPlaybackSnapshot)
+        pendingPictureInPictureOnPause = true
+        setPictureInPictureParams(params)
+        return enterPictureInPictureMode(params).also { entered ->
+            if (!entered) {
+                pendingPictureInPictureOnPause = false
+            }
+        }
+    }
+
+    private fun canAutoEnterPictureInPicture(): Boolean {
+        return canUsePictureInPicture() &&
             latestPlaybackSnapshot.isPlaying &&
             !latestPlaybackSnapshot.isLoading
+    }
+
+    private fun canUsePictureInPicture(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            supportsPictureInPicture &&
+            pictureInPictureEnabled &&
+            !isInPictureInPictureModeState
     }
 
     private fun updatePictureInPictureParams(snapshot: VideoPlayerPlaybackSnapshot) {

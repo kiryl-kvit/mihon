@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +29,8 @@ internal fun VideoPlayerTopBar(
     videoTitle: String,
     episodeName: String,
     onBack: () -> Unit,
+    showPictureInPictureButton: Boolean,
+    onEnterPictureInPicture: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -73,6 +76,15 @@ internal fun VideoPlayerTopBar(
         Row(
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (showPictureInPictureButton) {
+                VideoPlayerUtilityButton(onClick = onEnterPictureInPicture) {
+                    Icon(
+                        imageVector = Icons.Outlined.PictureInPictureAlt,
+                        contentDescription = stringResource(MR.strings.pref_enable_anime_picture_in_picture),
+                        tint = Color.White,
+                    )
+                }
+            }
             VideoPlayerUtilityButton(onClick = onOpenSettings) {
                 Icon(
                     imageVector = Icons.Outlined.Settings,
