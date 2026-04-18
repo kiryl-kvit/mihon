@@ -25,6 +25,10 @@
 -keep,allowoptimization class eu.kanade.tachiyomi.network.RequestsKt { public protected *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.AppInfo { public protected *; }
 
+# Preserve the extension runtime ABI. Older manga extensions override HttpSource hooks,
+# and anime extensions rely on the published Source/AnimeSource getter signatures.
+-keep class eu.kanade.tachiyomi.source.** { public protected *; }
+
 ##---------------Begin: proguard configuration for RxJava 1.x  ----------
 -dontwarn sun.misc.**
 
