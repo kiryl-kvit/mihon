@@ -10,7 +10,6 @@ import eu.kanade.presentation.updates.UpdatesUiModel
 import eu.kanade.presentation.updates.updatesLastUpdatedItem
 import eu.kanade.presentation.updates.updatesUiItems
 import eu.kanade.presentation.util.animateItemFastScroll
-import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesItem
 import tachiyomi.i18n.MR
 
@@ -63,9 +62,6 @@ fun AnimeUpdatesScreen(
                     onUpdateSelected(item, !item.selected, true)
                 },
                 onClickCover = { onClickCover(item) }.takeIf { !state.selectionMode },
-                onDownloadChapter = null,
-                downloadStateProvider = { Download.State.NOT_DOWNLOADED },
-                downloadProgressProvider = { 0 },
             )
         }
     }

@@ -221,9 +221,9 @@ internal fun ChapterUpdatesUiItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onClickCover: (() -> Unit)?,
-    onDownloadChapter: ((ChapterDownloadAction) -> Unit)?,
-    downloadStateProvider: () -> Download.State,
-    downloadProgressProvider: () -> Int,
+    onDownloadChapter: ((ChapterDownloadAction) -> Unit)? = null,
+    downloadStateProvider: (() -> Download.State)? = null,
+    downloadProgressProvider: (() -> Int)? = null,
     modifier: Modifier = Modifier,
 ) {
     UpdatesBaseUiItem(
@@ -276,14 +276,18 @@ internal fun ChapterUpdatesUiItem(
                 )
             }
         },
-        trailing = {
-            ChapterDownloadIndicator(
-                enabled = onDownloadChapter != null,
-                modifier = Modifier.padding(start = 4.dp),
-                downloadStateProvider = downloadStateProvider,
-                downloadProgressProvider = downloadProgressProvider,
-                onClick = { onDownloadChapter?.invoke(it) },
-            )
+        trailing = if (downloadStateProvider != null && downloadProgressProvider != null) {
+            {
+                ChapterDownloadIndicator(
+                    enabled = onDownloadChapter != null,
+                    modifier = Modifier.padding(start = 4.dp),
+                    downloadStateProvider = downloadStateProvider,
+                    downloadProgressProvider = downloadProgressProvider,
+                    onClick = { onDownloadChapter?.invoke(it) },
+                )
+            }
+        } else {
+            null
         },
     )
 }
