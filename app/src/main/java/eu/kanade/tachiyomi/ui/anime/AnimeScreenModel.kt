@@ -17,6 +17,7 @@ import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.source.AnimeScheduleSource
 import eu.kanade.tachiyomi.source.AnimeWebViewSource
 import eu.kanade.tachiyomi.source.model.SAnimeScheduleEpisode
+import eu.kanade.tachiyomi.util.lang.toStoredDisplayName
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
@@ -513,7 +514,7 @@ class AnimeScreenModel(
         val currentAnime = successState?.anime ?: return
         if (!currentAnime.favorite) return
 
-        updateSuccessState { it.copy(dialog = Dialog.EditDisplayName(currentAnime.displayName.orEmpty())) }
+        updateSuccessState { it.copy(dialog = Dialog.EditDisplayName(currentAnime.displayTitle)) }
     }
 
     fun showSettingsDialog() {
@@ -728,7 +729,7 @@ class AnimeScreenModel(
         screenModelScope.launchIO {
             val updated = animeRepository.updateDisplayName(
                 animeId = currentAnime.id,
-                displayName = displayName.trim().ifBlank { null },
+                displayName = displayName.toStoredDisplayName(currentAnime.title),
             )
             if (!updated) {
                 screenModelScope.launch {

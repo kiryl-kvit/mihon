@@ -51,6 +51,7 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.chapter.isDownloaded
+import eu.kanade.tachiyomi.util.lang.toStoredDisplayName
 import eu.kanade.tachiyomi.util.removeCovers
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.collections.immutable.ImmutableList
@@ -1692,7 +1693,7 @@ class MangaScreenModel(
             it.copy(
                 dialog = Dialog.EditDisplayName(
                     manga = state.manga,
-                    initialValue = state.manga.displayName.orEmpty(),
+                    initialValue = state.manga.displayTitle,
                 ),
             )
         }
@@ -1726,7 +1727,7 @@ class MangaScreenModel(
     fun updateDisplayName(displayName: String) {
         val manga = successState?.manga ?: return
         screenModelScope.launchIO {
-            updateManga.awaitUpdateDisplayName(manga.id, displayName.trim().ifBlank { null })
+            updateManga.awaitUpdateDisplayName(manga.id, displayName.toStoredDisplayName(manga.title))
             dismissDialog()
         }
     }

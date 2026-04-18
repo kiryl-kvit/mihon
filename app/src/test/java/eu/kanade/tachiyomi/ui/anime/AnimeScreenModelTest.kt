@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.mockk
@@ -644,6 +645,52 @@ class AnimeScreenModelTest {
 
         eventually(2.seconds) {
             animeRepository.displayNameUpdates.single() shouldBe (anime.id to null)
+        }
+    }
+
+    @Test
+    fun `edit display name dialog is seeded from visible title`() = runTest(dispatcher) {
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Source Title",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val model = createModel(anime = anime, episodes = emptyList())
+
+        advanceUntilIdle()
+        awaitSuccess(model)
+        model.showEditDisplayNameDialog()
+
+        eventually(2.seconds) {
+            val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+            val dialog = state.dialog.shouldBeInstanceOf<AnimeScreenModel.Dialog.EditDisplayName>()
+            dialog.initialValue shouldBe anime.title
+        }
+    }
+
+    @Test
+    fun `unchanged source title does not store redundant display name`() = runTest(dispatcher) {
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Source Title",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val animeRepository = FakeAnimeRepository(listOf(anime))
+        val model = createModel(anime = anime, episodes = emptyList(), animeRepository = animeRepository)
+
+        advanceUntilIdle()
+        awaitSuccess(model)
+        model.updateDisplayName(anime.title)
+
+        eventually(2.seconds) {
+            animeRepository.displayNameUpdates.single() shouldBe (anime.id to null)
+            animeRepository.getAnimeById(anime.id).displayName.shouldBeNull()
         }
     }
 
