@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -59,15 +60,20 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnimeBrowseSourceScreenModelTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    private lateinit var dispatcher: TestDispatcher
+    private val createdModels = mutableListOf<AnimeBrowseSourceScreenModel>()
 
     @BeforeEach
     fun setup() {
+        dispatcher = StandardTestDispatcher()
         Dispatchers.setMain(dispatcher)
     }
 
     @AfterEach
     fun tearDown() {
+        createdModels.asReversed().forEach { it.onDispose() }
+        createdModels.clear()
+        dispatcher.scheduler.advanceUntilIdle()
         Dispatchers.resetMain()
     }
 
@@ -324,7 +330,7 @@ class AnimeBrowseSourceScreenModelTest {
             updateMergedAnime = UpdateMergedAnime(FakeMergedAnimeRepository()),
             getIncognitoState = getIncognitoState,
             application = mockk<Application>(relaxed = true),
-        )
+        ).also(createdModels::add)
     }
 
     private fun anime(id: Long, favorite: Boolean, title: String = "Anime $id"): AnimeTitle {

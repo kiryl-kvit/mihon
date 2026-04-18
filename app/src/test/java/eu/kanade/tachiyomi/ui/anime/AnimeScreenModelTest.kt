@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -60,15 +61,20 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class AnimeScreenModelTest {
 
-    private val dispatcher = StandardTestDispatcher()
+    private lateinit var dispatcher: TestDispatcher
+    private val createdModels = mutableListOf<AnimeScreenModel>()
 
     @BeforeEach
     fun setup() {
+        dispatcher = StandardTestDispatcher()
         kotlinx.coroutines.Dispatchers.setMain(dispatcher)
     }
 
     @AfterEach
     fun tearDown() {
+        createdModels.asReversed().forEach(AnimeScreenModel::onDispose)
+        createdModels.clear()
+        dispatcher.scheduler.advanceUntilIdle()
         kotlinx.coroutines.Dispatchers.resetMain()
     }
 
@@ -728,7 +734,7 @@ class AnimeScreenModelTest {
                 animeEpisodeRepository = episodeRepository,
                 animeSourceManager = animeSourceManager,
             ),
-        )
+        ).also(createdModels::add)
     }
 
     private suspend fun awaitSuccess(model: AnimeScreenModel) {

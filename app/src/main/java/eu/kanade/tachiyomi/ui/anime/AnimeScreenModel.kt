@@ -22,6 +22,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -168,6 +169,7 @@ class AnimeScreenModel(
                     mutableState.value = State.Error(with(context) { e.formattedMessage })
                 }
                 .collectLatest {
+                    coroutineContext.ensureActive()
                     mutableState.value = it
                     if (it is State.Success) {
                         if (!it.anime.favorite && it.anime.episodeFlags == 0L) {
@@ -180,6 +182,8 @@ class AnimeScreenModel(
     }
 
     private fun observeDuplicateCandidates() {
+        if (!fromSource) return
+
         duplicateObservationJob?.cancel()
         duplicateObservationJob = screenModelScope.launchIO {
             getDuplicateLibraryAnime.subscribe(
@@ -187,7 +191,7 @@ class AnimeScreenModel(
                     .filter { it is State.Success }
                     .map { (it as State.Success).anime }
                     .distinctUntilChanged(),
-                scope = screenModelScope,
+                scope = this,
             ).collectLatest { duplicates ->
                 updateSuccessState {
                     if (!it.isFromSource || it.anime.favorite) {
