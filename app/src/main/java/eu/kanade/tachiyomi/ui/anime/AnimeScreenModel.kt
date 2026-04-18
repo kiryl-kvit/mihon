@@ -168,15 +168,13 @@ class AnimeScreenModel(
                     logcat(LogPriority.ERROR, e)
                     mutableState.value = State.Error(with(context) { e.formattedMessage })
                 }
-                .collectLatest {
+                .collectLatest { success ->
                     coroutineContext.ensureActive()
-                    mutableState.value = it
-                    if (it is State.Success) {
-                        if (!it.anime.favorite && it.anime.episodeFlags == 0L) {
-                            setAnimeDefaultEpisodeFlags.await(it.anime)
-                        }
-                        prefetchScheduleIfNeeded(it)
+                    mutableState.value = success
+                    if (!success.anime.favorite && success.anime.episodeFlags == 0L) {
+                        setAnimeDefaultEpisodeFlags.await(success.anime)
                     }
+                    prefetchScheduleIfNeeded(success)
                 }
         }
     }
@@ -677,8 +675,6 @@ class AnimeScreenModel(
 
     private fun loadSchedule(force: Boolean = false) {
         val currentState = successState ?: return
-        val currentAnime = currentState.anime
-        val source = animeSourceManager.get(currentAnime.source) as? AnimeScheduleSource ?: return
 
         val shouldLoad = when (currentState.schedule) {
             ScheduleState.Unavailable -> false
@@ -690,33 +686,75 @@ class AnimeScreenModel(
         }
         if (!shouldLoad) return
 
+        val requestedMemberIds = currentState.memberIds
+
         mutableState.update { currentState ->
             val success = currentState as? State.Success ?: return@update currentState
             success.copy(schedule = ScheduleState.Loading)
         }
 
         screenModelScope.launchIO {
-            val schedule = runCatching {
-                source.getEpisodeSchedule(currentAnime.toSAnime())
+            val scheduleTargets = requestedMemberIds.mapIndexedNotNull { memberOrder, memberId ->
+                val memberAnime = getAnimeOrNull(memberId) ?: return@mapIndexedNotNull null
+                val source =
+                    animeSourceManager.get(memberAnime.source) as? AnimeScheduleSource ?: return@mapIndexedNotNull null
+                ScheduleMemberTarget(
+                    anime = memberAnime,
+                    memberId = memberId,
+                    memberOrder = memberOrder,
+                    source = source,
+                )
             }
+
+            if (scheduleTargets.isEmpty()) {
+                mutableState.update { currentState ->
+                    val success = currentState as? State.Success ?: return@update currentState
+                    if (success.memberIds != requestedMemberIds) return@update currentState
+
+                    success.copy(
+                        schedule = ScheduleState.Unavailable,
+                        dialog = success.dialog.takeUnless { it is Dialog.Schedule },
+                    )
+                }
+                return@launchIO
+            }
+
+            val failures = mutableListOf<Throwable>()
+            val entries = buildList {
+                scheduleTargets.forEach { target ->
+                    runCatching {
+                        target.source.getEpisodeSchedule(target.anime.toSAnime())
+                    }.onSuccess { memberEntries ->
+                        addAll(
+                            memberEntries.map {
+                                it.toUi(
+                                    memberId = target.memberId,
+                                    memberOrder = target.memberOrder,
+                                    memberTitle = target.anime.displayTitle,
+                                )
+                            },
+                        )
+                    }.onFailure {
+                        logcat(LogPriority.ERROR, it)
+                        failures += it
+                    }
+                }
+            }.toImmutableList()
 
             mutableState.update { currentState ->
                 val success = currentState as? State.Success ?: return@update currentState
-                schedule.fold(
-                    onSuccess = {
-                        val entries = it.map(SAnimeScheduleEpisode::toUi).toImmutableList()
-                        success.copy(
-                            schedule = entries.takeIf { it.isNotEmpty() }
-                                ?.let(ScheduleState::Success)
-                                ?: ScheduleState.Empty,
-                            dialog = success.dialog.takeUnless { dialog ->
-                                dialog is Dialog.Schedule && entries.isEmpty()
-                            },
-                        )
-                    },
-                    onFailure = {
-                        logcat(LogPriority.ERROR, it)
-                        success.copy(schedule = ScheduleState.Error(with(context) { it.formattedMessage }))
+                if (success.memberIds != requestedMemberIds) return@update currentState
+
+                val scheduleState = when {
+                    entries.isNotEmpty() -> ScheduleState.Success(entries)
+                    failures.isNotEmpty() -> ScheduleState.Error(with(context) { failures.first().formattedMessage })
+                    else -> ScheduleState.Empty
+                }
+
+                success.copy(
+                    schedule = scheduleState,
+                    dialog = success.dialog.takeUnless { dialog ->
+                        dialog is Dialog.Schedule && scheduleState == ScheduleState.Empty
                     },
                 )
             }
@@ -950,6 +988,9 @@ class AnimeScreenModel(
 
     @Immutable
     data class AnimeScheduleEpisode(
+        val memberId: Long,
+        val memberOrder: Int,
+        val memberTitle: String,
         val seasonNumber: Int?,
         val episodeNumber: Float?,
         val title: String?,
@@ -1156,6 +1197,7 @@ class AnimeScreenModel(
         categories: List<Category>,
     ): State.Success {
         val currentSuccess = successState
+        val immutableMemberIds = memberIds.toImmutableList()
         val playbackStateByEpisodeId = playbackStates.associateBy(AnimePlaybackState::episodeId)
         val filteredEpisodes = episodes
             .filterEpisodes(anime, playbackStateByEpisodeId)
@@ -1165,23 +1207,21 @@ class AnimeScreenModel(
             filteredEpisodes.sortedForReading(anime, memberIds),
             playbackStateByEpisodeId,
         )
-        val source = animeSourceManager.get(anime.source)
-        val hasScheduleSupport = source is AnimeScheduleSource
-        val schedule = if (hasScheduleSupport) {
-            when (val currentSchedule = currentSuccess?.schedule) {
-                null,
-                ScheduleState.Unavailable,
-                -> ScheduleState.NotLoaded
-                else -> currentSchedule
-            }
-        } else {
-            ScheduleState.Unavailable
+        val hasScheduleSupport = memberAnimes.any { memberAnime ->
+            animeSourceManager.get(memberAnime.source) is AnimeScheduleSource
+        }
+        val schedule = when {
+            !hasScheduleSupport -> ScheduleState.Unavailable
+            currentSuccess == null -> ScheduleState.NotLoaded
+            currentSuccess.memberIds != immutableMemberIds -> ScheduleState.NotLoaded
+            currentSuccess.schedule == ScheduleState.Unavailable -> ScheduleState.NotLoaded
+            else -> currentSuccess.schedule
         }
 
         return State.Success(
             anime = anime,
             sourceName = getSourceName(anime, memberIds),
-            memberIds = memberIds.toImmutableList(),
+            memberIds = immutableMemberIds,
             memberTitleById = memberAnimes.associate { it.id to it.displayTitle },
             mergedMemberTitles = memberAnimes.map(AnimeTitle::displayTitle)
                 .filter { it.isNotBlank() }
@@ -1213,17 +1253,17 @@ class AnimeScreenModel(
 
     private suspend fun mergedMemberAnimeFlow(memberIds: List<Long>) =
         combine(memberIds.map { memberId -> animeRepository.getAnimeByIdAsFlow(memberId) }) { animes ->
-            animes.map { it as AnimeTitle }
+            animes.toList()
         }
 
     private fun mergedPlaybackStatesFlow(memberIds: List<Long>) =
         combine(memberIds.map(animePlaybackStateRepository::getByAnimeIdAsFlow)) { playbackStates ->
-            playbackStates.flatMap { it as List<AnimePlaybackState> }
+            playbackStates.flatMap(List<AnimePlaybackState>::toList)
         }
 
     private fun mergedCategoriesFlow(memberIds: List<Long>) =
         combine(memberIds.map(getAnimeCategories::subscribe)) { categories ->
-            categories.flatMap { it as List<Category> }
+            categories.flatMap(List<Category>::toList)
                 .filterNot(Category::isSystemCategory)
                 .distinctBy(Category::id)
                 .sortedBy(Category::order)
@@ -1462,7 +1502,21 @@ private fun List<AnimeEpisode>.sortEpisodes(
     }
 }
 
-private fun SAnimeScheduleEpisode.toUi() = AnimeScreenModel.AnimeScheduleEpisode(
+private data class ScheduleMemberTarget(
+    val anime: AnimeTitle,
+    val memberId: Long,
+    val memberOrder: Int,
+    val source: AnimeScheduleSource,
+)
+
+private fun SAnimeScheduleEpisode.toUi(
+    memberId: Long,
+    memberOrder: Int,
+    memberTitle: String,
+) = AnimeScreenModel.AnimeScheduleEpisode(
+    memberId = memberId,
+    memberOrder = memberOrder,
+    memberTitle = memberTitle,
     seasonNumber = seasonNumber,
     episodeNumber = episodeNumber,
     title = title,
