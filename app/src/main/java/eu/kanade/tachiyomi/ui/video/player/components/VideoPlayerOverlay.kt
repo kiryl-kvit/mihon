@@ -43,6 +43,8 @@ internal fun VideoPlayerOverlay(
     hideChromeForSeekFeedback: Boolean,
     onSeekFeedbackDismissed: () -> Unit,
     onBack: () -> Unit,
+    showPictureInPictureButton: Boolean,
+    onEnterPictureInPicture: () -> Unit,
     onOpenSettings: () -> Unit,
     onPreviousEpisode: () -> Unit,
     onSeekBackward: () -> Unit,
@@ -78,6 +80,8 @@ internal fun VideoPlayerOverlay(
                             videoTitle = videoTitle,
                             episodeName = episodeName,
                             onBack = onBack,
+                            showPictureInPictureButton = showPictureInPictureButton,
+                            onEnterPictureInPicture = onEnterPictureInPicture,
                             onOpenSettings = onOpenSettings,
                         )
                     }
