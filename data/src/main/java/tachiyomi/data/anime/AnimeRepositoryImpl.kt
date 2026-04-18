@@ -1,10 +1,10 @@
 package tachiyomi.data.anime
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import logcat.LogPriority
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler

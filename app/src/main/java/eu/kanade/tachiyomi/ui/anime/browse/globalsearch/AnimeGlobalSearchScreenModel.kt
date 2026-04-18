@@ -24,10 +24,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import mihon.domain.anime.model.toDomainAnime
 import tachiyomi.core.common.preference.toggle
-import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.domain.anime.interactor.GetAnime
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.model.AnimeTitle
+import tachiyomi.domain.source.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.concurrent.Executors

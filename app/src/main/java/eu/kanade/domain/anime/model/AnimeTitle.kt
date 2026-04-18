@@ -1,8 +1,8 @@
 package eu.kanade.domain.anime.model
 
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.anime.model.AnimeTitle
+import tachiyomi.domain.manga.model.MangaCover
 
 fun AnimeTitle.toMangaCover(): MangaCover {
     return MangaCover(

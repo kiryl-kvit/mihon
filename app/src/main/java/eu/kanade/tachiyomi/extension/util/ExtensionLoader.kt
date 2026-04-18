@@ -11,12 +11,12 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.model.ExtensionType
 import eu.kanade.tachiyomi.extension.model.LoadResult
-import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.Source
-import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
 import eu.kanade.tachiyomi.source.AnimeSource
 import eu.kanade.tachiyomi.source.AnimeSourceFactory
+import eu.kanade.tachiyomi.source.CatalogueSource
+import eu.kanade.tachiyomi.source.Source
+import eu.kanade.tachiyomi.source.SourceFactory
 import eu.kanade.tachiyomi.util.lang.Hash
 import eu.kanade.tachiyomi.util.storage.copyAndSetReadOnlyTo
 import eu.kanade.tachiyomi.util.system.ChildFirstPathClassLoader
@@ -303,7 +303,13 @@ internal object ExtensionLoader {
             ExtensionType.MANGA -> {
                 val sources = sourceClasses.flatMap { sourceClass ->
                     try {
-                        when (val obj = Class.forName(sourceClass, false, classLoader).getDeclaredConstructor().newInstance()) {
+                        when (
+                            val obj = Class.forName(
+                                sourceClass,
+                                false,
+                                classLoader,
+                            ).getDeclaredConstructor().newInstance()
+                        ) {
                             is Source -> listOf(obj)
                             is SourceFactory -> obj.createSources()
                             else -> throw Exception("Unknown manga source class type: ${obj.javaClass}")
@@ -341,7 +347,13 @@ internal object ExtensionLoader {
             ExtensionType.ANIME -> {
                 val sources = sourceClasses.flatMap { sourceClass ->
                     try {
-                        when (val obj = Class.forName(sourceClass, false, classLoader).getDeclaredConstructor().newInstance()) {
+                        when (
+                            val obj = Class.forName(
+                                sourceClass,
+                                false,
+                                classLoader,
+                            ).getDeclaredConstructor().newInstance()
+                        ) {
                             is AnimeSource -> listOf(obj)
                             is AnimeSourceFactory -> obj.createSources()
                             else -> throw Exception("Unknown video source class type: ${obj.javaClass}")

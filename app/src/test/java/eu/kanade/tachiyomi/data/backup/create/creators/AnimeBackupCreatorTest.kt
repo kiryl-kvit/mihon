@@ -10,7 +10,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
 import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler
-import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeHistory
@@ -24,6 +23,7 @@ import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.category.interactor.GetAnimeCategories
 import java.util.Date
 
 class AnimeBackupCreatorTest {

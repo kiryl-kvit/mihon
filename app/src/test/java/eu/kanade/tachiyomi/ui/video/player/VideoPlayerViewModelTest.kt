@@ -10,12 +10,12 @@ import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import io.kotest.matchers.shouldBe
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -24,13 +24,13 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
+import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeHistory
-import tachiyomi.domain.anime.model.AnimeHistoryWithRelations
 import tachiyomi.domain.anime.model.AnimeHistoryUpdate
+import tachiyomi.domain.anime.model.AnimeHistoryWithRelations
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
-import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.PlayerQualityMode
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
@@ -1029,7 +1029,9 @@ class VideoPlayerViewModelTest {
 
         override suspend fun update(episodeUpdate: tachiyomi.domain.anime.model.AnimeEpisodeUpdate) = error("Not used")
 
-        override suspend fun updateAll(episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>) = error("Not used")
+        override suspend fun updateAll(episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>) = error(
+            "Not used",
+        )
 
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = error("Not used")
 
@@ -1041,7 +1043,12 @@ class VideoPlayerViewModelTest {
             return flowOf(episodes.filter { it.animeId == animeId })
         }
 
-        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
+        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId in
+                    animeIds
+            },
+        )
 
         override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
 

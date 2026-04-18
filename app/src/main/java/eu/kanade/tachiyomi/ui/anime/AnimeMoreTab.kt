@@ -20,11 +20,12 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.core.preference.asState
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.ui.UiPreferences
-import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.anime.more.AnimeMoreScreen
+import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.setting.SettingsScreen
+import kotlinx.coroutines.launch
 import mihon.feature.profiles.core.ProfileManager
 import mihon.feature.profiles.ui.ProfilePickerScreen
 import mihon.feature.profiles.ui.handleProfileShortcut
@@ -33,7 +34,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import kotlinx.coroutines.launch
 
 data object AnimeMoreTab : Tab {
 

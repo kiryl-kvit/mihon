@@ -1,9 +1,8 @@
 package eu.kanade.tachiyomi.ui.anime.browse
 
 import android.app.Application
+import eu.kanade.domain.source.interactor.GetIncognitoState
 import eu.kanade.domain.source.service.SourcePreferences
-import io.mockk.every
-import io.mockk.mockk
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
 import eu.kanade.tachiyomi.source.model.AnimesPage
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -14,8 +13,10 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import io.mockk.every
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -29,19 +30,19 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
+import tachiyomi.domain.anime.interactor.GetAnime
 import tachiyomi.domain.anime.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
-import tachiyomi.domain.anime.interactor.GetAnime
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
-import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
@@ -49,7 +50,6 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.model.CategoryUpdate
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.library.service.LibraryPreferences
-import eu.kanade.domain.source.interactor.GetIncognitoState
 import tachiyomi.domain.source.interactor.GetRemoteAnime
 import tachiyomi.domain.source.repository.AnimeSourcePagingSource
 import tachiyomi.domain.source.repository.AnimeSourceRepository
@@ -133,7 +133,9 @@ class AnimeBrowseSourceScreenModelTest {
     }
 
     @Test
-    fun `long press on non favorite without default category uses chooser then opens category dialog`() = runTest(dispatcher) {
+    fun `long press on non favorite without default category uses chooser then opens category dialog`() = runTest(
+        dispatcher,
+    ) {
         val anime = anime(id = 3L, favorite = false)
         val existing = anime(id = 23L, favorite = true, title = "Existing")
         val categoryRepository = FakeCategoryRepository(
@@ -345,7 +347,14 @@ class AnimeBrowseSourceScreenModelTest {
 
         override suspend fun getAnimeById(id: Long): AnimeTitle = anime.first { it.id == id }
         override suspend fun getAnimeByIdAsFlow(id: Long): Flow<AnimeTitle> = flowOf(anime.first { it.id == id })
-        override suspend fun getAnimeByUrlAndSourceId(url: String, sourceId: Long): AnimeTitle? = anime.firstOrNull { it.url == url && it.source == sourceId }
+        override suspend fun getAnimeByUrlAndSourceId(
+            url: String,
+            sourceId: Long,
+        ): AnimeTitle? = anime.firstOrNull {
+            it.url ==
+                url &&
+                it.source == sourceId
+        }
         override fun getAnimeByUrlAndSourceIdAsFlow(url: String, sourceId: Long): Flow<AnimeTitle?> = flowOf(
             anime.firstOrNull { it.url == url && it.source == sourceId },
         )
@@ -377,7 +386,9 @@ class AnimeBrowseSourceScreenModelTest {
         override suspend fun getCategoriesByMangaId(mangaId: Long): List<Category> = emptyList()
         override fun getCategoriesByMangaIdAsFlow(mangaId: Long): Flow<List<Category>> = flowOf(emptyList())
         override suspend fun getCategoriesByAnimeId(animeId: Long): List<Category> = animeCategories[animeId].orEmpty()
-        override fun getCategoriesByAnimeIdAsFlow(animeId: Long): Flow<List<Category>> = flowOf(animeCategories[animeId].orEmpty())
+        override fun getCategoriesByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<Category>> = flowOf(animeCategories[animeId].orEmpty())
         override suspend fun getAnimeCategoryIds(animeIds: List<Long>): Map<Long, List<Long>> {
             return animeIds.associateWith { animeCategories[it].orEmpty().map(Category::id) }
         }
@@ -404,7 +415,11 @@ class AnimeBrowseSourceScreenModelTest {
         override val lang: String = "en"
         override val supportsLatest: Boolean = true
         override suspend fun getPopularAnime(page: Int): AnimesPage = AnimesPage(emptyList(), false)
-        override suspend fun getSearchAnime(page: Int, query: String, filters: FilterList): AnimesPage = AnimesPage(emptyList(), false)
+        override suspend fun getSearchAnime(
+            page: Int,
+            query: String,
+            filters: FilterList,
+        ): AnimesPage = AnimesPage(emptyList(), false)
         override suspend fun getLatestUpdates(page: Int): AnimesPage = AnimesPage(emptyList(), false)
         override fun getFilterList(): FilterList = FilterList()
         override suspend fun getAnimeDetails(anime: SAnime): SAnime = anime
@@ -418,23 +433,43 @@ class AnimeBrowseSourceScreenModelTest {
     private class FakeAnimeSourceRepository : AnimeSourceRepository {
         override fun getPopular(sourceId: Long): AnimeSourcePagingSource = error("Not used")
         override fun getLatest(sourceId: Long): AnimeSourcePagingSource = error("Not used")
-        override fun search(sourceId: Long, query: String, filterList: FilterList): AnimeSourcePagingSource = error("Not used")
+        override fun search(
+            sourceId: Long,
+            query: String,
+            filterList: FilterList,
+        ): AnimeSourcePagingSource = error("Not used")
     }
 
     private class FakeAnimeEpisodeRepository(
         private val episodesByAnimeId: Map<Long, List<tachiyomi.domain.anime.model.AnimeEpisode>> = emptyMap(),
     ) : AnimeEpisodeRepository {
-        override suspend fun addAll(episodes: List<tachiyomi.domain.anime.model.AnimeEpisode>): List<tachiyomi.domain.anime.model.AnimeEpisode> = episodes
+        override suspend fun addAll(
+            episodes: List<tachiyomi.domain.anime.model.AnimeEpisode>,
+        ): List<tachiyomi.domain.anime.model.AnimeEpisode> = episodes
         override suspend fun update(episodeUpdate: tachiyomi.domain.anime.model.AnimeEpisodeUpdate) = Unit
         override suspend fun updateAll(episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>) = Unit
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<tachiyomi.domain.anime.model.AnimeEpisode> = episodesByAnimeId[animeId].orEmpty()
-        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<tachiyomi.domain.anime.model.AnimeEpisode>> = flowOf(episodesByAnimeId[animeId].orEmpty())
-        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<tachiyomi.domain.anime.model.AnimeEpisode>> {
+        override suspend fun getEpisodesByAnimeId(
+            animeId: Long,
+        ): List<tachiyomi.domain.anime.model.AnimeEpisode> = episodesByAnimeId[animeId].orEmpty()
+        override fun getEpisodesByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<tachiyomi.domain.anime.model.AnimeEpisode>> = flowOf(episodesByAnimeId[animeId].orEmpty())
+        override fun getEpisodesByAnimeIdsAsFlow(
+            animeIds: List<Long>,
+        ): Flow<List<tachiyomi.domain.anime.model.AnimeEpisode>> {
             return flowOf(animeIds.flatMap { episodesByAnimeId[it].orEmpty() })
         }
-        override suspend fun getEpisodeById(id: Long): tachiyomi.domain.anime.model.AnimeEpisode? = episodesByAnimeId.values.flatten().firstOrNull { it.id == id }
-        override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): tachiyomi.domain.anime.model.AnimeEpisode? {
+        override suspend fun getEpisodeById(
+            id: Long,
+        ): tachiyomi.domain.anime.model.AnimeEpisode? = episodesByAnimeId.values.flatten().firstOrNull {
+            it.id ==
+                id
+        }
+        override suspend fun getEpisodeByUrlAndAnimeId(
+            url: String,
+            animeId: Long,
+        ): tachiyomi.domain.anime.model.AnimeEpisode? {
             return episodesByAnimeId[animeId].orEmpty().firstOrNull { it.url == url }
         }
     }
@@ -452,9 +487,14 @@ class AnimeBrowseSourceScreenModelTest {
             val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId
             return flowOf(targetId?.let { id -> merges.filter { it.targetId == id } }.orEmpty())
         }
-        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter {
+            it.targetId ==
+                targetAnimeId
+        }
         override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
-        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override fun subscribeTargetId(
+            animeId: Long,
+        ): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
         override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
         override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
         override suspend fun deleteGroup(targetAnimeId: Long) = Unit

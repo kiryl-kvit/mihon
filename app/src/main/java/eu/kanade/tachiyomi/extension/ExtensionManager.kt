@@ -77,13 +77,21 @@ class ExtensionManager(
     val installedExtensionsFlow = installedExtensionMapFlow.mapExtensions(scope)
     val installedAnimeExtensionsFlow = installedExtensionMapFlow
         .map { it.values.filterIsInstance<Extension.InstalledAnime>() }
-        .stateIn(scope, WhileSubscribed(5_000), installedExtensionMapFlow.value.values.filterIsInstance<Extension.InstalledAnime>())
+        .stateIn(
+            scope,
+            WhileSubscribed(5_000),
+            installedExtensionMapFlow.value.values.filterIsInstance<Extension.InstalledAnime>(),
+        )
 
     private val availableExtensionMapFlow = MutableStateFlow(emptyMap<String, Extension.Available>())
     val availableExtensionsFlow = availableExtensionMapFlow.mapExtensions(scope)
     val availableAnimeExtensionsFlow = availableExtensionMapFlow
         .map { it.values.filterIsInstance<Extension.AvailableAnime>() }
-        .stateIn(scope, WhileSubscribed(5_000), availableExtensionMapFlow.value.values.filterIsInstance<Extension.AvailableAnime>())
+        .stateIn(
+            scope,
+            WhileSubscribed(5_000),
+            availableExtensionMapFlow.value.values.filterIsInstance<Extension.AvailableAnime>(),
+        )
 
     private val untrustedExtensionMapFlow = MutableStateFlow(emptyMap<String, Extension.Untrusted>())
     val untrustedExtensionsFlow = untrustedExtensionMapFlow.mapExtensions(scope)

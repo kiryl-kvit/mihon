@@ -186,8 +186,10 @@ object DuplicateLibrarySupport {
         }
         score += scaledSimilarity(titleSimilarity, weights.title)
 
-        val authorMatched = current.primaryCreator != null && candidate.creators.any { namesMatch(current.primaryCreator, it) }
-        val artistMatched = current.secondaryCreator != null && candidate.creators.any { namesMatch(current.secondaryCreator, it) }
+        val authorMatched =
+            current.primaryCreator != null && candidate.creators.any { namesMatch(current.primaryCreator, it) }
+        val artistMatched =
+            current.secondaryCreator != null && candidate.creators.any { namesMatch(current.secondaryCreator, it) }
 
         if (weights.author > 0 && authorMatched) {
             reasons += DuplicateMangaMatchReason.AUTHOR

@@ -4,23 +4,23 @@ import android.app.Application
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.core.preference.asState
 import eu.kanade.core.preference.PreferenceMutableState
-import eu.kanade.presentation.library.components.LibraryToolbarTitle
+import eu.kanade.core.preference.asState
 import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
+import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.tachiyomi.ui.library.LibraryPage
 import eu.kanade.tachiyomi.ui.library.LibraryPageTab
 import eu.kanade.tachiyomi.ui.library.displayTitle
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -39,14 +39,9 @@ import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.UpdateMergedAnime
-import tachiyomi.domain.anime.model.AnimeMerge
-import tachiyomi.domain.category.interactor.GetAnimeCategories
-import tachiyomi.domain.category.interactor.GetCategories
-import tachiyomi.domain.category.interactor.SetAnimeCategories
-import tachiyomi.domain.category.interactor.SetSortModeForCategory
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
@@ -55,13 +50,18 @@ import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.repository.MergedAnimeRepository
+import tachiyomi.domain.anime.service.sortedForReading
+import tachiyomi.domain.category.interactor.GetAnimeCategories
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.interactor.SetAnimeCategories
+import tachiyomi.domain.category.interactor.SetSortModeForCategory
+import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.model.effectiveLibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.anime.service.sortedForReading
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.i18n.MR
@@ -271,7 +271,11 @@ class AnimeLibraryScreenModel(
                 sourceIds = setOf(anime.source),
                 sourceName = snapshot.sourceNamesBySourceId.getValue(anime.source),
                 sourceNames = setOf(snapshot.sourceNamesBySourceId.getValue(anime.source)),
-                sourceLanguage = if (snapshot.showLanguageBadge) animeSourceManager.get(anime.source)?.lang.orEmpty() else "",
+                sourceLanguage = if (snapshot.showLanguageBadge) {
+                    animeSourceManager.get(anime.source)?.lang.orEmpty()
+                } else {
+                    ""
+                },
                 primaryEpisodeAnimeId = primaryEpisode?.animeId,
                 primaryEpisodeId = primaryEpisode?.id,
                 hasUnwatched = hasUnwatched,
@@ -334,7 +338,8 @@ class AnimeLibraryScreenModel(
             members.firstOrNull { displaySourceId in it.sourceIds }?.sourceName.orEmpty()
         }
         val playbackStateByEpisodeId = members.associatePlaybackStateByEpisodeId()
-        val readingEpisodes = members.flatMap { it.episodes }.sortedForReading(target.anime, members.map(AnimeLibraryItem::animeId))
+        val readingEpisodes = members.flatMap { it.episodes }
+            .sortedForReading(target.anime, members.map(AnimeLibraryItem::animeId))
         val primaryEpisode = readingEpisodes.selectPrimaryEpisode(playbackStateByEpisodeId)
         val unwatchedCount = members.sumOf(AnimeLibraryItem::unwatchedCount)
 
@@ -473,7 +478,9 @@ class AnimeLibraryScreenModel(
                                 secondaryTab = sourceTabs.getValue(sourceId),
                                 category = category,
                                 sourceId = sourceId,
-                                itemIds = categoryItems.filter { it.displaySourceId == sourceId }.map(AnimeLibraryItem::animeId),
+                                itemIds = categoryItems
+                                    .filter { it.displaySourceId == sourceId }
+                                    .map(AnimeLibraryItem::animeId),
                             )
                         }
                     }
@@ -482,7 +489,15 @@ class AnimeLibraryScreenModel(
         }
 
         return pages.map { page ->
-            page.copy(itemIds = sortItemsForPage(page, items, groupType, globalSort, randomSortSeed).map(AnimeLibraryItem::animeId))
+            page.copy(
+                itemIds = sortItemsForPage(
+                    page = page,
+                    items = items,
+                    groupType = groupType,
+                    globalSort = globalSort,
+                    randomSortSeed = randomSortSeed,
+                ).map(AnimeLibraryItem::animeId),
+            )
         }
     }
 
@@ -972,7 +987,11 @@ class AnimeLibraryScreenModel(
             } || constraint.split(",").map { it.trim() }.all { subconstraint ->
                 checkNegatableConstraint(subconstraint) {
                     sourceNames.any { sourceName -> sourceName.contains(it, ignoreCase = true) } ||
-                        memberAnimes.any { anime -> anime.genre?.any { genreEntry -> genreEntry.equals(it, ignoreCase = true) } == true }
+                        memberAnimes.any { anime ->
+                            anime.genre?.any { genreEntry ->
+                                genreEntry.equals(it, ignoreCase = true)
+                            } == true
+                        }
                 }
             }
         }
@@ -1135,7 +1154,8 @@ private fun List<AnimeEpisode>.selectPrimaryEpisode(
     return firstOrNull { !it.completed } ?: firstOrNull()
 }
 
-private fun List<AnimeLibraryScreenModel.AnimeLibraryItem>.associatePlaybackStateByEpisodeId(): Map<Long, AnimePlaybackState> {
+private fun List<AnimeLibraryScreenModel.AnimeLibraryItem>.associatePlaybackStateByEpisodeId():
+    Map<Long, AnimePlaybackState> {
     return flatMap(AnimeLibraryScreenModel.AnimeLibraryItem::playbackStates)
         .associateBy(AnimePlaybackState::episodeId)
 }

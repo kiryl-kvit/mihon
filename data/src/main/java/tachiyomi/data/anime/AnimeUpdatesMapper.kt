@@ -1,7 +1,7 @@
 package tachiyomi.data.anime
 
-import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.anime.model.AnimeUpdatesWithRelations
+import tachiyomi.domain.manga.model.MangaCover
 
 object AnimeUpdatesMapper {
     fun mapUpdatesWithRelations(

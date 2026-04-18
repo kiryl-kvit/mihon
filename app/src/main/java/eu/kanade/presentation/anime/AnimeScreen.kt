@@ -36,14 +36,14 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CallSplit
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Circle
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Warning
@@ -67,11 +67,11 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
-import androidx.compose.material3.Surface
 import androidx.compose.material3.SmallExtendedFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.animateFloatingActionButton
 import androidx.compose.runtime.Composable
@@ -106,24 +106,27 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import eu.kanade.presentation.components.DropdownMenu
+import com.mikepenz.markdown.model.markdownAnnotator
+import com.mikepenz.markdown.model.markdownAnnotatorConfig
+import com.mikepenz.markdown.utils.getUnescapedTextInNode
 import eu.kanade.domain.anime.model.toMangaCover
-import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.AppBarTitle
-import eu.kanade.presentation.components.AdaptiveSheet
-import eu.kanade.presentation.manga.components.MergeEditorDialog
-import eu.kanade.presentation.manga.components.MergeEditorEntry
-import eu.kanade.presentation.manga.components.MangaBottomActionMenu
-import eu.kanade.presentation.manga.components.DotSeparatorText
-import eu.kanade.presentation.manga.components.DISALLOWED_MARKDOWN_TYPES
-import eu.kanade.presentation.manga.components.MARKDOWN_INLINE_IMAGE_TAG
+import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.relativeDateText
+import eu.kanade.presentation.manga.components.DISALLOWED_MARKDOWN_TYPES
+import eu.kanade.presentation.manga.components.DotSeparatorText
+import eu.kanade.presentation.manga.components.MARKDOWN_INLINE_IMAGE_TAG
+import eu.kanade.presentation.manga.components.MangaBottomActionMenu
 import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.manga.components.MarkdownRender
+import eu.kanade.presentation.manga.components.MergeEditorDialog
+import eu.kanade.presentation.manga.components.MergeEditorEntry
 import eu.kanade.presentation.manga.components.getMarkdownLinkStyle
+import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.presentation.util.toDurationString
 import eu.kanade.tachiyomi.R
@@ -131,22 +134,19 @@ import eu.kanade.tachiyomi.source.model.SAnime
 import eu.kanade.tachiyomi.ui.anime.AnimeEpisodeListEntry
 import eu.kanade.tachiyomi.ui.anime.AnimeScreenModel
 import eu.kanade.tachiyomi.util.system.copyToClipboard
-import com.mikepenz.markdown.model.markdownAnnotator
-import com.mikepenz.markdown.model.markdownAnnotatorConfig
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.findChildOfType
-import com.mikepenz.markdown.utils.getUnescapedTextInNode
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ListGroupHeader
+import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.VerticalFastScroller
-import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.PullRefresh
 import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
@@ -331,7 +331,11 @@ private fun AnimeScreenSmallImpl(
                     text = {
                         Text(
                             text = stringResource(
-                                if (state.playbackStateByEpisodeId[primaryEpisode.id]?.positionMs?.let { it > 0L } == true) {
+                                if (
+                                    state.playbackStateByEpisodeId[primaryEpisode.id]
+                                        ?.positionMs
+                                        ?.let { it > 0L } == true
+                                ) {
                                     MR.strings.action_resume
                                 } else {
                                     MR.strings.action_start
@@ -511,7 +515,11 @@ private fun AnimeScreenLargeImpl(
                     text = {
                         Text(
                             text = stringResource(
-                                if (state.playbackStateByEpisodeId[primaryEpisode.id]?.positionMs?.let { it > 0L } == true) {
+                                if (
+                                    state.playbackStateByEpisodeId[primaryEpisode.id]
+                                        ?.positionMs
+                                        ?.let { it > 0L } == true
+                                ) {
                                     MR.strings.action_resume
                                 } else {
                                     MR.strings.action_start
@@ -1096,7 +1104,11 @@ private fun ColumnScope.AnimeStatusAndSourceRow(
                     onClick = { onSearch(sourceText, false) },
                 ),
                 textAlign = textAlign,
-                color = if (isSourceError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isSourceError) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1148,7 +1160,6 @@ private fun animeFactsLine(anime: AnimeTitle): String? {
         .takeIf { it.isNotEmpty() }
         ?.joinToString(" • ")
 }
-
 
 @Composable
 private fun Long.toAnimeStatusText(): String? {
@@ -1634,7 +1645,11 @@ private fun AnimeEpisodeListItem(
                     },
                 ),
                 modifier = Modifier.padding(start = 4.dp),
-                tint = if (sourceAvailable) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (sourceAvailable) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
     }
@@ -1771,7 +1786,10 @@ fun AnimeScheduleSheet(
                                 ListGroupHeader(text = buildSeasonHeader(season))
                             }
                             items(
-                                items = episodes.sortedWith(compareBy<AnimeScreenModel.AnimeScheduleEpisode> { it.airDate }.thenBy { it.episodeNumber ?: Float.MAX_VALUE }),
+                                items = episodes.sortedWith(
+                                    compareBy<AnimeScreenModel.AnimeScheduleEpisode> { it.airDate }
+                                        .thenBy { it.episodeNumber ?: Float.MAX_VALUE },
+                                ),
                                 key = { episode -> episode.scheduleKey() },
                             ) { episode ->
                                 AnimeScheduleRow(episode)

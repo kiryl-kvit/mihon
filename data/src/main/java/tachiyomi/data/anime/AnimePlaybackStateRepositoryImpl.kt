@@ -1,7 +1,7 @@
 package tachiyomi.data.anime
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler

@@ -1,15 +1,23 @@
+@file:Suppress("ktlint:standard:max-line-length")
+
 package eu.kanade.tachiyomi.ui.anime
 
 import android.app.Application
+import eu.kanade.tachiyomi.source.AnimeScheduleSource
+import eu.kanade.tachiyomi.source.model.SAnime
+import eu.kanade.tachiyomi.source.model.SAnimeScheduleEpisode
+import eu.kanade.tachiyomi.source.model.SEpisode
+import eu.kanade.tachiyomi.source.model.VideoPlaybackData
+import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.flow.asStateFlow
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -21,13 +29,13 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
+import tachiyomi.domain.anime.interactor.GetDuplicateLibraryAnime
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.interactor.SetAnimeDefaultEpisodeFlags
 import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
-import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
-import tachiyomi.domain.anime.interactor.GetMergedAnime
-import tachiyomi.domain.anime.interactor.GetDuplicateLibraryAnime
-import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
@@ -35,24 +43,18 @@ import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
-import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
-import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.repository.CategoryRepository
+import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.service.DuplicatePreferences
 import tachiyomi.domain.source.service.AnimeSourceManager
-import eu.kanade.tachiyomi.source.AnimeScheduleSource
-import eu.kanade.tachiyomi.source.model.SAnime
-import eu.kanade.tachiyomi.source.model.SAnimeScheduleEpisode
-import eu.kanade.tachiyomi.source.model.SEpisode
-import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
-import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -72,7 +74,14 @@ class AnimeScreenModelTest {
 
     @Test
     fun `long press enters selection and second long press selects range`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
         val episodes = listOf(
             AnimeEpisode.create().copy(id = 10L, animeId = anime.id, sourceOrder = 0L, name = "Episode 1"),
             AnimeEpisode.create().copy(id = 11L, animeId = anime.id, sourceOrder = 1L, name = "Episode 2"),
@@ -97,7 +106,14 @@ class AnimeScreenModelTest {
 
     @Test
     fun `invert selection flips current episode selection`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
         val episodes = listOf(
             AnimeEpisode.create().copy(id = 10L, animeId = anime.id, sourceOrder = 0L),
             AnimeEpisode.create().copy(id = 11L, animeId = anime.id, sourceOrder = 1L),
@@ -120,15 +136,46 @@ class AnimeScreenModelTest {
 
     @Test
     fun `mark watched updates selected episodes and playback states`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
-        val firstEpisode = AnimeEpisode.create().copy(id = 10L, animeId = anime.id, watched = false, completed = false, sourceOrder = 0L)
-        val secondEpisode = AnimeEpisode.create().copy(id = 11L, animeId = anime.id, watched = true, completed = false, sourceOrder = 1L)
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val firstEpisode = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = anime.id,
+            watched = false,
+            completed = false,
+            sourceOrder = 0L,
+        )
+        val secondEpisode = AnimeEpisode.create().copy(
+            id = 11L,
+            animeId = anime.id,
+            watched = true,
+            completed = false,
+            sourceOrder = 1L,
+        )
         val episodeRepository = FakeAnimeEpisodeRepository(listOf(firstEpisode, secondEpisode))
         val playbackRepository = FakeAnimePlaybackStateRepository(
             mapOf(
                 anime.id to listOf(
-                    AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = false, lastWatchedAt = 100L),
-                    AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 7_500L, durationMs = 10_000L, completed = false, lastWatchedAt = 200L),
+                    AnimePlaybackState(
+                        episodeId = firstEpisode.id,
+                        positionMs = 5_000L,
+                        durationMs = 10_000L,
+                        completed = false,
+                        lastWatchedAt = 100L,
+                    ),
+                    AnimePlaybackState(
+                        episodeId = secondEpisode.id,
+                        positionMs = 7_500L,
+                        durationMs = 10_000L,
+                        completed = false,
+                        lastWatchedAt = 200L,
+                    ),
                 ),
             ),
         )
@@ -153,8 +200,20 @@ class AnimeScreenModelTest {
                 AnimeEpisodeUpdate(id = secondEpisode.id, watched = true, completed = true),
             ).sortedBy(AnimeEpisodeUpdate::id)
             playbackRepository.upserts.sortedBy(AnimePlaybackState::episodeId) shouldBe listOf(
-                AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = true, lastWatchedAt = 100L),
-                AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 7_500L, durationMs = 10_000L, completed = true, lastWatchedAt = 200L),
+                AnimePlaybackState(
+                    episodeId = firstEpisode.id,
+                    positionMs = 5_000L,
+                    durationMs = 10_000L,
+                    completed = true,
+                    lastWatchedAt = 100L,
+                ),
+                AnimePlaybackState(
+                    episodeId = secondEpisode.id,
+                    positionMs = 7_500L,
+                    durationMs = 10_000L,
+                    completed = true,
+                    lastWatchedAt = 200L,
+                ),
             ).sortedBy(AnimePlaybackState::episodeId)
             val state = model.state.value as AnimeScreenModel.State.Success
             state.selection shouldBe emptySet<Long>()
@@ -164,15 +223,46 @@ class AnimeScreenModelTest {
 
     @Test
     fun `mark unwatched resets selected episodes and playback states`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
-        val firstEpisode = AnimeEpisode.create().copy(id = 10L, animeId = anime.id, watched = true, completed = true, sourceOrder = 0L)
-        val secondEpisode = AnimeEpisode.create().copy(id = 11L, animeId = anime.id, watched = true, completed = false, sourceOrder = 1L)
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val firstEpisode = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = anime.id,
+            watched = true,
+            completed = true,
+            sourceOrder = 0L,
+        )
+        val secondEpisode = AnimeEpisode.create().copy(
+            id = 11L,
+            animeId = anime.id,
+            watched = true,
+            completed = false,
+            sourceOrder = 1L,
+        )
         val episodeRepository = FakeAnimeEpisodeRepository(listOf(firstEpisode, secondEpisode))
         val playbackRepository = FakeAnimePlaybackStateRepository(
             mapOf(
                 anime.id to listOf(
-                    AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 10_000L, durationMs = 10_000L, completed = true, lastWatchedAt = 100L),
-                    AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = false, lastWatchedAt = 200L),
+                    AnimePlaybackState(
+                        episodeId = firstEpisode.id,
+                        positionMs = 10_000L,
+                        durationMs = 10_000L,
+                        completed = true,
+                        lastWatchedAt = 100L,
+                    ),
+                    AnimePlaybackState(
+                        episodeId = secondEpisode.id,
+                        positionMs = 5_000L,
+                        durationMs = 10_000L,
+                        completed = false,
+                        lastWatchedAt = 200L,
+                    ),
                 ),
             ),
         )
@@ -197,8 +287,20 @@ class AnimeScreenModelTest {
                 AnimeEpisodeUpdate(id = secondEpisode.id, watched = false, completed = false),
             ).sortedBy(AnimeEpisodeUpdate::id)
             playbackRepository.upserts.sortedBy(AnimePlaybackState::episodeId) shouldBe listOf(
-                AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 0L, durationMs = 10_000L, completed = false, lastWatchedAt = 100L),
-                AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 0L, durationMs = 10_000L, completed = false, lastWatchedAt = 200L),
+                AnimePlaybackState(
+                    episodeId = firstEpisode.id,
+                    positionMs = 0L,
+                    durationMs = 10_000L,
+                    completed = false,
+                    lastWatchedAt = 100L,
+                ),
+                AnimePlaybackState(
+                    episodeId = secondEpisode.id,
+                    positionMs = 0L,
+                    durationMs = 10_000L,
+                    completed = false,
+                    lastWatchedAt = 200L,
+                ),
             ).sortedBy(AnimePlaybackState::episodeId)
             val state = model.state.value as AnimeScreenModel.State.Success
             state.selection shouldBe emptySet<Long>()
@@ -208,7 +310,14 @@ class AnimeScreenModelTest {
 
     @Test
     fun `schedule preloads and shows upcoming summary when entries exist`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
         val scheduleSource = FakeScheduleAnimeSource(
             scheduleEntries = listOf(
                 SAnimeScheduleEpisode(
@@ -240,7 +349,14 @@ class AnimeScreenModelTest {
 
     @Test
     fun `empty preloaded schedule hides button and cannot open dialog`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
         val scheduleSource = FakeScheduleAnimeSource(scheduleEntries = emptyList())
 
         val model = createModel(
@@ -264,7 +380,14 @@ class AnimeScreenModelTest {
 
     @Test
     fun `schedule load failure keeps button visible for retry`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
         val scheduleSource = FakeScheduleAnimeSource(error = IllegalStateException("boom"))
 
         val model = createModel(
@@ -296,9 +419,27 @@ class AnimeScreenModelTest {
             episodeFlags = AnimeTitle.EPISODE_SORT_ASC or AnimeTitle.EPISODE_SORTING_NUMBER,
         )
         val episodes = listOf(
-            AnimeEpisode.create().copy(id = 10L, animeId = anime.id, sourceOrder = 0L, episodeNumber = 3.0, name = "Episode 3"),
-            AnimeEpisode.create().copy(id = 11L, animeId = anime.id, sourceOrder = 1L, episodeNumber = 1.0, name = "Episode 1"),
-            AnimeEpisode.create().copy(id = 12L, animeId = anime.id, sourceOrder = 2L, episodeNumber = 2.0, name = "Episode 2"),
+            AnimeEpisode.create().copy(
+                id = 10L,
+                animeId = anime.id,
+                sourceOrder = 0L,
+                episodeNumber = 3.0,
+                name = "Episode 3",
+            ),
+            AnimeEpisode.create().copy(
+                id = 11L,
+                animeId = anime.id,
+                sourceOrder = 1L,
+                episodeNumber = 1.0,
+                name = "Episode 1",
+            ),
+            AnimeEpisode.create().copy(
+                id = 12L,
+                animeId = anime.id,
+                sourceOrder = 2L,
+                episodeNumber = 2.0,
+                name = "Episode 2",
+            ),
         )
 
         val model = createModel(anime = anime, episodes = episodes)
@@ -322,8 +463,21 @@ class AnimeScreenModelTest {
             url = "/anime/1",
             episodeFlags = AnimeTitle.EPISODE_SHOW_STARTED,
         )
-        val startedEpisode = AnimeEpisode.create().copy(id = 10L, animeId = anime.id, watched = true, sourceOrder = 0L, name = "Started")
-        val newEpisode = AnimeEpisode.create().copy(id = 11L, animeId = anime.id, watched = false, completed = false, sourceOrder = 1L, name = "New")
+        val startedEpisode = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = anime.id,
+            watched = true,
+            sourceOrder = 0L,
+            name = "Started",
+        )
+        val newEpisode = AnimeEpisode.create().copy(
+            id = 11L,
+            animeId = anime.id,
+            watched = false,
+            completed = false,
+            sourceOrder = 1L,
+            name = "New",
+        )
 
         val model = createModel(anime = anime, episodes = listOf(startedEpisode, newEpisode))
 
@@ -356,8 +510,22 @@ class AnimeScreenModelTest {
             url = "/anime/2",
         )
         val episodes = listOf(
-            AnimeEpisode.create().copy(id = 10L, animeId = target.id, episodeNumber = 1.0, sourceOrder = 1L, completed = false, name = "Target 1"),
-            AnimeEpisode.create().copy(id = 20L, animeId = member.id, episodeNumber = 1.0, sourceOrder = 1L, completed = false, name = "Member 1"),
+            AnimeEpisode.create().copy(
+                id = 10L,
+                animeId = target.id,
+                episodeNumber = 1.0,
+                sourceOrder = 1L,
+                completed = false,
+                name = "Target 1",
+            ),
+            AnimeEpisode.create().copy(
+                id = 20L,
+                animeId = member.id,
+                episodeNumber = 1.0,
+                sourceOrder = 1L,
+                completed = false,
+                name = "Member 1",
+            ),
         )
         val mergedRepository = FakeMergedAnimeRepository(
             listOf(
@@ -386,7 +554,14 @@ class AnimeScreenModelTest {
 
     @Test
     fun `set sorting updates repository episode flags`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/anime/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
         val animeRepository = FakeAnimeRepository(listOf(anime))
         val model = createModel(anime = anime, episodes = emptyList(), animeRepository = animeRepository)
 
@@ -643,11 +818,35 @@ class AnimeScreenModelTest {
             updateAllCalls += episodeUpdates
         }
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
-        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId == animeId })
-        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter {
+            it.animeId ==
+                animeId
+        }
+        override fun getEpisodesByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId ==
+                    animeId
+            },
+        )
+        override fun getEpisodesByAnimeIdsAsFlow(
+            animeIds: List<Long>,
+        ): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId in
+                    animeIds
+            },
+        )
         override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
-        override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): AnimeEpisode? = episodes.firstOrNull { it.url == url && it.animeId == animeId }
+        override suspend fun getEpisodeByUrlAndAnimeId(
+            url: String,
+            animeId: Long,
+        ): AnimeEpisode? = episodes.firstOrNull {
+            it.url ==
+                url &&
+                it.animeId == animeId
+        }
     }
 
     private class FakeAnimePlaybackStateRepository(
@@ -655,9 +854,21 @@ class AnimeScreenModelTest {
     ) : AnimePlaybackStateRepository {
         val upserts = mutableListOf<AnimePlaybackState>()
 
-        override suspend fun getByEpisodeId(episodeId: Long): AnimePlaybackState? = statesByAnimeId.values.flatten().firstOrNull { it.episodeId == episodeId }
-        override fun getByEpisodeIdAsFlow(episodeId: Long): Flow<AnimePlaybackState?> = flowOf(statesByAnimeId.values.flatten().firstOrNull { it.episodeId == episodeId })
-        override fun getByAnimeIdAsFlow(animeId: Long): Flow<List<AnimePlaybackState>> = flowOf(statesByAnimeId[animeId].orEmpty())
+        override suspend fun getByEpisodeId(episodeId: Long): AnimePlaybackState? = statesByAnimeId.values.flatten().firstOrNull {
+            it.episodeId ==
+                episodeId
+        }
+        override fun getByEpisodeIdAsFlow(
+            episodeId: Long,
+        ): Flow<AnimePlaybackState?> = flowOf(
+            statesByAnimeId.values.flatten().firstOrNull {
+                it.episodeId ==
+                    episodeId
+            },
+        )
+        override fun getByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<AnimePlaybackState>> = flowOf(statesByAnimeId[animeId].orEmpty())
         override suspend fun upsert(state: AnimePlaybackState) {
             upserts += state
         }
@@ -676,7 +887,8 @@ class AnimeScreenModelTest {
 
         private var source: eu.kanade.tachiyomi.source.AnimeSource? = null
 
-        override fun get(sourceKey: Long): eu.kanade.tachiyomi.source.AnimeSource? = source ?: FakeAnimeSource(sourceKey)
+        override fun get(sourceKey: Long): eu.kanade.tachiyomi.source.AnimeSource? =
+            source ?: FakeAnimeSource(sourceKey)
         override fun getCatalogueSources(): List<eu.kanade.tachiyomi.source.AnimeCatalogueSource> = emptyList()
     }
 
@@ -704,13 +916,20 @@ class AnimeScreenModelTest {
             val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return emptyList()
             return merges.filter { it.targetId == targetId }
         }
-        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(run {
-            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return@run emptyList()
-            merges.filter { it.targetId == targetId }
-        })
-        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(
+            run {
+                val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return@run emptyList()
+                merges.filter { it.targetId == targetId }
+            },
+        )
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter {
+            it.targetId ==
+                targetAnimeId
+        }
         override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
-        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override fun subscribeTargetId(
+            animeId: Long,
+        ): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
         override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
         override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
         override suspend fun deleteGroup(targetAnimeId: Long) = Unit

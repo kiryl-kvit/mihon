@@ -28,7 +28,6 @@ class SourcePreferences(
         const val ANIME_PINNED_SOURCES_KEY = "pinned_anime_catalogues"
     }
 
-
     val sourceDisplayMode: Preference<LibraryDisplayMode> = preferenceStore.getObjectFromString(
         "pref_display_mode_catalogue",
         LibraryDisplayMode.default,
@@ -43,7 +42,10 @@ class SourcePreferences(
 
     val disabledSources: Preference<Set<String>> = preferenceStore.getStringSet(MANGA_HIDDEN_SOURCES_KEY, emptySet())
 
-    val disabledAnimeSources: Preference<Set<String>> = preferenceStore.getStringSet(ANIME_HIDDEN_SOURCES_KEY, emptySet())
+    val disabledAnimeSources: Preference<Set<String>> = preferenceStore.getStringSet(
+        ANIME_HIDDEN_SOURCES_KEY,
+        emptySet(),
+    )
 
     val incognitoExtensions: Preference<Set<String>> = preferenceStore.getStringSet("incognito_extensions", emptySet())
 

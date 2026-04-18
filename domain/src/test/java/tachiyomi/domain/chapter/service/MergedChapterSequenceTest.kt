@@ -86,7 +86,8 @@ class MergedChapterSequenceTest {
             chapter(id = 301, mangaId = 3, chapterNumber = 1.0),
         )
 
-        chapters.sortedForMergedDisplay(manga, mergedMangaIds = listOf(1L, 2L, 3L)).map(Chapter::id) shouldBe listOf(101L, 301L)
+        chapters.sortedForMergedDisplay(manga, mergedMangaIds = listOf(1L, 2L, 3L)).map(Chapter::id) shouldBe
+            listOf(101L, 301L)
     }
 
     @Test
@@ -101,7 +102,8 @@ class MergedChapterSequenceTest {
             chapter(id = 301, mangaId = 3, chapterNumber = 1.0),
         )
 
-        chapters.sortedForReading(manga, mergedMangaIds = listOf(1L, 2L, 3L)).map(Chapter::id) shouldBe listOf(301L, 101L)
+        chapters.sortedForReading(manga, mergedMangaIds = listOf(1L, 2L, 3L)).map(Chapter::id) shouldBe
+            listOf(301L, 101L)
     }
 
     private fun chapter(

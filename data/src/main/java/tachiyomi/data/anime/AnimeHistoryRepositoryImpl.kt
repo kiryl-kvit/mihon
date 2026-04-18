@@ -1,7 +1,7 @@
 package tachiyomi.data.anime
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat
@@ -28,7 +28,10 @@ class AnimeHistoryRepositoryImpl(
 
     override suspend fun getLastHistory(): AnimeHistoryWithRelations? {
         return handler.awaitOneOrNull {
-            anime_historyQueries.getLatestHistory(profileProvider.activeProfileId, AnimeHistoryMapper::mapHistoryWithRelations)
+            anime_historyQueries.getLatestHistory(
+                profileProvider.activeProfileId,
+                AnimeHistoryMapper::mapHistoryWithRelations,
+            )
         }
     }
 
@@ -46,7 +49,11 @@ class AnimeHistoryRepositoryImpl(
 
     override suspend fun getHistoryByAnimeId(animeId: Long): List<AnimeHistory> {
         return handler.awaitList {
-            anime_historyQueries.getHistoryByAnimeId(profileProvider.activeProfileId, animeId, AnimeHistoryMapper::mapHistory)
+            anime_historyQueries.getHistoryByAnimeId(
+                profileProvider.activeProfileId,
+                animeId,
+                AnimeHistoryMapper::mapHistory,
+            )
         }
     }
 

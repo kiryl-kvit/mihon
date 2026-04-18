@@ -39,7 +39,9 @@ class VideoPlayerViewModel @JvmOverloads constructor(
     private val resolveVideoStream: VideoStreamResolver = Injekt.get<ResolveVideoStream>(),
     private val animePlaybackPreferencesRepository: AnimePlaybackPreferencesRepository = Injekt.get(),
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
-    private val getAnimeWithEpisodes: GetAnimeWithEpisodes? = runCatching { Injekt.get<GetAnimeWithEpisodes>() }.getOrNull(),
+    private val getAnimeWithEpisodes: GetAnimeWithEpisodes? = runCatching {
+        Injekt.get<GetAnimeWithEpisodes>()
+    }.getOrNull(),
     private val videoPlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
     private val videoHistoryRepository: AnimeHistoryRepository = Injekt.get(),
     private val resolveDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -251,8 +253,8 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         val current = mutableState.value as? State.Ready ?: return
         if (current.playback.currentSubtitle == selection) return
         mutableState.value = current.copy(
-                playback = current.playback.copy(currentSubtitle = selection),
-            )
+            playback = current.playback.copy(currentSubtitle = selection),
+        )
     }
 
     fun persistPlayback(positionMs: Long, durationMs: Long) {

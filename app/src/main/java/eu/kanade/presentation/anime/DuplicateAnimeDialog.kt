@@ -1,7 +1,6 @@
 package eu.kanade.presentation.anime
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,16 +14,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Schedule

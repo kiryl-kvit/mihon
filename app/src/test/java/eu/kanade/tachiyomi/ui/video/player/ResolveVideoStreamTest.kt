@@ -9,21 +9,21 @@ import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoStreamType
 import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
-import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
-import tachiyomi.domain.anime.model.PlayerQualityMode
 import tachiyomi.domain.anime.model.AnimeTitle
+import tachiyomi.domain.anime.model.PlayerQualityMode
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.source.service.AnimeSourceManager
 
 class ResolveVideoStreamTest {
 
@@ -32,7 +32,10 @@ class ResolveVideoStreamTest {
         val video = videoTitle(id = 1L, sourceId = 99L)
         val episode = videoEpisode(id = 2L, animeId = 1L)
         val firstStream = VideoStream(
-            request = VideoRequest(url = "https://cdn.example.com/first.m3u8", headers = mapOf("Referer" to "https://example.com")),
+            request = VideoRequest(
+                url = "https://cdn.example.com/first.m3u8",
+                headers = mapOf("Referer" to "https://example.com"),
+            ),
             label = "Auto",
             type = VideoStreamType.HLS,
         )
@@ -255,7 +258,9 @@ class ResolveVideoStreamTest {
 
         override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = error("Not used")
 
-        override suspend fun updateAll(videoUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = error("Not used")
+        override suspend fun updateAll(
+            videoUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>,
+        ): Boolean = error("Not used")
 
         override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = error("Not used")
 
@@ -269,7 +274,9 @@ class ResolveVideoStreamTest {
 
         override suspend fun update(episodeUpdate: tachiyomi.domain.anime.model.AnimeEpisodeUpdate) = error("Not used")
 
-        override suspend fun updateAll(episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>) = error("Not used")
+        override suspend fun updateAll(
+            episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>,
+        ) = error("Not used")
 
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = error("Not used")
 

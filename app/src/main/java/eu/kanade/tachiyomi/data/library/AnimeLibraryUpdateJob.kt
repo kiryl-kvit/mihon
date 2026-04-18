@@ -26,8 +26,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import logcat.LogPriority
-import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
@@ -181,7 +181,9 @@ class AnimeLibraryUpdateJob(private val context: Context, workerParams: WorkerPa
                                             )
                                         logcat(LogPriority.ERROR, e) {
                                             buildString {
-                                                append("Anime library update failed for ${currentAnime.title} ($sourceName)")
+                                                append(
+                                                    "Anime library update failed for ${currentAnime.title} ($sourceName)",
+                                                )
                                                 append(": $errorMessage")
                                             }
                                         }
@@ -328,7 +330,8 @@ internal fun filterAnimeToUpdate(
             val matchesSource = sourceId == -1L || anime.source == sourceId
             matchesCategory && matchesSource
         } else {
-            val included = includedCategories.isEmpty() || effectiveCategoryIds.intersect(includedCategories).isNotEmpty()
+            val included =
+                includedCategories.isEmpty() || effectiveCategoryIds.intersect(includedCategories).isNotEmpty()
             val excluded = effectiveCategoryIds.intersect(excludedCategories).isNotEmpty()
             included && !excluded
         }

@@ -24,6 +24,7 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.launch
+import mihon.feature.profiles.core.ProfileManager
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.ResetCategoryFlags
 import tachiyomi.domain.category.model.Category
@@ -46,7 +47,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.pluralStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.collectAsState
-import mihon.feature.profiles.core.ProfileManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -335,7 +335,9 @@ object SettingsLibraryScreen : SearchableSettings {
                     preference = libraryPreferences.displayMode,
                     entries = persistentMapOf(
                         LibraryDisplayMode.CompactGrid to stringResource(MR.strings.action_display_grid),
-                        LibraryDisplayMode.ComfortableGrid to stringResource(MR.strings.action_display_comfortable_grid),
+                        LibraryDisplayMode.ComfortableGrid to stringResource(
+                            MR.strings.action_display_comfortable_grid,
+                        ),
                         LibraryDisplayMode.CoverOnlyGrid to stringResource(MR.strings.action_display_cover_only_grid),
                         LibraryDisplayMode.List to stringResource(MR.strings.action_display_list),
                     ),
@@ -399,8 +401,12 @@ object SettingsLibraryScreen : SearchableSettings {
                     entries = persistentMapOf(
                         LibraryGroupType.Category to stringResource(MR.strings.action_group_category),
                         LibraryGroupType.Extension to stringResource(MR.strings.action_group_extension),
-                        LibraryGroupType.ExtensionCategory to stringResource(MR.strings.action_group_extension_category),
-                        LibraryGroupType.CategoryExtension to stringResource(MR.strings.action_group_category_extension),
+                        LibraryGroupType.ExtensionCategory to stringResource(
+                            MR.strings.action_group_extension_category,
+                        ),
+                        LibraryGroupType.CategoryExtension to stringResource(
+                            MR.strings.action_group_category_extension,
+                        ),
                     ),
                     title = stringResource(MR.strings.action_group),
                 ),

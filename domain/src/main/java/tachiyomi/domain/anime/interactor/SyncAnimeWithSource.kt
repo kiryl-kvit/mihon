@@ -3,14 +3,14 @@ package tachiyomi.domain.anime.interactor
 import mihon.domain.anime.model.copyFrom
 import mihon.domain.anime.model.toDomainEpisode
 import mihon.domain.anime.model.toSAnime
-import tachiyomi.domain.source.model.SourceNotInstalledException
-import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.source.model.SourceNotInstalledException
+import tachiyomi.domain.source.service.AnimeSourceManager
 import java.time.Instant
 import kotlin.math.abs
 
@@ -182,7 +182,8 @@ class SyncAnimeWithSource(
                 emptyList()
             }
 
-        val hasEpisodeChanges = insertedEpisodes.isNotEmpty() || episodesToUpdate.isNotEmpty() || episodesToRemove.isNotEmpty()
+        val hasEpisodeChanges =
+            insertedEpisodes.isNotEmpty() || episodesToUpdate.isNotEmpty() || episodesToRemove.isNotEmpty()
         if (hasEpisodeChanges) {
             val timestamp = now()
             if (!animeRepository.update(AnimeTitleUpdate(id = anime.id, lastUpdate = timestamp))) {

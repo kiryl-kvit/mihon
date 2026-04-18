@@ -2,13 +2,13 @@ package tachiyomi.data.source
 
 import androidx.paging.PagingState
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
-import eu.kanade.tachiyomi.source.model.FilterList
 import eu.kanade.tachiyomi.source.model.AnimesPage
+import eu.kanade.tachiyomi.source.model.FilterList
 import mihon.domain.anime.model.toDomainAnime
 import tachiyomi.core.common.util.lang.withIOContext
-import tachiyomi.domain.source.repository.AnimeSourcePagingSource
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.model.AnimeTitle
+import tachiyomi.domain.source.repository.AnimeSourcePagingSource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

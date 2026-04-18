@@ -1,8 +1,8 @@
 package tachiyomi.data.anime
 
-import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.anime.model.AnimeHistory
 import tachiyomi.domain.anime.model.AnimeHistoryWithRelations
+import tachiyomi.domain.manga.model.MangaCover
 import java.util.Date
 
 object AnimeHistoryMapper {

@@ -38,7 +38,7 @@ import kotlinx.coroutines.delay
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
-private const val seekFeedbackVisibleDurationMs = 700L
+private const val SEEK_FEEDBACK_VISIBLE_DURATION_MS = 700L
 
 @Composable
 internal fun VideoPlayerSeekFeedback(
@@ -60,7 +60,7 @@ internal fun VideoPlayerSeekFeedback(
 
         displayedFeedback = feedbackState
         visible = true
-        delay(seekFeedbackVisibleDurationMs)
+        delay(SEEK_FEEDBACK_VISIBLE_DURATION_MS)
         if (latestFeedbackState?.sequence == feedbackState.sequence) {
             visible = false
             delay(120L)

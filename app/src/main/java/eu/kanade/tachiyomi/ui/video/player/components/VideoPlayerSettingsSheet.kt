@@ -1,14 +1,14 @@
 package eu.kanade.tachiyomi.ui.video.player.components
 
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
@@ -30,18 +30,18 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.tachiyomi.source.model.VideoPlaybackOption
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.ui.video.player.VideoAdaptiveQualityPreference
+import eu.kanade.tachiyomi.ui.video.player.VideoPlaybackUiState
+import eu.kanade.tachiyomi.ui.video.player.VideoPlayerSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.defaultSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.externalSubtitleOptions
 import eu.kanade.tachiyomi.ui.video.player.resolvePreviewSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.subtitleSelectionKey
-import eu.kanade.tachiyomi.ui.video.player.VideoPlaybackUiState
-import eu.kanade.tachiyomi.ui.video.player.VideoPlayerSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.withSelectedDub
 import eu.kanade.tachiyomi.ui.video.player.withSelectedSourceQuality
 import eu.kanade.tachiyomi.ui.video.player.withSelectedStream
 import tachiyomi.i18n.MR
-import tachiyomi.presentation.core.components.SettingsItemsPaddings
 import tachiyomi.presentation.core.components.SettingsChipRow
+import tachiyomi.presentation.core.components.SettingsItemsPaddings
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.theme.header
@@ -84,9 +84,11 @@ internal fun VideoPlayerSettingsSheet(
         playback.preview.subtitles.orEmpty()
     }
     val subtitleOptions = if (draftDubMatchesActive) {
-        (externalSubtitleOptions(playback.subtitles) + playback.subtitleOptions.filter {
-            it.selection is VideoPlayerSubtitleSelection.Embedded
-        }).distinctBy { it.key }
+        (
+            externalSubtitleOptions(playback.subtitles) + playback.subtitleOptions.filter {
+                it.selection is VideoPlayerSubtitleSelection.Embedded
+            }
+            ).distinctBy { it.key }
     } else {
         externalSubtitleOptions(previewSubtitles)
     }
@@ -247,7 +249,9 @@ internal fun VideoPlayerSettingsSheet(
                                 draftSubtitleSelection
                             } else {
                                 when (draftSubtitleSelection) {
-                                    is VideoPlayerSubtitleSelection.Embedded -> defaultSubtitleSelection(previewSubtitles)
+                                    is VideoPlayerSubtitleSelection.Embedded -> defaultSubtitleSelection(
+                                        previewSubtitles,
+                                    )
                                     else -> draftSubtitleSelection
                                 }
                             },

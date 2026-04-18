@@ -12,8 +12,6 @@ import tachiyomi.data.anime.AnimeEpisodeMapper
 import tachiyomi.data.anime.AnimeHistoryMapper
 import tachiyomi.data.anime.AnimePlaybackPreferencesMapper
 import tachiyomi.data.anime.AnimePlaybackStateMapper
-import tachiyomi.domain.category.interactor.GetAnimeCategories
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeHistory
@@ -25,6 +23,8 @@ import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.category.interactor.GetAnimeCategories
+import tachiyomi.domain.category.model.Category
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -65,7 +65,9 @@ class AnimeBackupCreator(
                 dubKey = preferences.dubKey,
                 streamKey = preferences.streamKey,
                 sourceQualityKey = preferences.sourceQualityKey,
-                playerQualityMode = AnimePlaybackPreferencesMapper.encodePlayerQualityMode(preferences.playerQualityMode),
+                playerQualityMode = AnimePlaybackPreferencesMapper.encodePlayerQualityMode(
+                    preferences.playerQualityMode,
+                ),
                 playerQualityHeight = preferences.playerQualityHeight,
                 subtitleOffsetX = preferences.subtitleOffsetX,
                 subtitleOffsetY = preferences.subtitleOffsetY,
@@ -170,7 +172,12 @@ class AnimeBackupCreator(
             animeEpisodeRepository.getEpisodeByUrlAndAnimeId(episodeUrl, animeId)
         } else {
             handler.awaitOneOrNull {
-                anime_episodesQueries.getEpisodeByUrlAndAnimeId(profileId, episodeUrl, animeId, AnimeEpisodeMapper::mapEpisode)
+                anime_episodesQueries.getEpisodeByUrlAndAnimeId(
+                    profileId,
+                    episodeUrl,
+                    animeId,
+                    AnimeEpisodeMapper::mapEpisode,
+                )
             }
         }
     }

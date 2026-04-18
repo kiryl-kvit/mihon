@@ -70,8 +70,8 @@ import eu.kanade.domain.source.model.toListing
 import eu.kanade.presentation.browse.BrowseSourceContent
 import eu.kanade.presentation.browse.components.BaseSourceItem
 import eu.kanade.presentation.browse.components.BrowseLibraryActionDialog
-import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.browse.components.BrowseMangaPreviewSheet
+import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.browse.components.MergeTargetPickerDialog
 import eu.kanade.presentation.browse.components.RemoveMangaDialog
 import eu.kanade.presentation.browse.components.SourceIcon
@@ -102,8 +102,8 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.domain.manga.interactor.GetMergedManga
-import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.manga.model.presentationTitle
+import tachiyomi.domain.source.model.Source
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.PullRefresh

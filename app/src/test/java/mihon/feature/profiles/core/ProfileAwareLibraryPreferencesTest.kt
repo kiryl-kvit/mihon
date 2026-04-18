@@ -189,7 +189,9 @@ class ProfileAwareLibraryPreferencesTest {
             launch { fixture.libraryPreferences.filterStarted.changes().take(3).toList(filterStartedValues) },
             launch { fixture.libraryPreferences.filterBookmarked.changes().take(3).toList(filterBookmarkedValues) },
             launch { fixture.libraryPreferences.filterCompleted.changes().take(3).toList(filterCompletedValues) },
-            launch { fixture.libraryPreferences.animeFilterUnwatched.changes().take(3).toList(animeFilterUnwatchedValues) },
+            launch {
+                fixture.libraryPreferences.animeFilterUnwatched.changes().take(3).toList(animeFilterUnwatchedValues)
+            },
             launch { fixture.libraryPreferences.animeFilterStarted.changes().take(3).toList(animeFilterStartedValues) },
             launch { fixture.libraryPreferences.sortingMode.changes().take(3).toList(sortingValues) },
             launch { fixture.libraryPreferences.displayMode.changes().take(3).toList(displayValues) },

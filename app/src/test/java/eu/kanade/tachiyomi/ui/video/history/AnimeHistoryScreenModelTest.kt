@@ -3,9 +3,9 @@ package eu.kanade.tachiyomi.ui.anime.history
 import eu.kanade.domain.anime.model.toMangaCover
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -170,7 +170,9 @@ class AnimeHistoryScreenModelTest {
 
         override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = true
 
-        override suspend fun updateAll(animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
+        override suspend fun updateAll(
+            animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>,
+        ): Boolean = true
 
         override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = animes
 
@@ -187,7 +189,9 @@ class AnimeHistoryScreenModelTest {
 
         override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> = groupsByAnimeId[animeId].orEmpty()
 
-        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(groupsByAnimeId[animeId].orEmpty())
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> {
+            return flowOf(groupsByAnimeId[animeId].orEmpty())
+        }
 
         override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> {
             return groupsByAnimeId.values.flatten().filter { it.targetId == targetAnimeId }

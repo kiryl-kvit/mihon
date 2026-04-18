@@ -58,7 +58,8 @@ class GetDuplicateLibraryAnimeTest {
 
     @Test
     fun `does not match unrelated entries without tracker support`() = runTest {
-        val current = anime(id = 1, title = "Alpha Series", description = "A short unique summary for the current show.")
+        val current =
+            anime(id = 1, title = "Alpha Series", description = "A short unique summary for the current show.")
         val library = anime(
             id = 2,
             title = "Totally Different Show",
@@ -108,7 +109,14 @@ class GetDuplicateLibraryAnimeTest {
     ) : AnimeRepository {
         override suspend fun getAnimeById(id: Long): AnimeTitle = anime.first { it.id == id }
         override suspend fun getAnimeByIdAsFlow(id: Long): Flow<AnimeTitle> = flowOf(anime.first { it.id == id })
-        override suspend fun getAnimeByUrlAndSourceId(url: String, sourceId: Long): AnimeTitle? = anime.firstOrNull { it.url == url && it.source == sourceId }
+        override suspend fun getAnimeByUrlAndSourceId(
+            url: String,
+            sourceId: Long,
+        ): AnimeTitle? = anime.firstOrNull {
+            it.url ==
+                url &&
+                it.source == sourceId
+        }
         override fun getAnimeByUrlAndSourceIdAsFlow(url: String, sourceId: Long): Flow<AnimeTitle?> {
             return flowOf(anime.firstOrNull { it.url == url && it.source == sourceId })
         }
@@ -117,7 +125,9 @@ class GetDuplicateLibraryAnimeTest {
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = anime
         override suspend fun updateDisplayName(animeId: Long, displayName: String?): Boolean = true
         override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = true
-        override suspend fun updateAll(animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
+        override suspend fun updateAll(
+            animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>,
+        ): Boolean = true
         override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = animes
         override suspend fun setAnimeCategories(animeId: Long, categoryIds: List<Long>) = Unit
     }
@@ -129,11 +139,35 @@ class GetDuplicateLibraryAnimeTest {
         override suspend fun update(episodeUpdate: tachiyomi.domain.anime.model.AnimeEpisodeUpdate) = Unit
         override suspend fun updateAll(episodeUpdates: List<tachiyomi.domain.anime.model.AnimeEpisodeUpdate>) = Unit
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
-        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId == animeId })
-        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter {
+            it.animeId ==
+                animeId
+        }
+        override fun getEpisodesByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId ==
+                    animeId
+            },
+        )
+        override fun getEpisodesByAnimeIdsAsFlow(
+            animeIds: List<Long>,
+        ): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId in
+                    animeIds
+            },
+        )
         override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
-        override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): AnimeEpisode? = episodes.firstOrNull { it.url == url && it.animeId == animeId }
+        override suspend fun getEpisodeByUrlAndAnimeId(
+            url: String,
+            animeId: Long,
+        ): AnimeEpisode? = episodes.firstOrNull {
+            it.url ==
+                url &&
+                it.animeId == animeId
+        }
     }
 
     private class FakeMergedAnimeRepository(
@@ -149,9 +183,14 @@ class GetDuplicateLibraryAnimeTest {
             val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId
             return flowOf(targetId?.let { id -> merges.filter { it.targetId == id } }.orEmpty())
         }
-        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter {
+            it.targetId ==
+                targetAnimeId
+        }
         override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
-        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override fun subscribeTargetId(
+            animeId: Long,
+        ): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
         override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) = Unit
         override suspend fun removeMembers(targetAnimeId: Long, animeIds: List<Long>) = Unit
         override suspend fun deleteGroup(targetAnimeId: Long) = Unit

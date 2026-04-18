@@ -225,7 +225,9 @@ class AnimeRestorerTest {
 
         override suspend fun getFavorites(): List<AnimeTitle> = animeById.values.filter(AnimeTitle::favorite)
 
-        override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(animeById.values.filter(AnimeTitle::favorite))
+        override fun getFavoritesAsFlow(): Flow<List<AnimeTitle>> = flowOf(
+            animeById.values.filter(AnimeTitle::favorite),
+        )
 
         override suspend fun getAllAnimeByProfile(profileId: Long): List<AnimeTitle> = animeById.values.toList()
 

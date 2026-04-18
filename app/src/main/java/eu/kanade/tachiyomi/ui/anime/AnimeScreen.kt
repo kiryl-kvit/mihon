@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.ui.anime
 
 import android.content.Context
-import androidx.core.net.toUri
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
@@ -10,42 +9,43 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import cafe.adriel.voyager.core.model.rememberScreenModel
-import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.LocalNavigator
+import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.core.util.ifAnimeSourcesLoaded
+import eu.kanade.domain.anime.model.toMangaCover
+import eu.kanade.presentation.anime.AnimeMergeTargetPickerDialog
+import eu.kanade.presentation.anime.AnimeScheduleSheet
+import eu.kanade.presentation.anime.AnimeScreen
+import eu.kanade.presentation.anime.DuplicateAnimeDialog
 import eu.kanade.presentation.anime.EpisodeSettingsDialog
 import eu.kanade.presentation.anime.ManageAnimeMergeDialog
-import eu.kanade.presentation.anime.AnimeScreen
-import eu.kanade.presentation.anime.AnimeScheduleSheet
-import eu.kanade.presentation.anime.AnimeMergeTargetPickerDialog
-import eu.kanade.presentation.anime.DuplicateAnimeDialog
-import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.browse.components.BrowseMergeEditorDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.manga.components.EditDisplayNameDialog
 import eu.kanade.presentation.manga.components.MangaCoverDialog
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.ui.anime.browse.AnimeBrowseSourceScreen
 import eu.kanade.tachiyomi.ui.anime.browse.globalsearch.AnimeGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
+import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import eu.kanade.tachiyomi.util.system.toShareIntent
 import eu.kanade.tachiyomi.util.system.toast
-import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
+import kotlinx.coroutines.launch
 import mihon.domain.anime.model.toSAnime
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
-import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
-import kotlinx.coroutines.launch
+import tachiyomi.core.common.i18n.stringResource as contextStringResource
 
 data class AnimeScreen(
     private val animeId: Long,

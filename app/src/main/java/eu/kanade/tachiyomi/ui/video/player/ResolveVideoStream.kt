@@ -10,14 +10,14 @@ import eu.kanade.tachiyomi.source.model.VideoSubtitle
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
-import tachiyomi.domain.anime.model.AnimePlaybackPreferences
-import tachiyomi.domain.anime.model.PlayerQualityMode
-import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.domain.anime.model.AnimeEpisode
+import tachiyomi.domain.anime.model.AnimePlaybackPreferences
 import tachiyomi.domain.anime.model.AnimeTitle
+import tachiyomi.domain.anime.model.PlayerQualityMode
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.source.service.AnimeSourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 

@@ -1,10 +1,10 @@
 package mihon.domain.anime.model
 
 import eu.kanade.tachiyomi.source.model.SAnime
-import uy.kohesive.injekt.Injekt
-import uy.kohesive.injekt.api.get
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.library.service.LibraryPreferences
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 fun SAnime.toDomainAnime(sourceId: Long): AnimeTitle {
     val libraryPreferences = Injekt.get<LibraryPreferences>()

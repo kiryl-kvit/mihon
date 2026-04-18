@@ -5,9 +5,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.edit
 import androidx.preference.PreferenceManager
+import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
-import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

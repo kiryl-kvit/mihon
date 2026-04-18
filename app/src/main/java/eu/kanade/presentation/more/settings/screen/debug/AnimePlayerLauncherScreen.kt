@@ -21,9 +21,9 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
+import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.ioCoroutineScope
-import eu.kanade.presentation.more.settings.widget.TextPreferenceWidget
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,9 +32,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import mihon.feature.profiles.core.ProfileManager
-import tachiyomi.domain.profile.model.ProfileType
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.profile.model.ProfileType
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.util.plus
 import uy.kohesive.injekt.Injekt

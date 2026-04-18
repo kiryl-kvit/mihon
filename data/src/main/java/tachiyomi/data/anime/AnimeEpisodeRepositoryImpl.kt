@@ -1,7 +1,7 @@
 package tachiyomi.data.anime
 
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
 import logcat.LogPriority
 import tachiyomi.core.common.util.system.logcat

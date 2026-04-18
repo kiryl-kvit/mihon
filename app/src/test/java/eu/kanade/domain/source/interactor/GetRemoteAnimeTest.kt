@@ -53,7 +53,9 @@ private class FakeAnimeSourceRepository(
 }
 
 private class FakeAnimeSourcePagingSource : AnimeSourcePagingSource() {
-    override fun getRefreshKey(state: androidx.paging.PagingState<Long, tachiyomi.domain.anime.model.AnimeTitle>): Long? = null
+    override fun getRefreshKey(
+        state: androidx.paging.PagingState<Long, tachiyomi.domain.anime.model.AnimeTitle>,
+    ): Long? = null
 
     override suspend fun load(params: LoadParams<Long>): LoadResult<Long, tachiyomi.domain.anime.model.AnimeTitle> {
         error("Not used")

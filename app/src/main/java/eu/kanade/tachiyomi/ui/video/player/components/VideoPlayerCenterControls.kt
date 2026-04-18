@@ -27,9 +27,9 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 private val youtubeLikeControlButtonSize = 60.dp
-private const val outerControlSlotWeight = 2f
-private const val spacerControlSlotWeight = 0.5f
-private const val centerControlSlotWeight = 1f
+private const val OUTER_CONTROL_SLOT_WEIGHT = 2f
+private const val SPACER_CONTROL_SLOT_WEIGHT = 0.5f
+private const val CENTER_CONTROL_SLOT_WEIGHT = 1f
 
 @Composable
 internal fun VideoPlayerCenterControls(
@@ -49,7 +49,7 @@ internal fun VideoPlayerCenterControls(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         VideoPlayerControlSlot(
-            weight = outerControlSlotWeight,
+            weight = OUTER_CONTROL_SLOT_WEIGHT,
             contentAlignment = Alignment.CenterEnd,
         ) {
             VideoPlayerTransportButton(
@@ -65,10 +65,10 @@ internal fun VideoPlayerCenterControls(
                 onClick = onPreviousEpisode,
             )
         }
-        VideoPlayerControlSlot(weight = spacerControlSlotWeight) {
+        VideoPlayerControlSlot(weight = SPACER_CONTROL_SLOT_WEIGHT) {
             Spacer(modifier = Modifier.size(youtubeLikeControlButtonSize))
         }
-        VideoPlayerControlSlot(weight = centerControlSlotWeight) {
+        VideoPlayerControlSlot(weight = CENTER_CONTROL_SLOT_WEIGHT) {
             VideoPlayerTransportButton(
                 icon = {
                     Icon(
@@ -81,11 +81,11 @@ internal fun VideoPlayerCenterControls(
                 onClick = onTogglePlayback,
             )
         }
-        VideoPlayerControlSlot(weight = spacerControlSlotWeight) {
+        VideoPlayerControlSlot(weight = SPACER_CONTROL_SLOT_WEIGHT) {
             Spacer(modifier = Modifier.size(youtubeLikeControlButtonSize))
         }
         VideoPlayerControlSlot(
-            weight = outerControlSlotWeight,
+            weight = OUTER_CONTROL_SLOT_WEIGHT,
             contentAlignment = Alignment.CenterStart,
         ) {
             VideoPlayerTransportButton(

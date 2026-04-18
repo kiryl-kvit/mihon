@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.manga.components.MergeEditorDialog
 import eu.kanade.presentation.manga.components.MergeEditorEntry
-import eu.kanade.presentation.manga.components.MergeTargetPickerSheet
 import eu.kanade.presentation.manga.components.MergeTarget
+import eu.kanade.presentation.manga.components.MergeTargetPickerSheet
 import kotlinx.collections.immutable.toPersistentList
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ActionButton

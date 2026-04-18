@@ -6,6 +6,7 @@ import eu.kanade.presentation.updates.UpdatesUiModel
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
+import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -13,25 +14,24 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import io.mockk.mockk
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.domain.anime.interactor.GetAnime
-import tachiyomi.domain.anime.interactor.GetMergedAnime
-import tachiyomi.domain.anime.model.AnimeMerge
-import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.interactor.GetAnimeUpdates
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
+import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeUpdatesWithRelations
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
-import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimeUpdatesRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.source.service.HiddenAnimeSourceIds
 import tachiyomi.domain.updates.service.UpdatesPreferences
@@ -151,7 +151,11 @@ class AnimeUpdatesScreenModelTest {
     private class FakeAnimeUpdatesRepository(
         private val items: List<AnimeUpdatesWithRelations>,
     ) : AnimeUpdatesRepository {
-        override suspend fun awaitWithWatched(watched: Boolean, after: Long, limit: Long): List<AnimeUpdatesWithRelations> {
+        override suspend fun awaitWithWatched(
+            watched: Boolean,
+            after: Long,
+            limit: Long,
+        ): List<AnimeUpdatesWithRelations> {
             return items
         }
 
@@ -164,7 +168,11 @@ class AnimeUpdatesScreenModelTest {
             return flowOf(items)
         }
 
-        override fun subscribeWithWatched(watched: Boolean, after: Long, limit: Long): Flow<List<AnimeUpdatesWithRelations>> {
+        override fun subscribeWithWatched(
+            watched: Boolean,
+            after: Long,
+            limit: Long,
+        ): Flow<List<AnimeUpdatesWithRelations>> {
             return flowOf(items)
         }
     }
@@ -186,11 +194,17 @@ class AnimeUpdatesScreenModelTest {
 
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
 
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> {
+            return episodes.filter { it.animeId == animeId }
+        }
 
-        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId == animeId })
+        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> {
+            return flowOf(episodes.filter { it.animeId == animeId })
+        }
 
-        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
+        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> {
+            return flowOf(episodes.filter { it.animeId in animeIds })
+        }
 
         override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
 
@@ -234,7 +248,9 @@ class AnimeUpdatesScreenModelTest {
 
         override suspend fun update(update: tachiyomi.domain.anime.model.AnimeTitleUpdate): Boolean = true
 
-        override suspend fun updateAll(animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
+        override suspend fun updateAll(
+            animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>,
+        ): Boolean = true
 
         override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = animes
 
@@ -251,7 +267,9 @@ class AnimeUpdatesScreenModelTest {
 
         override suspend fun getGroupByAnimeId(animeId: Long): List<AnimeMerge> = groupsByAnimeId[animeId].orEmpty()
 
-        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(groupsByAnimeId[animeId].orEmpty())
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> {
+            return flowOf(groupsByAnimeId[animeId].orEmpty())
+        }
 
         override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> {
             return groupsByAnimeId.values.flatten().filter { it.targetId == targetAnimeId }

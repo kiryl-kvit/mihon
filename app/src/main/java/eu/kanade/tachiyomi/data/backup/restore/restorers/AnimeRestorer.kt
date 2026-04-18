@@ -1,20 +1,20 @@
 package eu.kanade.tachiyomi.data.backup.restore.restorers
 
-import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import eu.kanade.tachiyomi.data.backup.models.BackupAnime
+import eu.kanade.tachiyomi.data.backup.models.BackupCategory
 import tachiyomi.data.ActiveProfileProvider
 import tachiyomi.data.DatabaseHandler
-import tachiyomi.domain.category.interactor.GetAnimeCategories
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeHistoryUpdate
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
 import tachiyomi.domain.anime.model.AnimePlaybackState
-import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.category.interactor.GetAnimeCategories
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import java.util.Date
@@ -96,7 +96,8 @@ class AnimeRestorer(
 
     suspend fun restorePendingMerges() {
         pendingMerges.values.forEach { merge ->
-            val targetAnime = animeRepository.getAnimeByUrlAndSourceId(merge.targetUrl, merge.targetSource) ?: return@forEach
+            val targetAnime =
+                animeRepository.getAnimeByUrlAndSourceId(merge.targetUrl, merge.targetSource) ?: return@forEach
             val orderedIds = merge.members
                 .let { members ->
                     if (members.any { it.source == merge.targetSource && it.url == merge.targetUrl }) {

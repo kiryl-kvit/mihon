@@ -16,11 +16,11 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.core.util.ifAnimeSourcesLoaded
-import eu.kanade.presentation.util.Tab
 import eu.kanade.presentation.anime.history.AnimeHistoryScreen
+import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.anime.history.AnimeHistoryScreenModel
+import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -84,7 +84,9 @@ data object AnimeHistoryTab : Tab {
                         screenModel.snackbarHostState.showSnackbar(context.stringResource(MR.strings.internal_error))
                     }
                     AnimeHistoryScreenModel.Event.HistoryCleared -> {
-                        screenModel.snackbarHostState.showSnackbar(context.stringResource(MR.strings.clear_history_completed))
+                        screenModel.snackbarHostState.showSnackbar(
+                            context.stringResource(MR.strings.clear_history_completed),
+                        )
                     }
                 }
             }

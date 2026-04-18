@@ -194,5 +194,4 @@ class ExtensionsScreenModel(
             extensionManager.trust(extension)
         }
     }
-
 }

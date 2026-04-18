@@ -19,8 +19,8 @@ import eu.kanade.presentation.more.settings.screen.SettingsAppearanceScreen
 import eu.kanade.presentation.more.settings.screen.SettingsDataScreen
 import eu.kanade.presentation.more.settings.screen.SettingsMainScreen
 import eu.kanade.presentation.more.settings.screen.SettingsTrackingScreen
-import eu.kanade.presentation.more.settings.screen.resolveSettingsStartScreen
 import eu.kanade.presentation.more.settings.screen.about.AboutScreen
+import eu.kanade.presentation.more.settings.screen.resolveSettingsStartScreen
 import eu.kanade.presentation.util.DefaultNavigatorScreenTransition
 import eu.kanade.presentation.util.LocalBackPress
 import eu.kanade.presentation.util.Screen

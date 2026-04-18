@@ -225,9 +225,10 @@ internal fun subtitleSelectionKey(selection: VideoPlayerSubtitleSelection): Stri
 internal fun AnimePlaybackPreferences.toAdaptiveQualityPreference(): VideoAdaptiveQualityPreference {
     return when (playerQualityMode) {
         PlayerQualityMode.AUTO -> VideoAdaptiveQualityPreference.Auto
-        PlayerQualityMode.SPECIFIC_HEIGHT -> playerQualityHeight
-            ?.let(VideoAdaptiveQualityPreference::SpecificHeight)
-            ?: VideoAdaptiveQualityPreference.Auto
+        PlayerQualityMode.SPECIFIC_HEIGHT ->
+            playerQualityHeight
+                ?.let(VideoAdaptiveQualityPreference::SpecificHeight)
+                ?: VideoAdaptiveQualityPreference.Auto
     }
 }
 

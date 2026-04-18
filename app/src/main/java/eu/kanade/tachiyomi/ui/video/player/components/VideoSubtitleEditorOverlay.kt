@@ -64,8 +64,8 @@ import eu.kanade.tachiyomi.ui.video.player.MAX_SUBTITLE_TEXT_SIZE
 import eu.kanade.tachiyomi.ui.video.player.MIN_SUBTITLE_OFFSET_X
 import eu.kanade.tachiyomi.ui.video.player.MIN_SUBTITLE_OFFSET_Y
 import eu.kanade.tachiyomi.ui.video.player.MIN_SUBTITLE_TEXT_SIZE
-import eu.kanade.tachiyomi.ui.video.player.applyAppearance
 import eu.kanade.tachiyomi.ui.video.player.VideoSubtitleAppearance
+import eu.kanade.tachiyomi.ui.video.player.applyAppearance
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
@@ -322,7 +322,11 @@ private fun SubtitleEditorDrawerHandle(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = if (expanded) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                imageVector = if (expanded) {
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                } else {
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft
+                },
                 contentDescription = stringResource(MR.strings.anime_playback_subtitle_settings),
             )
         }

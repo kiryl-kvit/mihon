@@ -9,10 +9,10 @@ import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
-import androidx.media3.common.text.Cue
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
+import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
@@ -203,7 +203,9 @@ internal fun ExoPlayer.applyAdaptiveQuality(preference: VideoAdaptiveQualityPref
     trackSelectionParameters = builder.build()
 }
 
-internal fun ExoPlayer.availableSubtitleTracks(externalSubtitles: List<VideoSubtitle>): List<VideoPlayerSubtitleOption> {
+internal fun ExoPlayer.availableSubtitleTracks(
+    externalSubtitles: List<VideoSubtitle>,
+): List<VideoPlayerSubtitleOption> {
     val externalSubtitleKeys = externalSubtitles.mapTo(mutableSetOf(), ::subtitleChoiceKey)
     val externalSubtitleFingerprints = externalSubtitles.mapTo(mutableSetOf(), ::subtitleTrackFingerprint)
     val options = externalSubtitleOptions(externalSubtitles).toMutableList()
@@ -242,7 +244,9 @@ internal fun ExoPlayer.resolveAppliedSubtitleSelection(
             if (externalSubtitles.isEmpty()) {
                 currentTracks.groups
                     .firstNotNullOfOrNull { group ->
-                        if (group.getType() != C.TRACK_TYPE_TEXT || !group.isSupported()) return@firstNotNullOfOrNull null
+                        if (group.getType() != C.TRACK_TYPE_TEXT || !group.isSupported()) {
+                            return@firstNotNullOfOrNull null
+                        }
                         (0 until group.length)
                             .firstOrNull { index ->
                                 group.isTrackSupported(index) &&
@@ -257,7 +261,8 @@ internal fun ExoPlayer.resolveAppliedSubtitleSelection(
                     }
                     ?: VideoPlayerSubtitleSelection.None
             } else {
-                val defaultSubtitle = externalSubtitles.firstOrNull(VideoSubtitle::isDefault) ?: externalSubtitles.firstOrNull()
+                val defaultSubtitle = externalSubtitles.firstOrNull(VideoSubtitle::isDefault)
+                    ?: externalSubtitles.firstOrNull()
                 defaultSubtitle?.let { subtitle ->
                     if (matchingTextTrack(subtitle) != null) {
                         VideoPlayerSubtitleSelection.External(subtitle)

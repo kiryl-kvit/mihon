@@ -19,9 +19,9 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.WindowManager
-import androidx.annotation.OptIn
-import androidx.activity.viewModels
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,10 +37,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -48,22 +48,20 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.Player
 import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.Player
 import androidx.media3.common.text.Cue
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import eu.kanade.tachiyomi.R
-import mihon.core.common.CustomPreferences
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerLoadingOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSettingsSheet
-import eu.kanade.tachiyomi.ui.video.player.components.VideoSubtitleEditorOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSwitchingOverlay
-import tachiyomi.core.common.i18n.stringResource
+import eu.kanade.tachiyomi.ui.video.player.components.VideoSubtitleEditorOverlay
 import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.view.setComposeContent
 import kotlinx.coroutines.Job
@@ -71,6 +69,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import mihon.core.common.CustomPreferences
+import tachiyomi.core.common.i18n.stringResource
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -216,15 +216,39 @@ class VideoPlayerActivity : BaseActivity() {
                 val subtitlePayloadKey = remember(current.playback.subtitles) {
                     current.playback.subtitles.joinToString(separator = "||") { subtitleChoiceKey(it) }
                 }
-                var controlsVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(true) }
-                var startupOverlayVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(true) }
-                var settingsVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
-                var subtitleEditorVisible by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
+                var controlsVisible by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(true) }
+                var startupOverlayVisible by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(true) }
+                var settingsVisible by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(false) }
+                var subtitleEditorVisible by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(false) }
                 var subtitleEditorDraft by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(current.playback.subtitleAppearance)
                 }
-                var resumePlaybackAfterSubtitleEditor by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
-                var isScrubbing by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(false) }
+                var resumePlaybackAfterSubtitleEditor by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(false) }
+                var isScrubbing by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(false) }
                 var scrubPositionMs by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(current.resumePositionMs.coerceAtLeast(0L))
                 }
@@ -235,8 +259,16 @@ class VideoPlayerActivity : BaseActivity() {
                         ),
                     )
                 }
-                var controllerInteractionSequence by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(0L) }
-                var seekFeedbackSequence by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) { mutableStateOf(0L) }
+                var controllerInteractionSequence by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(0L) }
+                var seekFeedbackSequence by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(0L) }
                 var seekFeedbackState by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf<VideoPlayerSeekFeedbackState?>(null)
                 }
@@ -296,7 +328,9 @@ class VideoPlayerActivity : BaseActivity() {
                                     val latestPlaybackState = latestPlayback
                                     exoPlayer.applySubtitleSelection(latestPlaybackState.currentSubtitle)
                                     viewModel.updateAdaptiveQualities(exoPlayer.availableAdaptiveQualities())
-                                    viewModel.updateSubtitleOptions(exoPlayer.availableSubtitleTracks(latestPlaybackState.subtitles))
+                                    viewModel.updateSubtitleOptions(
+                                        exoPlayer.availableSubtitleTracks(latestPlaybackState.subtitles),
+                                    )
                                     val resolvedSubtitleSelection = exoPlayer.resolveAppliedSubtitleSelection(
                                         latestPlaybackState.currentSubtitle,
                                         latestPlaybackState.subtitles,
@@ -536,7 +570,11 @@ class VideoPlayerActivity : BaseActivity() {
                             playerView.setKeepContentOnPlayerReset(true)
                             playerView.useController = false
                             playerView.applySubtitleAppearance(
-                                appearance = if (subtitleEditorVisible) subtitleEditorDraft else current.playback.subtitleAppearance,
+                                appearance = if (subtitleEditorVisible) {
+                                    subtitleEditorDraft
+                                } else {
+                                    current.playback.subtitleAppearance
+                                },
                                 editorVisible = subtitleEditorVisible,
                             )
                             val gestureDetector = GestureDetector(
@@ -576,7 +614,11 @@ class VideoPlayerActivity : BaseActivity() {
                                     return@setOnTouchListener true
                                 }
                                 val handled = gestureDetector.onTouchEvent(motionEvent)
-                                if (!latestSettingsVisible && latestSeekGestureModeActive && motionEvent.actionMasked == MotionEvent.ACTION_UP) {
+                                if (
+                                    !latestSettingsVisible &&
+                                    latestSeekGestureModeActive &&
+                                    motionEvent.actionMasked == MotionEvent.ACTION_UP
+                                ) {
                                     val direction = latestResolveSeekDirectionFromTap(motionEvent.x, playerView.width)
                                     if (direction != null) {
                                         if (ignoreNextGestureSeekTapUp) {
@@ -638,7 +680,9 @@ class VideoPlayerActivity : BaseActivity() {
                                 scrubPositionMs = positionMs.coerceToPlaybackDuration(playbackSnapshot.durationMs)
                             },
                             onScrubFinished = {
-                                val targetPositionMs = scrubPositionMs.coerceToPlaybackDuration(playbackSnapshot.durationMs)
+                                val targetPositionMs = scrubPositionMs.coerceToPlaybackDuration(
+                                    playbackSnapshot.durationMs,
+                                )
                                 isScrubbing = false
                                 scrubPositionMs = targetPositionMs
                                 playbackSnapshot = playbackSnapshot.copy(positionMs = targetPositionMs)
@@ -929,7 +973,8 @@ class VideoPlayerActivity : BaseActivity() {
     }
 
     companion object {
-        private const val ACTION_PICTURE_IN_PICTURE_TOGGLE_PLAYBACK = "eu.kanade.tachiyomi.ui.video.player.action.TOGGLE_PLAYBACK"
+        private const val ACTION_PICTURE_IN_PICTURE_TOGGLE_PLAYBACK =
+            "eu.kanade.tachiyomi.ui.video.player.action.TOGGLE_PLAYBACK"
         private const val EXTRA_VIDEO_ID = "video_id"
         private const val EXTRA_OWNER_VIDEO_ID = "owner_video_id"
         private const val EXTRA_EPISODE_ID = "episode_id"

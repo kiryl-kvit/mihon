@@ -42,6 +42,12 @@ import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.extension.ExtensionManager
+import eu.kanade.tachiyomi.ui.anime.AnimeBrowseTab
+import eu.kanade.tachiyomi.ui.anime.AnimeHistoryTab
+import eu.kanade.tachiyomi.ui.anime.AnimeLibraryTab
+import eu.kanade.tachiyomi.ui.anime.AnimeMoreTab
+import eu.kanade.tachiyomi.ui.anime.AnimeScreen
+import eu.kanade.tachiyomi.ui.anime.AnimeUpdatesTab
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
 import eu.kanade.tachiyomi.ui.history.HistoryTab
@@ -49,12 +55,6 @@ import eu.kanade.tachiyomi.ui.library.LibraryTab
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.more.MoreTab
 import eu.kanade.tachiyomi.ui.updates.UpdatesTab
-import eu.kanade.tachiyomi.ui.anime.AnimeBrowseTab
-import eu.kanade.tachiyomi.ui.anime.AnimeHistoryTab
-import eu.kanade.tachiyomi.ui.anime.AnimeLibraryTab
-import eu.kanade.tachiyomi.ui.anime.AnimeMoreTab
-import eu.kanade.tachiyomi.ui.anime.AnimeScreen
-import eu.kanade.tachiyomi.ui.anime.AnimeUpdatesTab
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -70,10 +70,10 @@ import mihon.feature.profiles.core.ProfileManager
 import mihon.feature.profiles.core.ProfileStore
 import mihon.feature.profiles.ui.ProfilePickerScreen
 import mihon.feature.profiles.ui.handleProfileShortcut
-import tachiyomi.domain.profile.model.ProfileType
 import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.profile.model.ProfileType
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.NavigationBar
 import tachiyomi.presentation.core.components.material.NavigationRail
@@ -306,7 +306,9 @@ object HomeScreen : Screen() {
                         if (it is Tab.Library && it.mangaIdToOpen != null && resolvedTab::class == LibraryTab::class) {
                             navigator.push(MangaScreen(it.mangaIdToOpen))
                         }
-                        if (it is Tab.Library && it.animeIdToOpen != null && resolvedTab::class == AnimeLibraryTab::class) {
+                        if (it is Tab.Library && it.animeIdToOpen != null &&
+                            resolvedTab::class == AnimeLibraryTab::class
+                        ) {
                             navigator.push(AnimeScreen(it.animeIdToOpen))
                         }
                         if (it is Tab.More && resolvedTab::class == MoreTab::class && it.toDownloads) {

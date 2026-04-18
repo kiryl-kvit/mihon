@@ -3,12 +3,12 @@ package eu.kanade.domain.source.interactor
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
 import eu.kanade.tachiyomi.source.AnimeSource
+import eu.kanade.tachiyomi.source.model.AnimesPage
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SEpisode
 import eu.kanade.tachiyomi.source.model.SAnime
+import eu.kanade.tachiyomi.source.model.SEpisode
 import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
-import eu.kanade.tachiyomi.source.model.AnimesPage
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
@@ -101,7 +101,10 @@ private data class FakeAnimeCatalogueSource(
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = error("Not used")
 
-    override suspend fun getPlaybackData(episode: SEpisode, selection: VideoPlaybackSelection): VideoPlaybackData = error("Not used")
+    override suspend fun getPlaybackData(
+        episode: SEpisode,
+        selection: VideoPlaybackSelection,
+    ): VideoPlaybackData = error("Not used")
 }
 
 internal class InteractorTestPreferenceStore : PreferenceStore {
@@ -117,7 +120,10 @@ internal class InteractorTestPreferenceStore : PreferenceStore {
 
     override fun getBoolean(key: String, defaultValue: Boolean): Preference<Boolean> = TestPreference(key, defaultValue)
 
-    override fun getStringSet(key: String, defaultValue: Set<String>): Preference<Set<String>> = TestPreference(key, defaultValue)
+    override fun getStringSet(
+        key: String,
+        defaultValue: Set<String>,
+    ): Preference<Set<String>> = TestPreference(key, defaultValue)
 
     override fun <T> getObjectFromString(
         key: String,

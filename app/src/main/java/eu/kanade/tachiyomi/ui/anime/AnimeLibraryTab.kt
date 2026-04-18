@@ -9,23 +9,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -52,9 +52,10 @@ import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
+import dev.icerock.moko.resources.StringResource
 import eu.kanade.core.preference.PreferenceMutableState
-import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.core.util.ifAnimeSourcesLoaded
+import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.presentation.anime.toMergeEditorEntry
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.TabbedDialog
@@ -63,23 +64,23 @@ import eu.kanade.presentation.library.components.GlobalSearchItem
 import eu.kanade.presentation.library.components.LanguageBadge
 import eu.kanade.presentation.library.components.LazyLibraryGrid
 import eu.kanade.presentation.library.components.LibraryPageEmptyScreen
-import eu.kanade.presentation.library.components.SharedLibraryContent
 import eu.kanade.presentation.library.components.LibraryToolbar
-import eu.kanade.presentation.manga.components.MergeEditorDialog
-import eu.kanade.presentation.manga.components.MergeEditorEntry
-import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.library.components.MangaCompactGridItem
 import eu.kanade.presentation.library.components.MangaListItem
-import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
+import eu.kanade.presentation.library.components.SharedLibraryContent
 import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
+import eu.kanade.presentation.manga.components.MangaCover
+import eu.kanade.presentation.manga.components.MergeEditorDialog
+import eu.kanade.presentation.manga.components.MergeEditorEntry
+import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.library.AnimeLibraryUpdateJob
-import eu.kanade.tachiyomi.ui.library.LibraryPage
 import eu.kanade.tachiyomi.ui.anime.browse.globalsearch.AnimeGlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
+import eu.kanade.tachiyomi.ui.library.LibraryPage
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerActivity
 import kotlinx.collections.immutable.persistentListOf
@@ -87,8 +88,6 @@ import kotlinx.collections.immutable.toPersistentList
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import dev.icerock.moko.resources.StringResource
-import tachiyomi.core.common.i18n.stringResource as contextStringResource
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
@@ -111,6 +110,7 @@ import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.plus
+import tachiyomi.core.common.i18n.stringResource as contextStringResource
 
 data object AnimeLibraryTab : Tab {
 
@@ -866,7 +866,9 @@ private fun AnimeLibrarySettingsDialog(
                                     },
                                     onChange = {
                                         screenModel
-                                            .getColumnsForOrientation(configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+                                            .getColumnsForOrientation(
+                                                configuration.orientation == Configuration.ORIENTATION_LANDSCAPE,
+                                            )
                                             .value = it
                                     },
                                     pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,

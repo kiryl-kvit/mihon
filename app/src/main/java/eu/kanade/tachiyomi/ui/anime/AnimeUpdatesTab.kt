@@ -24,8 +24,8 @@ import eu.kanade.presentation.updates.UpdatesScreenState
 import eu.kanade.presentation.updates.animeUpdatesFilterOptions
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesScreenModel
 import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesItem
+import eu.kanade.tachiyomi.ui.anime.updates.AnimeUpdatesScreenModel
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.updates.UpdatesSettingsScreenModel

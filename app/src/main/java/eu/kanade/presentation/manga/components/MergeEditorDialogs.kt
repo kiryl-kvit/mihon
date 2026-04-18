@@ -406,7 +406,11 @@ private fun ReorderableCollectionItemScope.MergeEditorItem(
                                         text = {
                                             Text(
                                                 stringResource(
-                                                    if (markedForRemoval) MR.strings.action_keep else MR.strings.action_remove,
+                                                    if (markedForRemoval) {
+                                                        MR.strings.action_keep
+                                                    } else {
+                                                        MR.strings.action_remove
+                                                    },
                                                 ),
                                             )
                                         },
@@ -440,7 +444,11 @@ private fun ReorderableCollectionItemScope.MergeEditorItem(
                                         text = {
                                             Text(
                                                 stringResource(
-                                                    if (isTarget) MR.strings.action_open_merged_entry else MR.strings.action_open,
+                                                    if (isTarget) {
+                                                        MR.strings.action_open_merged_entry
+                                                    } else {
+                                                        MR.strings.action_open
+                                                    },
                                                 ),
                                             )
                                         },

@@ -2,15 +2,15 @@ package tachiyomi.domain.anime.interactor
 
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
 import eu.kanade.tachiyomi.source.AnimeSource
+import eu.kanade.tachiyomi.source.model.AnimesPage
 import eu.kanade.tachiyomi.source.model.FilterList
-import eu.kanade.tachiyomi.source.model.SEpisode
 import eu.kanade.tachiyomi.source.model.SAnime
+import eu.kanade.tachiyomi.source.model.SEpisode
 import eu.kanade.tachiyomi.source.model.VideoPlaybackData
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
-import eu.kanade.tachiyomi.source.model.AnimesPage
-import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.Flow
@@ -20,13 +20,13 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
-import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.source.service.AnimeSourceManager
 
 class SyncAnimeWithSourceTest {
 
@@ -534,7 +534,9 @@ class SyncAnimeWithSourceTest {
             removals += episodeIds
         }
 
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> {
+            return episodes.filter { it.animeId == animeId }
+        }
 
         override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = emptyFlow()
 
@@ -568,7 +570,11 @@ class SyncAnimeWithSourceTest {
 
         override suspend fun getPopularAnime(page: Int): AnimesPage = error("Not used")
 
-        override suspend fun getSearchAnime(page: Int, query: String, filters: FilterList): AnimesPage = error("Not used")
+        override suspend fun getSearchAnime(
+            page: Int,
+            query: String,
+            filters: FilterList,
+        ): AnimesPage = error("Not used")
 
         override suspend fun getLatestUpdates(page: Int): AnimesPage = error("Not used")
 
@@ -578,6 +584,9 @@ class SyncAnimeWithSourceTest {
 
         override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> = episodes
 
-        override suspend fun getPlaybackData(episode: SEpisode, selection: VideoPlaybackSelection): VideoPlaybackData = error("Not used")
+        override suspend fun getPlaybackData(
+            episode: SEpisode,
+            selection: VideoPlaybackSelection,
+        ): VideoPlaybackData = error("Not used")
     }
 }

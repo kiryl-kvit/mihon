@@ -4,8 +4,8 @@ import android.content.Context
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.extension.interactor.GetAnimeExtensionSources
-import eu.kanade.domain.source.interactor.ToggleIncognito
 import eu.kanade.domain.source.interactor.ToggleAnimeSource
+import eu.kanade.domain.source.interactor.ToggleIncognito
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension

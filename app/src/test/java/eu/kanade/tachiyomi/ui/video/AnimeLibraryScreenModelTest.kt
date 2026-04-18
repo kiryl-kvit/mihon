@@ -1,25 +1,30 @@
+@file:Suppress("ktlint:standard:max-line-length")
+
 package eu.kanade.tachiyomi.ui.anime
 
 import android.app.Application
 import io.kotest.assertions.nondeterministic.eventually
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.flow.MutableStateFlow
+import io.mockk.mockk
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import io.mockk.mockk
+import mihon.feature.profiles.core.ProfileAwareStore
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import tachiyomi.core.common.preference.CheckboxState
+import tachiyomi.core.common.preference.InMemoryPreferenceStore
 import tachiyomi.core.common.preference.TriState
-import tachiyomi.domain.source.service.AnimeSourceManager
+import tachiyomi.domain.anime.interactor.GetMergedAnime
+import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeHistory
@@ -29,24 +34,21 @@ import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
-import tachiyomi.domain.anime.interactor.GetMergedAnime
-import tachiyomi.domain.anime.interactor.UpdateMergedAnime
-import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
+import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.category.interactor.GetAnimeCategories
-import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.interactor.SetSortModeForCategory
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.category.repository.CategoryRepository
 import tachiyomi.domain.library.model.LibraryGroupType
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.core.common.preference.InMemoryPreferenceStore
-import mihon.feature.profiles.core.ProfileAwareStore
+import tachiyomi.domain.source.service.AnimeSourceManager
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -74,9 +76,30 @@ class AnimeLibraryScreenModelTest {
             initialized = true,
             url = "/video/1",
         )
-        val firstEpisode = AnimeEpisode.create().copy(id = 10L, animeId = 1L, url = "/e/1", name = "Episode 1", sourceOrder = 0L, completed = false)
-        val secondEpisode = AnimeEpisode.create().copy(id = 11L, animeId = 1L, url = "/e/2", name = "Episode 2", sourceOrder = 1L, completed = false)
-        val inProgress = AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = false, lastWatchedAt = 100L)
+        val firstEpisode = AnimeEpisode.create().copy(
+            id = 10L,
+            animeId = 1L,
+            url = "/e/1",
+            name = "Episode 1",
+            sourceOrder = 0L,
+            completed = false,
+        )
+        val secondEpisode = AnimeEpisode.create().copy(
+            id = 11L,
+            animeId = 1L,
+            url = "/e/2",
+            name = "Episode 2",
+            sourceOrder = 1L,
+            completed = false,
+        )
+        val inProgress =
+            AnimePlaybackState(
+                episodeId = secondEpisode.id,
+                positionMs = 5_000L,
+                durationMs = 10_000L,
+                completed = false,
+                lastWatchedAt = 100L,
+            )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(video)),
@@ -165,8 +188,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `filters library by unwatched anime preference`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             animeFilterUnwatched.set(TriState.ENABLED_IS)
         }
@@ -204,10 +241,29 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `filters library by started anime preference`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Started", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Not started", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Started",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Not started",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val firstEpisode = AnimeEpisode.create().copy(id = 10L, animeId = first.id, watched = true, completed = false)
-        val secondEpisode = AnimeEpisode.create().copy(id = 11L, animeId = second.id, watched = false, completed = false)
+        val secondEpisode = AnimeEpisode.create().copy(
+            id = 11L,
+            animeId = second.id,
+            watched = false,
+            completed = false,
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             animeFilterStarted.set(TriState.ENABLED_IS)
         }
@@ -284,8 +340,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `search supports anime id queries`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(first, second)),
@@ -314,8 +384,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `search supports anime source id queries`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(first, second)),
@@ -344,8 +428,24 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `search supports negated genre and source matching`() = runTest(dispatcher) {
-        val action = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Action", favorite = true, initialized = true, url = "/video/1", genre = listOf("Action"))
-        val drama = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Drama", favorite = true, initialized = true, url = "/video/2", genre = listOf("Drama"))
+        val action = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Action",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+            genre = listOf("Action"),
+        )
+        val drama = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Drama",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+            genre = listOf("Drama"),
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(action, drama)),
@@ -379,8 +479,24 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `sorts anime library by date added`() = runTest(dispatcher) {
-        val older = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Older", favorite = true, initialized = true, url = "/video/1", dateAdded = 100L)
-        val newer = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Newer", favorite = true, initialized = true, url = "/video/2", dateAdded = 200L)
+        val older = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Older",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+            dateAdded = 100L,
+        )
+        val newer = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Newer",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+            dateAdded = 200L,
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             sortingMode.set(LibrarySort(LibrarySort.Type.DateAdded, LibrarySort.Direction.Descending))
         }
@@ -410,8 +526,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `sorts anime library by unwatched count`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             sortingMode.set(LibrarySort(LibrarySort.Type.UnreadCount, LibrarySort.Direction.Descending))
         }
@@ -447,7 +577,14 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `unread badge preference hides badge count without affecting sort data`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/video/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             unreadBadge.set(false)
         }
@@ -484,7 +621,14 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `language badge preference clears source language`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/video/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             languageBadge.set(false)
         }
@@ -514,7 +658,14 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `continue watching follows manga library preference logic`() = runTest(dispatcher) {
-        val anime = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Anime", favorite = true, initialized = true, url = "/video/1")
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
         val episode = AnimeEpisode.create().copy(id = 10L, animeId = anime.id, completed = false)
 
         val hiddenByContinuePref = AnimeLibraryScreenModel(
@@ -659,9 +810,30 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `library merge dialog flattens existing merged selection into member entries`() = runTest(dispatcher) {
-        val target = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Target", favorite = true, initialized = true, url = "/video/1")
-        val member = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Member", favorite = true, initialized = true, url = "/video/2")
-        val extra = AnimeTitle.create().copy(id = 3L, source = 101L, title = "Extra", favorite = true, initialized = true, url = "/video/3")
+        val target = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val member = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
+        val extra = AnimeTitle.create().copy(
+            id = 3L,
+            source = 101L,
+            title = "Extra",
+            favorite = true,
+            initialized = true,
+            url = "/video/3",
+        )
         val mergedRepository = FakeMergedAnimeRepository(
             listOf(
                 AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
@@ -710,7 +882,14 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `category grouping hides system category when no anime are uncategorized`() = runTest(dispatcher) {
-        val categorized = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Categorized", favorite = true, initialized = true, url = "/video/1")
+        val categorized = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Categorized",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
         val categories = listOf(
             Category(Category.UNCATEGORIZED_ID, "", -1L, 0L),
             Category(id = 1L, name = "Favorites", order = 0L, flags = 0L),
@@ -743,8 +922,17 @@ class AnimeLibraryScreenModelTest {
     }
 
     @Test
-    fun `category grouping shows system category for uncategorized anime and preserves empty categories`() = runTest(dispatcher) {
-        val uncategorized = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Uncategorized", favorite = true, initialized = true, url = "/video/1")
+    fun `category grouping shows system category for uncategorized anime and preserves empty categories`() = runTest(
+        dispatcher,
+    ) {
+        val uncategorized = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Uncategorized",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
         val categories = listOf(
             Category(Category.UNCATEGORIZED_ID, "", -1L, 0L),
             Category(id = 1L, name = "Favorites", order = 0L, flags = 0L),
@@ -781,7 +969,14 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `category extension preserves empty category pages`() = runTest(dispatcher) {
-        val uncategorized = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Uncategorized", favorite = true, initialized = true, url = "/video/1")
+        val uncategorized = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Uncategorized",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
         val categories = listOf(
             Category(Category.UNCATEGORIZED_ID, "", -1L, 0L),
             Category(id = 1L, name = "Favorites", order = 0L, flags = 0L),
@@ -818,8 +1013,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `extension category omits empty source category combinations`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val categories = listOf(
             Category(Category.UNCATEGORIZED_ID, "", -1L, 0L),
             Category(id = 1L, name = "Favorites", order = 0L, flags = 0L),
@@ -859,8 +1068,24 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `uses category sort override only when grouped by category`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Alpha", favorite = true, initialized = true, url = "/video/1", dateAdded = 100L)
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Zulu", favorite = true, initialized = true, url = "/video/2", dateAdded = 200L)
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Alpha",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+            dateAdded = 100L,
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Zulu",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+            dateAdded = 200L,
+        )
         val category = Category(
             id = 1L,
             name = "Favorites",
@@ -904,8 +1129,24 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `ignores category sort override when not grouped by category`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Alpha", favorite = true, initialized = true, url = "/video/1", dateAdded = 100L)
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Zulu", favorite = true, initialized = true, url = "/video/2", dateAdded = 200L)
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Alpha",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+            dateAdded = 100L,
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Zulu",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+            dateAdded = 200L,
+        )
         val category = Category(
             id = 1L,
             name = "Favorites",
@@ -947,8 +1188,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `toggle selection enters and clears selection mode`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(first, second)),
@@ -983,9 +1238,30 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `range selection selects inclusive range on same page`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Alpha", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Beta", favorite = true, initialized = true, url = "/video/2")
-        val third = AnimeTitle.create().copy(id = 3L, source = 99L, title = "Gamma", favorite = true, initialized = true, url = "/video/3")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Alpha",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Beta",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
+        val third = AnimeTitle.create().copy(
+            id = 3L,
+            source = 99L,
+            title = "Gamma",
+            favorite = true,
+            initialized = true,
+            url = "/video/3",
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(first, second, third)),
@@ -1016,8 +1292,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `range selection does not cross pages`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Source A", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 100L, title = "Source B", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Source A",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Source B",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             groupType.set(LibraryGroupType.Extension)
         }
@@ -1055,9 +1345,30 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `select all selects active page only`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Source A1", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Source A2", favorite = true, initialized = true, url = "/video/2")
-        val third = AnimeTitle.create().copy(id = 3L, source = 100L, title = "Source B1", favorite = true, initialized = true, url = "/video/3")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Source A1",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Source A2",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
+        val third = AnimeTitle.create().copy(
+            id = 3L,
+            source = 100L,
+            title = "Source B1",
+            favorite = true,
+            initialized = true,
+            url = "/video/3",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             groupType.set(LibraryGroupType.Extension)
         }
@@ -1089,9 +1400,30 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `invert selection toggles active page only and preserves off-page selections`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "Source A1", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Source A2", favorite = true, initialized = true, url = "/video/2")
-        val third = AnimeTitle.create().copy(id = 3L, source = 100L, title = "Source B1", favorite = true, initialized = true, url = "/video/3")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Source A1",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Source A2",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
+        val third = AnimeTitle.create().copy(
+            id = 3L,
+            source = 100L,
+            title = "Source B1",
+            favorite = true,
+            initialized = true,
+            url = "/video/3",
+        )
         val prefs = LibraryPreferences(InMemoryPreferenceStore()).apply {
             groupType.set(LibraryGroupType.Extension)
         }
@@ -1133,8 +1465,22 @@ class AnimeLibraryScreenModelTest {
     fun `selection survives state rebuilds for visible items`() = runTest(dispatcher) {
         val store = InMemoryPreferenceStore()
         val prefs = LibraryPreferences(store)
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(first, second)),
@@ -1170,8 +1516,22 @@ class AnimeLibraryScreenModelTest {
     fun `bulk category dialog preselects common and mixed categories`() = runTest(dispatcher) {
         val common = Category(id = 1L, name = "Common", order = 0L, flags = 0L)
         val mixed = Category(id = 2L, name = "Mixed", order = 1L, flags = 0L)
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val categoryRepository = FakeCategoryRepository(
             categories = listOf(common, mixed),
             categoryIdsByAnimeId = mapOf(
@@ -1220,8 +1580,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `bulk category apply merges includes and excludes per anime`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val categoryRepository = FakeCategoryRepository(
             categories = listOf(
                 Category(id = 1L, name = "Keep", order = 0L, flags = 0L),
@@ -1266,8 +1640,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `remove dialog opens for selected anime`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
 
         val model = AnimeLibraryScreenModel(
             animeRepository = FakeAnimeRepository(listOf(first, second)),
@@ -1307,8 +1695,22 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `remove anime bulk-unfavorites selected anime`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val animeRepository = FakeAnimeRepository(listOf(first, second))
 
         val model = AnimeLibraryScreenModel(
@@ -1341,15 +1743,47 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `mark watched selection updates episodes and playback state`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val firstEpisode = AnimeEpisode.create().copy(id = 10L, animeId = first.id, watched = false, completed = false)
         val secondEpisode = AnimeEpisode.create().copy(id = 11L, animeId = second.id, watched = true, completed = false)
         val episodeRepository = FakeAnimeEpisodeRepository(listOf(firstEpisode, secondEpisode))
         val playbackRepository = FakeAnimePlaybackStateRepository(
             mapOf(
-                first.id to listOf(AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = false, lastWatchedAt = 100L)),
-                second.id to listOf(AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 7_500L, durationMs = 10_000L, completed = false, lastWatchedAt = 200L)),
+                first.id to
+                    listOf(
+                        AnimePlaybackState(
+                            episodeId = firstEpisode.id,
+                            positionMs = 5_000L,
+                            durationMs = 10_000L,
+                            completed = false,
+                            lastWatchedAt = 100L,
+                        ),
+                    ),
+                second.id to
+                    listOf(
+                        AnimePlaybackState(
+                            episodeId = secondEpisode.id,
+                            positionMs = 7_500L,
+                            durationMs = 10_000L,
+                            completed = false,
+                            lastWatchedAt = 200L,
+                        ),
+                    ),
             ),
         )
 
@@ -1390,8 +1824,20 @@ class AnimeLibraryScreenModelTest {
                 AnimeEpisodeUpdate(id = secondEpisode.id, watched = true, completed = true),
             )
             playbackRepository.upserts shouldBe listOf(
-                AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = true, lastWatchedAt = 100L),
-                AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 7_500L, durationMs = 10_000L, completed = true, lastWatchedAt = 200L),
+                AnimePlaybackState(
+                    episodeId = firstEpisode.id,
+                    positionMs = 5_000L,
+                    durationMs = 10_000L,
+                    completed = true,
+                    lastWatchedAt = 100L,
+                ),
+                AnimePlaybackState(
+                    episodeId = secondEpisode.id,
+                    positionMs = 7_500L,
+                    durationMs = 10_000L,
+                    completed = true,
+                    lastWatchedAt = 200L,
+                ),
             )
             model.state.value.selection shouldBe emptySet()
         }
@@ -1399,15 +1845,47 @@ class AnimeLibraryScreenModelTest {
 
     @Test
     fun `mark unwatched selection resets episodes and playback state`() = runTest(dispatcher) {
-        val first = AnimeTitle.create().copy(id = 1L, source = 99L, title = "First", favorite = true, initialized = true, url = "/video/1")
-        val second = AnimeTitle.create().copy(id = 2L, source = 99L, title = "Second", favorite = true, initialized = true, url = "/video/2")
+        val first = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "First",
+            favorite = true,
+            initialized = true,
+            url = "/video/1",
+        )
+        val second = AnimeTitle.create().copy(
+            id = 2L,
+            source = 99L,
+            title = "Second",
+            favorite = true,
+            initialized = true,
+            url = "/video/2",
+        )
         val firstEpisode = AnimeEpisode.create().copy(id = 10L, animeId = first.id, watched = true, completed = true)
         val secondEpisode = AnimeEpisode.create().copy(id = 11L, animeId = second.id, watched = true, completed = false)
         val episodeRepository = FakeAnimeEpisodeRepository(listOf(firstEpisode, secondEpisode))
         val playbackRepository = FakeAnimePlaybackStateRepository(
             mapOf(
-                first.id to listOf(AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 10_000L, durationMs = 10_000L, completed = true, lastWatchedAt = 100L)),
-                second.id to listOf(AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 5_000L, durationMs = 10_000L, completed = false, lastWatchedAt = 200L)),
+                first.id to
+                    listOf(
+                        AnimePlaybackState(
+                            episodeId = firstEpisode.id,
+                            positionMs = 10_000L,
+                            durationMs = 10_000L,
+                            completed = true,
+                            lastWatchedAt = 100L,
+                        ),
+                    ),
+                second.id to
+                    listOf(
+                        AnimePlaybackState(
+                            episodeId = secondEpisode.id,
+                            positionMs = 5_000L,
+                            durationMs = 10_000L,
+                            completed = false,
+                            lastWatchedAt = 200L,
+                        ),
+                    ),
             ),
         )
 
@@ -1448,8 +1926,20 @@ class AnimeLibraryScreenModelTest {
                 AnimeEpisodeUpdate(id = secondEpisode.id, watched = false, completed = false),
             )
             playbackRepository.upserts shouldBe listOf(
-                AnimePlaybackState(episodeId = firstEpisode.id, positionMs = 0L, durationMs = 10_000L, completed = false, lastWatchedAt = 100L),
-                AnimePlaybackState(episodeId = secondEpisode.id, positionMs = 0L, durationMs = 10_000L, completed = false, lastWatchedAt = 200L),
+                AnimePlaybackState(
+                    episodeId = firstEpisode.id,
+                    positionMs = 0L,
+                    durationMs = 10_000L,
+                    completed = false,
+                    lastWatchedAt = 100L,
+                ),
+                AnimePlaybackState(
+                    episodeId = secondEpisode.id,
+                    positionMs = 0L,
+                    durationMs = 10_000L,
+                    completed = false,
+                    lastWatchedAt = 200L,
+                ),
             )
             model.state.value.selection shouldBe emptySet()
         }
@@ -1473,7 +1963,9 @@ class AnimeLibraryScreenModelTest {
             updates += update
             return true
         }
-        override suspend fun updateAll(animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>): Boolean = true
+        override suspend fun updateAll(
+            animeUpdates: List<tachiyomi.domain.anime.model.AnimeTitleUpdate>,
+        ): Boolean = true
         override suspend fun insertNetworkAnime(animes: List<AnimeTitle>): List<AnimeTitle> = animes
         override suspend fun setAnimeCategories(animeId: Long, categoryIds: List<Long>) {
             setCategoriesCalls += animeId to categoryIds
@@ -1491,11 +1983,35 @@ class AnimeLibraryScreenModelTest {
             updateAllCalls += episodeUpdates
         }
         override suspend fun removeEpisodesWithIds(episodeIds: List<Long>) = Unit
-        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter { it.animeId == animeId }
-        override fun getEpisodesByAnimeIdAsFlow(animeId: Long): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId == animeId })
-        override fun getEpisodesByAnimeIdsAsFlow(animeIds: List<Long>): Flow<List<AnimeEpisode>> = flowOf(episodes.filter { it.animeId in animeIds })
+        override suspend fun getEpisodesByAnimeId(animeId: Long): List<AnimeEpisode> = episodes.filter {
+            it.animeId ==
+                animeId
+        }
+        override fun getEpisodesByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId ==
+                    animeId
+            },
+        )
+        override fun getEpisodesByAnimeIdsAsFlow(
+            animeIds: List<Long>,
+        ): Flow<List<AnimeEpisode>> = flowOf(
+            episodes.filter {
+                it.animeId in
+                    animeIds
+            },
+        )
         override suspend fun getEpisodeById(id: Long): AnimeEpisode? = episodes.firstOrNull { it.id == id }
-        override suspend fun getEpisodeByUrlAndAnimeId(url: String, animeId: Long): AnimeEpisode? = episodes.firstOrNull { it.url == url && it.animeId == animeId }
+        override suspend fun getEpisodeByUrlAndAnimeId(
+            url: String,
+            animeId: Long,
+        ): AnimeEpisode? = episodes.firstOrNull {
+            it.url ==
+                url &&
+                it.animeId == animeId
+        }
     }
 
     private class FakeAnimePlaybackStateRepository(
@@ -1503,11 +2019,16 @@ class AnimeLibraryScreenModelTest {
     ) : AnimePlaybackStateRepository {
         val upserts = mutableListOf<AnimePlaybackState>()
 
-        override suspend fun getByEpisodeId(episodeId: Long): AnimePlaybackState? = statesByVideoId.values.flatten().firstOrNull { it.episodeId == episodeId }
+        override suspend fun getByEpisodeId(episodeId: Long): AnimePlaybackState? = statesByVideoId.values.flatten().firstOrNull {
+            it.episodeId ==
+                episodeId
+        }
         override fun getByEpisodeIdAsFlow(episodeId: Long): Flow<AnimePlaybackState?> {
             return flowOf(statesByVideoId.values.flatten().firstOrNull { it.episodeId == episodeId })
         }
-        override fun getByAnimeIdAsFlow(animeId: Long): Flow<List<AnimePlaybackState>> = flowOf(statesByVideoId[animeId].orEmpty())
+        override fun getByAnimeIdAsFlow(
+            animeId: Long,
+        ): Flow<List<AnimePlaybackState>> = flowOf(statesByVideoId[animeId].orEmpty())
         override suspend fun upsert(state: AnimePlaybackState) {
             upserts += state
         }
@@ -1562,13 +2083,20 @@ class AnimeLibraryScreenModelTest {
             val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId ?: return emptyList()
             return merges.filter { it.targetId == targetId }
         }
-        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(run {
-            val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId
-            merges.filter { it.targetId == targetId }
-        })
-        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter { it.targetId == targetAnimeId }
+        override fun subscribeGroupByAnimeId(animeId: Long): Flow<List<AnimeMerge>> = flowOf(
+            run {
+                val targetId = merges.firstOrNull { it.animeId == animeId }?.targetId
+                merges.filter { it.targetId == targetId }
+            },
+        )
+        override suspend fun getGroupByTargetId(targetAnimeId: Long): List<AnimeMerge> = merges.filter {
+            it.targetId ==
+                targetAnimeId
+        }
         override suspend fun getTargetId(animeId: Long): Long? = merges.firstOrNull { it.animeId == animeId }?.targetId
-        override fun subscribeTargetId(animeId: Long): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
+        override fun subscribeTargetId(
+            animeId: Long,
+        ): Flow<Long?> = flowOf(merges.firstOrNull { it.animeId == animeId }?.targetId)
         override suspend fun upsertGroup(targetAnimeId: Long, orderedAnimeIds: List<Long>) {
             merges = merges.filterNot { it.animeId in orderedAnimeIds } + orderedAnimeIds.mapIndexed { index, animeId ->
                 AnimeMerge(targetId = targetAnimeId, animeId = animeId, position = index.toLong())

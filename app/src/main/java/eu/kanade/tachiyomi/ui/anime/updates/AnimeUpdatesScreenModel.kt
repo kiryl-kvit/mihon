@@ -36,14 +36,14 @@ import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.lang.withUIContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.anime.interactor.GetAnime
-import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.interactor.GetAnimeUpdates
+import tachiyomi.domain.anime.interactor.GetMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
 import tachiyomi.domain.anime.model.AnimeUpdatesWithRelations
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
-import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.manga.model.MangaCover
 import tachiyomi.domain.updates.service.UpdatesPreferences
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt

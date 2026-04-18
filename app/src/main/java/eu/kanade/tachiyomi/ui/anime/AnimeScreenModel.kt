@@ -3,23 +3,24 @@ package eu.kanade.tachiyomi.ui.anime
 import android.content.Context
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Immutable
-import eu.kanade.domain.anime.model.episodesFiltered
+import cafe.adriel.voyager.core.model.StateScreenModel
+import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.core.util.addOrRemove
+import eu.kanade.domain.anime.model.episodesFiltered
 import eu.kanade.presentation.anime.AnimeMergeTarget
 import eu.kanade.presentation.anime.buildAnimeMergeTargets
 import eu.kanade.presentation.anime.matchesQuery
 import eu.kanade.presentation.anime.toMergeEditorEntry
 import eu.kanade.presentation.manga.components.MergeEditorEntry
-import eu.kanade.tachiyomi.source.AnimeScheduleSource
 import eu.kanade.presentation.updates.UpdatesSelectionState
-import eu.kanade.tachiyomi.source.AnimeWebViewSource
-import cafe.adriel.voyager.core.model.StateScreenModel
-import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.presentation.util.formattedMessage
+import eu.kanade.tachiyomi.source.AnimeScheduleSource
+import eu.kanade.tachiyomi.source.AnimeWebViewSource
+import eu.kanade.tachiyomi.source.model.SAnimeScheduleEpisode
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -29,19 +30,16 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import tachiyomi.core.common.util.lang.launchNonCancellable
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import logcat.LogPriority
-import tachiyomi.core.common.preference.CheckboxState
+import mihon.domain.anime.model.toSAnime
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.mapAsCheckboxState
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.core.common.util.lang.launchNonCancellable
 import tachiyomi.core.common.util.system.logcat
-import tachiyomi.domain.category.interactor.GetCategories
-import tachiyomi.domain.category.interactor.GetAnimeCategories
-import tachiyomi.domain.category.interactor.SetAnimeCategories
-import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
 import tachiyomi.domain.anime.interactor.GetDuplicateLibraryAnime
 import tachiyomi.domain.anime.interactor.GetMergedAnime
@@ -51,12 +49,12 @@ import tachiyomi.domain.anime.interactor.SetAnimeEpisodeFlags
 import tachiyomi.domain.anime.interactor.SyncAnimeWithSource
 import tachiyomi.domain.anime.interactor.UpdateMergedAnime
 import tachiyomi.domain.anime.model.AnimeEpisode
-import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimeEpisodeUpdate
+import tachiyomi.domain.anime.model.AnimeMerge
 import tachiyomi.domain.anime.model.AnimePlaybackState
-import tachiyomi.domain.anime.model.DuplicateAnimeCandidate
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.AnimeTitleUpdate
+import tachiyomi.domain.anime.model.DuplicateAnimeCandidate
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
@@ -64,6 +62,10 @@ import tachiyomi.domain.anime.repository.MergedAnimeRepository
 import tachiyomi.domain.anime.service.groupedByMergedMember
 import tachiyomi.domain.anime.service.sortedForMergedDisplay
 import tachiyomi.domain.anime.service.sortedForReading
+import tachiyomi.domain.category.interactor.GetAnimeCategories
+import tachiyomi.domain.category.interactor.GetCategories
+import tachiyomi.domain.category.interactor.SetAnimeCategories
+import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
@@ -73,8 +75,6 @@ import uy.kohesive.injekt.api.get
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import eu.kanade.tachiyomi.source.model.SAnimeScheduleEpisode
-import mihon.domain.anime.model.toSAnime
 
 class AnimeScreenModel(
     private val context: Context,
@@ -520,7 +520,14 @@ class AnimeScreenModel(
     fun showDuplicateDialog() {
         val currentState = successState ?: return
         if (currentState.duplicateCandidates.isEmpty()) return
-        updateSuccessState { it.copy(dialog = Dialog.DuplicateAnime(currentState.anime, currentState.duplicateCandidates)) }
+        updateSuccessState {
+            it.copy(
+                dialog = Dialog.DuplicateAnime(
+                    currentState.anime,
+                    currentState.duplicateCandidates,
+                ),
+            )
+        }
     }
 
     fun showMergeTargetPicker() {
@@ -885,7 +892,8 @@ class AnimeScreenModel(
             val scheduleSummary: ScheduleSummary
                 get() = when (val schedule = schedule) {
                     ScheduleState.NotLoaded,
-                    ScheduleState.Loading -> ScheduleSummary.Loading
+                    ScheduleState.Loading,
+                    -> ScheduleSummary.Loading
                     is ScheduleState.Success -> {
                         val today = LocalDate.now(ZoneId.systemDefault())
                         val upcomingCount = schedule.entries.count { it.isUpcoming(today) }
@@ -1254,7 +1262,9 @@ class AnimeScreenModel(
         return runCatching { animeRepository.getAnimeById(id) }.getOrNull()
     }
 
-    private suspend fun getMergeTargets(excludedAnimeIds: Set<Long>): kotlinx.collections.immutable.ImmutableList<AnimeMergeTarget> {
+    private suspend fun getMergeTargets(
+        excludedAnimeIds: Set<Long>,
+    ): kotlinx.collections.immutable.ImmutableList<AnimeMergeTarget> {
         val libraryAnime = animeRepository.getFavorites()
         val categoryIdsByAnimeId = libraryAnime.associate { anime ->
             anime.id to getAnimeCategories.await(anime.id).map(Category::id)
@@ -1435,7 +1445,10 @@ private fun List<AnimeEpisode>.sortEpisodes(
         AnimeTitle.EPISODE_SORTING_UPLOAD_DATE -> compareBy<AnimeEpisode> {
             it.dateUpload.takeIf { date -> date > 0L } ?: Long.MAX_VALUE
         }.thenBy { it.sourceOrder }
-        AnimeTitle.EPISODE_SORTING_ALPHABET -> compareBy<AnimeEpisode>({ it.name.ifBlank { it.url } }, { it.sourceOrder })
+        AnimeTitle.EPISODE_SORTING_ALPHABET -> compareBy<AnimeEpisode>(
+            { it.name.ifBlank { it.url } },
+            { it.sourceOrder },
+        )
         else -> compareBy<AnimeEpisode> { it.sourceOrder }
     }
     return if (ascending) {

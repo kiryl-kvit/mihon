@@ -86,7 +86,8 @@ class MergedEpisodeSequenceTest {
             episode(id = 301, animeId = 3, episodeNumber = 1.0),
         )
 
-        episodes.sortedForMergedDisplay(anime, mergedAnimeIds = listOf(1L, 2L, 3L)).map(AnimeEpisode::id) shouldBe listOf(101L, 301L)
+        episodes.sortedForMergedDisplay(anime, mergedAnimeIds = listOf(1L, 2L, 3L)).map(AnimeEpisode::id) shouldBe
+            listOf(101L, 301L)
     }
 
     @Test
@@ -101,7 +102,8 @@ class MergedEpisodeSequenceTest {
             episode(id = 301, animeId = 3, episodeNumber = 1.0),
         )
 
-        episodes.sortedForReading(anime, mergedAnimeIds = listOf(1L, 2L, 3L)).map(AnimeEpisode::id) shouldBe listOf(301L, 101L)
+        episodes.sortedForReading(anime, mergedAnimeIds = listOf(1L, 2L, 3L)).map(AnimeEpisode::id) shouldBe
+            listOf(301L, 101L)
     }
 
     private fun episode(

@@ -11,9 +11,9 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +27,7 @@ import eu.kanade.tachiyomi.ui.video.player.VideoPlayerSeekFeedbackState
 private val overlayBarsSlideAnimationSpec = tween<IntOffset>(190)
 private val overlayBarsFadeAnimationSpec = tween<Float>(125)
 private val overlayCenterFadeAnimationSpec = tween<Float>(110)
-private const val overlayUiWidthFraction = 0.8f
+private const val OVERLAY_UI_WIDTH_FRACTION = 0.8f
 
 @Composable
 internal fun VideoPlayerOverlay(
@@ -73,7 +73,7 @@ internal fun VideoPlayerOverlay(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth(overlayUiWidthFraction)) {
+                    Box(modifier = Modifier.fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)) {
                         VideoPlayerTopBar(
                             videoTitle = videoTitle,
                             episodeName = episodeName,
@@ -101,7 +101,7 @@ internal fun VideoPlayerOverlay(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth(overlayUiWidthFraction)) {
+                    Box(modifier = Modifier.fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)) {
                         VideoPlayerTimeline(
                             positionMs = displayedPositionMs,
                             durationMs = playbackSnapshot.durationMs,
@@ -129,9 +129,9 @@ internal fun VideoPlayerOverlay(
                     animationSpec = tween(100),
                     targetScale = 0.97f,
                 ),
-            ) {
-                Box(
-                    modifier = Modifier
+        ) {
+            Box(
+                modifier = Modifier
                     .background(
                         brush = Brush.radialGradient(
                             colors = listOf(
@@ -143,23 +143,23 @@ internal fun VideoPlayerOverlay(
                         ),
                     )
                     .fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(modifier = Modifier.fillMaxWidth(overlayUiWidthFraction)) {
-                        VideoPlayerCenterControls(
-                            isPlaying = playbackSnapshot.isPlaying,
-                            hasPreviousEpisode = hasPreviousEpisode,
-                            hasNextEpisode = hasNextEpisode,
-                            onPreviousEpisode = onPreviousEpisode,
-                            onSeekBackward = onSeekBackward,
-                            onTogglePlayback = onTogglePlayback,
-                            onSeekForward = onSeekForward,
-                            onNextEpisode = onNextEpisode,
-                            modifier = Modifier.background(Color.Transparent),
-                        )
-                    }
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(modifier = Modifier.fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)) {
+                    VideoPlayerCenterControls(
+                        isPlaying = playbackSnapshot.isPlaying,
+                        hasPreviousEpisode = hasPreviousEpisode,
+                        hasNextEpisode = hasNextEpisode,
+                        onPreviousEpisode = onPreviousEpisode,
+                        onSeekBackward = onSeekBackward,
+                        onTogglePlayback = onTogglePlayback,
+                        onSeekForward = onSeekForward,
+                        onNextEpisode = onNextEpisode,
+                        modifier = Modifier.background(Color.Transparent),
+                    )
                 }
             }
+        }
 
         AnimatedVisibility(
             visible = chromeVisible,

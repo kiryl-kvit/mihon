@@ -42,7 +42,9 @@ class AnimePlaybackPreferencesRepositoryImpl(
                 dubKey = preferences.dubKey,
                 streamKey = preferences.streamKey,
                 sourceQualityKey = preferences.sourceQualityKey,
-                playerQualityMode = AnimePlaybackPreferencesMapper.encodePlayerQualityMode(preferences.playerQualityMode),
+                playerQualityMode = AnimePlaybackPreferencesMapper.encodePlayerQualityMode(
+                    preferences.playerQualityMode,
+                ),
                 playerQualityHeight = preferences.playerQualityHeight?.toLong(),
                 subtitleOffsetX = preferences.subtitleOffsetX,
                 subtitleOffsetY = preferences.subtitleOffsetY,
@@ -60,7 +62,9 @@ class AnimePlaybackPreferencesRepositoryImpl(
                 dubKey = preferences.dubKey,
                 streamKey = preferences.streamKey,
                 sourceQualityKey = preferences.sourceQualityKey,
-                playerQualityMode = AnimePlaybackPreferencesMapper.encodePlayerQualityMode(preferences.playerQualityMode),
+                playerQualityMode = AnimePlaybackPreferencesMapper.encodePlayerQualityMode(
+                    preferences.playerQualityMode,
+                ),
                 playerQualityHeight = preferences.playerQualityHeight?.toLong(),
                 subtitleOffsetX = preferences.subtitleOffsetX,
                 subtitleOffsetY = preferences.subtitleOffsetY,

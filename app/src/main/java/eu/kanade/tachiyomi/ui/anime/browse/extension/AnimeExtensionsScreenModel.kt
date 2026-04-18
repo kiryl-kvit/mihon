@@ -191,5 +191,4 @@ class AnimeExtensionsScreenModel(
             extensionManager.trust(extension)
         }
     }
-
 }

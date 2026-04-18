@@ -62,7 +62,9 @@ fun AnimeTitle.episodeSortComparator(
         AnimeTitle.EPISODE_SORTING_UPLOAD_DATE -> compareBy<AnimeEpisode> {
             it.dateUpload.takeIf { date -> date > 0L } ?: Long.MAX_VALUE
         }.thenBy { it.sourceOrder }
-        AnimeTitle.EPISODE_SORTING_ALPHABET -> compareBy<AnimeEpisode>({ it.name.ifBlank { it.url } }, { it.sourceOrder })
+        AnimeTitle.EPISODE_SORTING_ALPHABET -> compareBy<AnimeEpisode>({
+            it.name.ifBlank { it.url }
+        }, { it.sourceOrder })
         else -> compareBy<AnimeEpisode> { it.sourceOrder }
     }
 
