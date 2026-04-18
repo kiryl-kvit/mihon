@@ -25,9 +25,14 @@
 -keep,allowoptimization class eu.kanade.tachiyomi.network.RequestsKt { public protected *; }
 -keep,allowoptimization class eu.kanade.tachiyomi.AppInfo { public protected *; }
 
-# Preserve the extension runtime ABI. Older manga extensions override HttpSource hooks,
-# and anime extensions rely on the published Source/AnimeSource getter signatures.
--keep class eu.kanade.tachiyomi.source.** { public protected *; }
+# Preserve the extension runtime ABI from extensions-lib. External extension APKs link
+# against these exact classes and Kotlin synthetic default-arg bridges, so R8 must not
+# rewrite signatures or method finality on this surface.
+-keep class eu.kanade.tachiyomi.source.** { *; }
+-keep class eu.kanade.tachiyomi.network.** { *; }
+-keep class eu.kanade.tachiyomi.util.JsoupExtensionsKt { *; }
+-keep class eu.kanade.tachiyomi.util.RxExtensionKt { *; }
+-keep class tachiyomi.core.common.util.lang.RxCoroutineBridgeKt { *; }
 
 ##---------------Begin: proguard configuration for RxJava 1.x  ----------
 -dontwarn sun.misc.**
