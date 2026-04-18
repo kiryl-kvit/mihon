@@ -119,7 +119,7 @@ private fun RowScope.VideoPlayerControlSlot(
 }
 
 @Composable
-private fun VideoPlayerTransportButton(
+internal fun VideoPlayerTransportButton(
     icon: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,

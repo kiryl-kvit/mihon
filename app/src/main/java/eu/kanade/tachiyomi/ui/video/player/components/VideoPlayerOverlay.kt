@@ -10,8 +10,10 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -32,6 +34,7 @@ private const val OVERLAY_UI_WIDTH_FRACTION = 0.8f
 @Composable
 internal fun VideoPlayerOverlay(
     visible: Boolean,
+    locked: Boolean,
     videoTitle: String,
     episodeName: String,
     playbackSnapshot: VideoPlayerPlaybackSnapshot,
@@ -40,11 +43,14 @@ internal fun VideoPlayerOverlay(
     hasPreviousEpisode: Boolean,
     hasNextEpisode: Boolean,
     seekFeedbackState: VideoPlayerSeekFeedbackState?,
+    sideGestureFeedbackState: eu.kanade.tachiyomi.ui.video.player.VideoPlayerSideGestureFeedbackState?,
     hideChromeForSeekFeedback: Boolean,
     onSeekFeedbackDismissed: () -> Unit,
+    onSideGestureFeedbackDismissed: () -> Unit,
     onBack: () -> Unit,
     showPictureInPictureButton: Boolean,
     onEnterPictureInPicture: () -> Unit,
+    onToggleLock: () -> Unit,
     onOpenSettings: () -> Unit,
     onPreviousEpisode: () -> Unit,
     onSeekBackward: () -> Unit,
@@ -56,7 +62,8 @@ internal fun VideoPlayerOverlay(
     onScrubFinished: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val chromeVisible = visible && !hideChromeForSeekFeedback
+    val chromeVisible = visible && !hideChromeForSeekFeedback && !locked
+    val lockedChromeVisible = visible && !hideChromeForSeekFeedback && locked
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -71,20 +78,18 @@ internal fun VideoPlayerOverlay(
                     animationSpec = overlayBarsSlideAnimationSpec,
                 ) + fadeOut(animationSpec = overlayBarsFadeAnimationSpec),
             ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
+                VideoPlayerChromeContainer(
                     contentAlignment = Alignment.TopCenter,
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)) {
-                        VideoPlayerTopBar(
-                            videoTitle = videoTitle,
-                            episodeName = episodeName,
-                            onBack = onBack,
-                            showPictureInPictureButton = showPictureInPictureButton,
-                            onEnterPictureInPicture = onEnterPictureInPicture,
-                            onOpenSettings = onOpenSettings,
-                        )
-                    }
+                    VideoPlayerTopBar(
+                        videoTitle = videoTitle,
+                        episodeName = episodeName,
+                        onBack = onBack,
+                        showPictureInPictureButton = showPictureInPictureButton,
+                        onEnterPictureInPicture = onEnterPictureInPicture,
+                        onToggleLock = onToggleLock,
+                        onOpenSettings = onOpenSettings,
+                    )
                 }
             }
 
@@ -101,21 +106,18 @@ internal fun VideoPlayerOverlay(
                     animationSpec = overlayBarsSlideAnimationSpec,
                 ) + fadeOut(animationSpec = overlayBarsFadeAnimationSpec),
             ) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
+                VideoPlayerChromeContainer(
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)) {
-                        VideoPlayerTimeline(
-                            positionMs = displayedPositionMs,
-                            durationMs = playbackSnapshot.durationMs,
-                            bufferedPositionMs = playbackSnapshot.bufferedPositionMs,
-                            isScrubbing = isScrubbing,
-                            onScrubStarted = onScrubStarted,
-                            onScrubPositionChange = onScrubPositionChange,
-                            onScrubFinished = onScrubFinished,
-                        )
-                    }
+                    VideoPlayerTimeline(
+                        positionMs = displayedPositionMs,
+                        durationMs = playbackSnapshot.durationMs,
+                        bufferedPositionMs = playbackSnapshot.bufferedPositionMs,
+                        isScrubbing = isScrubbing,
+                        onScrubStarted = onScrubStarted,
+                        onScrubPositionChange = onScrubPositionChange,
+                        onScrubFinished = onScrubFinished,
+                    )
                 }
             }
         }
@@ -149,7 +151,10 @@ internal fun VideoPlayerOverlay(
                     .fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(modifier = Modifier.fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)) {
+                VideoPlayerChromeContainer(
+                    modifier = Modifier.fillMaxSize(),
+                    matchParentHeight = true,
+                ) {
                     VideoPlayerCenterControls(
                         isPlaying = playbackSnapshot.isPlaying,
                         hasPreviousEpisode = hasPreviousEpisode,
@@ -161,6 +166,44 @@ internal fun VideoPlayerOverlay(
                         onNextEpisode = onNextEpisode,
                         modifier = Modifier.background(Color.Transparent),
                     )
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = lockedChromeVisible,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(animationSpec = overlayCenterFadeAnimationSpec) +
+                scaleIn(
+                    animationSpec = tween(120),
+                    initialScale = 0.94f,
+                ),
+            exit = fadeOut(animationSpec = overlayCenterFadeAnimationSpec) +
+                scaleOut(
+                    animationSpec = tween(100),
+                    targetScale = 0.97f,
+                ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.24f),
+                                Color.Black.copy(alpha = 0.1f),
+                                Color.Transparent,
+                            ),
+                            radius = 380f,
+                        ),
+                    )
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                VideoPlayerChromeContainer(
+                    modifier = Modifier.fillMaxSize(),
+                    matchParentHeight = true,
+                ) {
+                    VideoPlayerLockedOverlay(onUnlock = onToggleLock)
                 }
             }
         }
@@ -190,6 +233,39 @@ internal fun VideoPlayerOverlay(
             feedbackState = seekFeedbackState,
             onDismissed = onSeekFeedbackDismissed,
             modifier = Modifier.fillMaxSize(),
+        )
+
+        VideoPlayerSideGestureFeedback(
+            feedbackState = sideGestureFeedbackState,
+            onDismissed = onSideGestureFeedbackDismissed,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+internal fun VideoPlayerChromeContainer(
+    modifier: Modifier = Modifier,
+    matchParentHeight: Boolean = false,
+    contentAlignment: Alignment = Alignment.Center,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = contentAlignment,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(OVERLAY_UI_WIDTH_FRACTION)
+                .then(
+                    if (matchParentHeight) {
+                        Modifier.fillMaxHeight()
+                    } else {
+                        Modifier
+                    },
+                ),
+            contentAlignment = contentAlignment,
+            content = content,
         )
     }
 }

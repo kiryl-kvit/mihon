@@ -50,6 +50,18 @@ internal data class VideoPlayerSeekFeedbackState(
     val updatedAtMillis: Long,
 )
 
+internal enum class VideoPlayerSideGestureType {
+    Brightness,
+    Volume,
+}
+
+internal data class VideoPlayerSideGestureFeedbackState(
+    val type: VideoPlayerSideGestureType,
+    val level: Int,
+    val maxLevel: Int = 100,
+    val sequence: Long,
+)
+
 @OptIn(markerClass = [UnstableApi::class])
 internal fun buildVideoPlayer(
     context: Context,

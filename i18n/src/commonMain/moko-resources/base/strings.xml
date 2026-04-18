@@ -112,6 +112,8 @@
     <string name="action_view_episodes">View episodes</string>
     <string name="action_play">Play</string>
     <string name="action_pause">Pause</string>
+    <string name="action_lock">Lock</string>
+    <string name="action_unlock">Unlock</string>
     <string name="action_previous_chapter">Previous chapter</string>
     <string name="action_next_chapter">Next chapter</string>
     <string name="action_retry">Retry</string>
@@ -795,6 +797,11 @@
     <string name="anime_playback_subtitle_background_opacity">Background opacity</string>
     <string name="anime_playback_subtitle_recenter">Recenter</string>
     <string name="anime_playback_subtitle_sample">Subtitle preview</string>
+    <string name="anime_playback_brightness">Brightness</string>
+    <string name="anime_playback_volume">Volume</string>
+    <string name="anime_playback_lock_controls">Lock controls</string>
+    <string name="anime_playback_unlock_controls">Unlock controls</string>
+    <string name="anime_playback_controls_locked">Controls locked</string>
     <string name="pref_category_player">Player</string>
     <string name="pref_enable_anime_picture_in_picture">Picture-in-Picture</string>
     <string name="pref_enable_anime_picture_in_picture_summary">Automatically keep anime playback in a floating window when leaving the app</string>
