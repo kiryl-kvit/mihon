@@ -414,6 +414,203 @@ class AnimeScreenModelTest {
     }
 
     @Test
+    fun `merged schedule preloads all members in merge order`() = runTest(dispatcher) {
+        val target = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val member = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/anime/2",
+        )
+        val targetScheduleSource = FakeScheduleAnimeSource(
+            id = target.source,
+            scheduleEntries = listOf(
+                SAnimeScheduleEpisode(
+                    seasonNumber = 1,
+                    episodeNumber = 12f,
+                    title = "Target Finale",
+                    airDate = System.currentTimeMillis() + 172_800_000L,
+                    isAvailable = false,
+                ),
+            ),
+        )
+        val memberScheduleSource = FakeScheduleAnimeSource(
+            id = member.source,
+            scheduleEntries = listOf(
+                SAnimeScheduleEpisode(
+                    seasonNumber = 1,
+                    episodeNumber = 1f,
+                    title = "Member Premiere",
+                    airDate = System.currentTimeMillis() + 86_400_000L,
+                    isAvailable = false,
+                ),
+            ),
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 1L),
+            ),
+        )
+
+        val model = createModel(
+            anime = target,
+            episodes = emptyList(),
+            animeRepository = FakeAnimeRepository(listOf(target, member)),
+            animeSourceManager = FakeAnimeSourceManager(targetScheduleSource, memberScheduleSource),
+            mergedRepository = mergedRepository,
+        )
+
+        advanceUntilIdle()
+
+        eventually(2.seconds) {
+            val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+            state.showScheduleButton shouldBe true
+            state.scheduleSummary shouldBe AnimeScreenModel.ScheduleSummary.Upcoming(2)
+
+            val schedule = state.schedule.shouldBeInstanceOf<AnimeScreenModel.ScheduleState.Success>()
+            schedule.entries.map { it.memberId }.distinct() shouldContainExactly listOf(member.id, target.id)
+            schedule.entries.map { it.memberId to it.memberOrder }.distinct() shouldContainExactly listOf(
+                member.id to 0,
+                target.id to 1,
+            )
+            schedule.entries.map { it.memberTitle }.distinct() shouldContainExactly listOf("Member", "Target")
+            targetScheduleSource.scheduleRequests shouldBe 1
+            memberScheduleSource.scheduleRequests shouldBe 1
+        }
+    }
+
+    @Test
+    fun `merged schedule uses child support when root source has none`() = runTest(dispatcher) {
+        val target = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val member = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/anime/2",
+        )
+        val memberScheduleSource = FakeScheduleAnimeSource(
+            id = member.source,
+            scheduleEntries = listOf(
+                SAnimeScheduleEpisode(
+                    seasonNumber = 2,
+                    episodeNumber = 3f,
+                    title = "Child Schedule",
+                    airDate = System.currentTimeMillis() + 86_400_000L,
+                    isAvailable = false,
+                ),
+            ),
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+
+        val model = createModel(
+            anime = target,
+            episodes = emptyList(),
+            animeRepository = FakeAnimeRepository(listOf(target, member)),
+            animeSourceManager = FakeAnimeSourceManager(FakeAnimeSource(target.source), memberScheduleSource),
+            mergedRepository = mergedRepository,
+        )
+
+        advanceUntilIdle()
+
+        eventually(2.seconds) {
+            val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+            state.showScheduleButton shouldBe true
+            state.scheduleSummary shouldBe AnimeScreenModel.ScheduleSummary.Upcoming(1)
+
+            val schedule = state.schedule.shouldBeInstanceOf<AnimeScreenModel.ScheduleState.Success>()
+            schedule.entries.map { it.memberId } shouldContainExactly listOf(member.id)
+            memberScheduleSource.scheduleRequests shouldBe 1
+        }
+    }
+
+    @Test
+    fun `merged schedule keeps successful members when one member fails`() = runTest(dispatcher) {
+        val target = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val member = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/anime/2",
+        )
+        val targetScheduleSource = FakeScheduleAnimeSource(
+            id = target.source,
+            scheduleEntries = listOf(
+                SAnimeScheduleEpisode(
+                    seasonNumber = 1,
+                    episodeNumber = 10f,
+                    title = "Target Success",
+                    airDate = System.currentTimeMillis() + 86_400_000L,
+                    isAvailable = false,
+                ),
+            ),
+        )
+        val memberScheduleSource = FakeScheduleAnimeSource(
+            id = member.source,
+            error = IllegalStateException("boom"),
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+
+        val model = createModel(
+            anime = target,
+            episodes = emptyList(),
+            animeRepository = FakeAnimeRepository(listOf(target, member)),
+            animeSourceManager = FakeAnimeSourceManager(targetScheduleSource, memberScheduleSource),
+            mergedRepository = mergedRepository,
+        )
+
+        advanceUntilIdle()
+
+        eventually(2.seconds) {
+            val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+            state.showScheduleButton shouldBe true
+            state.scheduleSummary shouldBe AnimeScreenModel.ScheduleSummary.Upcoming(1)
+
+            val schedule = state.schedule.shouldBeInstanceOf<AnimeScreenModel.ScheduleState.Success>()
+            schedule.entries.map { it.memberId } shouldContainExactly listOf(target.id)
+            targetScheduleSource.scheduleRequests shouldBe 1
+            memberScheduleSource.scheduleRequests shouldBe 1
+        }
+    }
+
+    @Test
     fun `sort by episode number reorders episodes ascending`() = runTest(dispatcher) {
         val anime = AnimeTitle.create().copy(
             id = 1L,
@@ -885,16 +1082,22 @@ class AnimeScreenModelTest {
         override val isInitialized = MutableStateFlow(true)
         override val catalogueSources = flowOf(emptyList<eu.kanade.tachiyomi.source.AnimeCatalogueSource>())
 
+        private val sources = mutableMapOf<Long, eu.kanade.tachiyomi.source.AnimeSource>()
+
         constructor()
 
         constructor(source: eu.kanade.tachiyomi.source.AnimeSource) {
-            this.source = source
+            sources[source.id] = source
         }
 
-        private var source: eu.kanade.tachiyomi.source.AnimeSource? = null
+        constructor(vararg sources: eu.kanade.tachiyomi.source.AnimeSource) {
+            sources.forEach { source ->
+                this.sources[source.id] = source
+            }
+        }
 
         override fun get(sourceKey: Long): eu.kanade.tachiyomi.source.AnimeSource? =
-            source ?: FakeAnimeSource(sourceKey)
+            sources[sourceKey] ?: FakeAnimeSource(sourceKey)
         override fun getCatalogueSources(): List<eu.kanade.tachiyomi.source.AnimeCatalogueSource> = emptyList()
     }
 
@@ -942,9 +1145,10 @@ class AnimeScreenModelTest {
     }
 
     private class FakeScheduleAnimeSource(
+        override val id: Long = 99L,
         private val scheduleEntries: List<SAnimeScheduleEpisode> = emptyList(),
         private val error: Throwable? = null,
-    ) : FakeAnimeSource(id = 99L), AnimeScheduleSource {
+    ) : FakeAnimeSource(id = id), AnimeScheduleSource {
         var scheduleRequests = 0
 
         override suspend fun getEpisodeSchedule(anime: SAnime): List<SAnimeScheduleEpisode> {

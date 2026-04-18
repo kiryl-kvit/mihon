@@ -1736,15 +1736,13 @@ fun AnimeScheduleSheet(
             is AnimeScreenModel.ScheduleState.Success -> {
                 val listState = rememberLazyListState()
                 val today = LocalDate.now(ZoneId.systemDefault())
-                val upcomingEntries = remember(schedule.entries, today) {
+                val upcomingEntryGroups = remember(schedule.entries, today) {
                     schedule.entries
                         .filter { it.isUpcoming(today) }
-                        .sortedBy { it.airDate }
+                        .groupedForScheduleDisplay()
                 }
-                val entriesBySeason = remember(schedule.entries) {
-                    schedule.entries
-                        .groupBy { it.seasonNumber }
-                        .toSortedMap(compareBy(nullsFirst()) { it })
+                val scheduledEntryGroups = remember(schedule.entries) {
+                    schedule.entries.groupedForScheduleDisplay()
                 }
                 Box {
                     ScrollbarLazyColumn(
@@ -1768,32 +1766,23 @@ fun AnimeScheduleSheet(
                                 )
                             }
                         }
-                        if (upcomingEntries.isNotEmpty()) {
+                        if (upcomingEntryGroups.isNotEmpty()) {
                             item(key = "upcoming-header") {
                                 HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
                                 ListGroupHeader(text = stringResource(MR.strings.label_upcoming))
                             }
-                            items(
-                                items = upcomingEntries,
-                                key = { episode -> "upcoming-${episode.scheduleKey()}" },
+                            scheduleEntryGroups(
+                                prefix = "upcoming",
+                                groups = upcomingEntryGroups,
                             ) { episode ->
-                                AnimeScheduleRow(episode)
+                                AnimeScheduleRow(episode = episode, showMemberTitle = schedule.isMergedSchedule)
                             }
                         }
-                        entriesBySeason.forEach { (season, episodes) ->
-                            item(key = "season-$season") {
-                                HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
-                                ListGroupHeader(text = buildSeasonHeader(season))
-                            }
-                            items(
-                                items = episodes.sortedWith(
-                                    compareBy<AnimeScreenModel.AnimeScheduleEpisode> { it.airDate }
-                                        .thenBy { it.episodeNumber ?: Float.MAX_VALUE },
-                                ),
-                                key = { episode -> episode.scheduleKey() },
-                            ) { episode ->
-                                AnimeScheduleRow(episode)
-                            }
+                        scheduleEntryGroups(
+                            prefix = "schedule",
+                            groups = scheduledEntryGroups,
+                        ) { episode ->
+                            AnimeScheduleRow(episode = episode, showMemberTitle = schedule.isMergedSchedule)
                         }
                     }
                     if (listState.canScrollBackward) HorizontalDivider(modifier = Modifier.align(Alignment.TopCenter))
@@ -1805,7 +1794,10 @@ fun AnimeScheduleSheet(
 }
 
 @Composable
-private fun AnimeScheduleRow(episode: AnimeScreenModel.AnimeScheduleEpisode) {
+private fun AnimeScheduleRow(
+    episode: AnimeScreenModel.AnimeScheduleEpisode,
+    showMemberTitle: Boolean,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1814,6 +1806,15 @@ private fun AnimeScheduleRow(episode: AnimeScreenModel.AnimeScheduleEpisode) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
+            if (showMemberTitle) {
+                Text(
+                    text = episode.memberTitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 text = buildEpisodeLabel(episode),
                 style = MaterialTheme.typography.bodyMedium,
@@ -1843,6 +1844,30 @@ private fun AnimeScheduleRow(episode: AnimeScreenModel.AnimeScheduleEpisode) {
     }
 }
 
+private fun LazyListScope.scheduleEntryGroups(
+    prefix: String,
+    groups: List<ScheduleEntryGroup>,
+    rowContent: @Composable (AnimeScreenModel.AnimeScheduleEpisode) -> Unit,
+) {
+    groups.forEach { group ->
+        item(key = "$prefix-member-${group.memberId}") {
+            HorizontalDivider(modifier = Modifier.padding(top = 16.dp))
+            ListGroupHeader(text = group.memberTitle)
+        }
+        group.entriesBySeason.forEach { seasonGroup ->
+            item(key = "$prefix-member-${group.memberId}-season-${seasonGroup.seasonNumber ?: "unknown"}") {
+                ListSubheader(text = buildSeasonHeader(seasonGroup.seasonNumber))
+            }
+            items(
+                items = seasonGroup.entries,
+                key = { episode -> "$prefix-${episode.scheduleKey()}" },
+            ) { episode ->
+                rowContent(episode)
+            }
+        }
+    }
+}
+
 @Composable
 private fun buildScheduleSubtitle(entries: List<AnimeScreenModel.AnimeScheduleEpisode>): String {
     val today = LocalDate.now(ZoneId.systemDefault())
@@ -1869,6 +1894,16 @@ private fun buildSeasonHeader(seasonNumber: Int?): String {
 }
 
 @Composable
+private fun ListSubheader(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
 private fun buildEpisodeLabel(episode: AnimeScreenModel.AnimeScheduleEpisode): String {
     val episodeNumber = episode.episodeNumber
         ?.takeIf { it > 0f }
@@ -1883,7 +1918,46 @@ private fun buildEpisodeLabel(episode: AnimeScreenModel.AnimeScheduleEpisode): S
 }
 
 private fun AnimeScreenModel.AnimeScheduleEpisode.scheduleKey(): String {
-    return "${seasonNumber ?: "na"}-${episodeNumber ?: "na"}-$airDate-${title.orEmpty()}"
+    return "$memberId-$memberOrder-${seasonNumber ?: "na"}-${episodeNumber ?: "na"}-$airDate-${title.orEmpty()}"
+}
+
+private data class ScheduleEntryGroup(
+    val memberId: Long,
+    val memberTitle: String,
+    val entriesBySeason: List<ScheduleSeasonGroup>,
+)
+
+private data class ScheduleSeasonGroup(
+    val seasonNumber: Int?,
+    val entries: List<AnimeScreenModel.AnimeScheduleEpisode>,
+)
+
+private val AnimeScreenModel.ScheduleState.Success.isMergedSchedule: Boolean
+    get() = entries.map(AnimeScreenModel.AnimeScheduleEpisode::memberId).distinct().size > 1
+
+private fun List<AnimeScreenModel.AnimeScheduleEpisode>.groupedForScheduleDisplay(): List<ScheduleEntryGroup> {
+    return groupBy(AnimeScreenModel.AnimeScheduleEpisode::memberId)
+        .values
+        .sortedBy { memberEntries -> memberEntries.first().memberOrder }
+        .map { memberEntries ->
+            ScheduleEntryGroup(
+                memberId = memberEntries.first().memberId,
+                memberTitle = memberEntries.first().memberTitle,
+                entriesBySeason = memberEntries
+                    .groupBy(AnimeScreenModel.AnimeScheduleEpisode::seasonNumber)
+                    .toSortedMap(compareBy(nullsFirst()) { it })
+                    .map { (seasonNumber, seasonEntries) ->
+                        ScheduleSeasonGroup(
+                            seasonNumber = seasonNumber,
+                            entries = seasonEntries.sortedWith(
+                                compareBy<AnimeScreenModel.AnimeScheduleEpisode> { it.airDate }
+                                    .thenBy { it.episodeNumber ?: Float.MAX_VALUE }
+                                    .thenBy { it.title.orEmpty() },
+                            ),
+                        )
+                    },
+            )
+        }
 }
 
 @Composable
