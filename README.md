@@ -12,6 +12,7 @@
 - Browse → Feeds
 - Manga merge
 - Manga preview
+- Anime support (new profile type)
 
 <table>
   <tr>
