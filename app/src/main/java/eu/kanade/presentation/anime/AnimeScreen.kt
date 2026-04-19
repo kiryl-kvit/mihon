@@ -905,7 +905,7 @@ private fun AnimeActionRow(
 ) {
     val defaultActionButtonColor = MaterialTheme.colorScheme.onSurface.copy(alpha = DISABLED_ALPHA)
     val scheduleTitle = when (scheduleSummary) {
-        AnimeScreenModel.ScheduleSummary.Loading -> stringResource(MR.strings.loading)
+        AnimeScreenModel.ScheduleSummary.Loading -> stringResource(MR.strings.anime_schedule_loading)
         is AnimeScreenModel.ScheduleSummary.Upcoming -> pluralStringResource(
             MR.plurals.anime_num_upcoming_episodes,
             scheduleSummary.count,
@@ -917,9 +917,8 @@ private fun AnimeActionRow(
             scheduleSummary.count,
         )
         AnimeScreenModel.ScheduleSummary.Error -> stringResource(MR.strings.action_retry)
-        AnimeScreenModel.ScheduleSummary.Empty,
-        AnimeScreenModel.ScheduleSummary.Unavailable,
-        -> stringResource(MR.strings.not_applicable)
+        AnimeScreenModel.ScheduleSummary.Empty -> stringResource(MR.strings.not_found)
+        AnimeScreenModel.ScheduleSummary.Unavailable -> stringResource(MR.strings.not_applicable)
     }
     Row(modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)) {
         AnimeActionButton(
@@ -1524,8 +1523,10 @@ fun AnimeScheduleSheet(
                         .filter { it.isUpcoming(today) }
                         .groupedForScheduleDisplay()
                 }
-                val scheduledEntryGroups = remember(schedule.entries) {
-                    schedule.entries.groupedForScheduleDisplay()
+                val scheduledEntryGroups = remember(schedule.entries, today) {
+                    schedule.entries
+                        .filterNot { it.isUpcoming(today) }
+                        .groupedForScheduleDisplay()
                 }
                 Box {
                     ScrollbarLazyColumn(
@@ -1561,11 +1562,13 @@ fun AnimeScheduleSheet(
                                 AnimeScheduleRow(episode = episode, showMemberTitle = schedule.isMergedSchedule)
                             }
                         }
-                        scheduleEntryGroups(
-                            prefix = "schedule",
-                            groups = scheduledEntryGroups,
-                        ) { episode ->
-                            AnimeScheduleRow(episode = episode, showMemberTitle = schedule.isMergedSchedule)
+                        if (scheduledEntryGroups.isNotEmpty()) {
+                            scheduleEntryGroups(
+                                prefix = "schedule",
+                                groups = scheduledEntryGroups,
+                            ) { episode ->
+                                AnimeScheduleRow(episode = episode, showMemberTitle = schedule.isMergedSchedule)
+                            }
                         }
                     }
                     if (listState.canScrollBackward) HorizontalDivider(modifier = Modifier.align(Alignment.TopCenter))

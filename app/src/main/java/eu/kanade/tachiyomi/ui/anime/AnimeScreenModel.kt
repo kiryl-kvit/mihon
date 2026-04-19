@@ -656,7 +656,7 @@ class AnimeScreenModel(
 
     fun showScheduleDialog() {
         val currentState = successState ?: return
-        if (!currentState.showScheduleButton) return
+        if (!currentState.canOpenScheduleDialog) return
 
         updateSuccessState { it.copy(dialog = Dialog.Schedule) }
     }
@@ -897,6 +897,17 @@ class AnimeScreenModel(
             val filterActive: Boolean = anime.episodesFiltered()
 
             val showScheduleButton: Boolean
+                get() = when (schedule) {
+                    ScheduleState.Unavailable -> false
+                    ScheduleState.NotLoaded,
+                    ScheduleState.Loading,
+                    ScheduleState.Empty,
+                    is ScheduleState.Error,
+                    is ScheduleState.Success,
+                    -> true
+                }
+
+            val canOpenScheduleDialog: Boolean
                 get() = when (schedule) {
                     is ScheduleState.Success,
                     is ScheduleState.Error,

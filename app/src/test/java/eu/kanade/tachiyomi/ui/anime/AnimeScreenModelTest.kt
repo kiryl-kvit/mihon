@@ -16,6 +16,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -355,7 +356,42 @@ class AnimeScreenModelTest {
     }
 
     @Test
-    fun `empty preloaded schedule hides button and cannot open dialog`() = runTest(dispatcher) {
+    fun `loading schedule keeps button visible and cannot open dialog`() = runTest(dispatcher) {
+        val anime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Anime",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val scheduleSource = FakeScheduleAnimeSource(
+            suspendIndefinitely = true,
+        )
+
+        val model = createModel(
+            anime = anime,
+            episodes = emptyList(),
+            animeSourceManager = FakeAnimeSourceManager(scheduleSource),
+        )
+
+        eventually(2.seconds) {
+            val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+            state.showScheduleButton shouldBe true
+            state.canOpenScheduleDialog shouldBe false
+            state.scheduleSummary shouldBe AnimeScreenModel.ScheduleSummary.Loading
+            state.schedule shouldBe AnimeScreenModel.ScheduleState.Loading
+            scheduleSource.scheduleRequests shouldBe 1
+        }
+
+        model.showScheduleDialog()
+
+        val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
+        state.dialog shouldBe null
+    }
+
+    @Test
+    fun `empty preloaded schedule keeps button visible and cannot open dialog`() = runTest(dispatcher) {
         val anime = AnimeTitle.create().copy(
             id = 1L,
             source = 99L,
@@ -378,7 +414,9 @@ class AnimeScreenModelTest {
 
         eventually(2.seconds) {
             val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
-            state.showScheduleButton shouldBe false
+            state.showScheduleButton shouldBe true
+            state.canOpenScheduleDialog shouldBe false
+            state.scheduleSummary shouldBe AnimeScreenModel.ScheduleSummary.Empty
             state.schedule shouldBe AnimeScreenModel.ScheduleState.Empty
             state.dialog shouldBe null
             scheduleSource.scheduleRequests shouldBe 1
@@ -408,6 +446,7 @@ class AnimeScreenModelTest {
         eventually(2.seconds) {
             val state = model.state.value.shouldBeInstanceOf<AnimeScreenModel.State.Success>()
             state.showScheduleButton shouldBe true
+            state.canOpenScheduleDialog shouldBe true
             state.scheduleSummary shouldBe AnimeScreenModel.ScheduleSummary.Error
             state.schedule.shouldBeInstanceOf<AnimeScreenModel.ScheduleState.Error>()
             scheduleSource.scheduleRequests shouldBe 1
@@ -1195,11 +1234,15 @@ class AnimeScreenModelTest {
         override val id: Long = 99L,
         private val scheduleEntries: List<SAnimeScheduleEpisode> = emptyList(),
         private val error: Throwable? = null,
+        private val suspendIndefinitely: Boolean = false,
     ) : FakeAnimeSource(id = id), AnimeScheduleSource {
         var scheduleRequests = 0
 
         override suspend fun getEpisodeSchedule(anime: SAnime): List<SAnimeScheduleEpisode> {
             scheduleRequests += 1
+            if (suspendIndefinitely) {
+                awaitCancellation()
+            }
             error?.let { throw it }
             return scheduleEntries
         }

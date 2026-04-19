@@ -215,6 +215,7 @@
 
     <!-- Operations -->
     <string name="loading">Loading…</string>
+    <string name="not_found">Not found</string>
     <string name="internal_error">InternalError: Check crash logs for further information</string>
 
     <!-- Shortcuts-->
@@ -1084,6 +1085,7 @@
     <string name="updates_last_update_info_just_now">Just now</string>
     <string name="relative_time_span_never">Never</string>
     <string name="action_view_upcoming">View Upcoming Updates</string>
+    <string name="anime_schedule_loading">Loading</string>
     <string name="action_filter_excluded_scanlators">Filter excluded scanlators</string>
     <string name="anime_schedule_season">Season %1$d</string>
     <string name="anime_schedule_episode">Episode</string>

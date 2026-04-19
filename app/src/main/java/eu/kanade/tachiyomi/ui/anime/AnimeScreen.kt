@@ -117,7 +117,7 @@ data class AnimeScreen(
                             performTagSearch(navigator, current.anime, tag)
                         }
                     },
-                    onScheduleClicked = screenModel::showScheduleDialog.takeIf { current.showScheduleButton },
+                    onScheduleClicked = screenModel::showScheduleDialog.takeIf { current.canOpenScheduleDialog },
                     onDuplicatesClicked = screenModel::showDuplicateDialog.takeIf {
                         current.isFromSource && current.anime.initialized && current.duplicateCandidates.isNotEmpty()
                     },
