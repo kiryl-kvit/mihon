@@ -35,12 +35,12 @@ import eu.kanade.presentation.manga.components.MergeTarget
 import eu.kanade.presentation.manga.components.buildMergeTargets
 import eu.kanade.presentation.manga.components.matchesQuery
 import eu.kanade.presentation.util.ioCoroutineScope
-import eu.kanade.tachiyomi.source.AsyncCatalogueFilterSource
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
+import eu.kanade.tachiyomi.source.AsyncCatalogueFilterSource
 import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -117,7 +117,9 @@ class BrowseSourceScreenModel(
 
     init {
         if (source is CatalogueSource) {
-            if (source is AsyncCatalogueFilterSource && state.value.listing is Listing.Search && !state.value.isWaitingForInitialFilterLoad) {
+            if (source is AsyncCatalogueFilterSource && state.value.listing is Listing.Search &&
+                !state.value.isWaitingForInitialFilterLoad
+            ) {
                 mutableState.update {
                     it.copy(
                         filterState = FilterUiState.Loading,
@@ -272,7 +274,11 @@ class BrowseSourceScreenModel(
         if (source !is CatalogueSource) return
         screenModelScope.launchIO {
             loadFilters(
-                initialFilterSnapshot = if (state.value.isWaitingForInitialFilterLoad) initialFilterSnapshot else emptyList(),
+                initialFilterSnapshot = if (state.value.isWaitingForInitialFilterLoad) {
+                    initialFilterSnapshot
+                } else {
+                    emptyList()
+                },
             )
         }
     }

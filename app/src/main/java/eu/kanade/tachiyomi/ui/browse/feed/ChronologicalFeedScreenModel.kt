@@ -11,8 +11,8 @@ import eu.kanade.domain.source.model.applySnapshot
 import eu.kanade.domain.source.service.BrowseFeedService
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.resolveFilterList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update

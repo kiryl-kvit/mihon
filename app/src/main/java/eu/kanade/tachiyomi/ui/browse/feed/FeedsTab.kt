@@ -82,8 +82,8 @@ import eu.kanade.presentation.components.TabContent
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.tachiyomi.source.CatalogueSource
-import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
 import eu.kanade.tachiyomi.ui.browse.source.browse.FilterUiState
@@ -356,7 +356,9 @@ private fun FeedsTabContent(
                         } else {
                             val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
                             val isRefreshing = when {
-                                browseModelState.isWaitingForInitialFilterLoad -> browseModelState.filterState is FilterUiState.Loading
+                                browseModelState.isWaitingForInitialFilterLoad -> {
+                                    browseModelState.filterState is FilterUiState.Loading
+                                }
                                 else -> mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
                             }
 
@@ -387,12 +389,15 @@ private fun FeedsTabContent(
                                     BrowseSourceContent(
                                         source = browseModel.source,
                                         mangaList = mangaList,
-                                        columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                                        columns = browseModel.getColumnsPreference(
+                                            LocalConfiguration.current.orientation,
+                                        ),
                                         displayMode = browseModel.displayMode,
                                         snackbarHostState = snackbarHostState,
                                         contentPadding = feedContentPadding,
                                         onWebViewClick = {
-                                            val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
+                                            val httpSource =
+                                                browseModel.source as? HttpSource ?: return@BrowseSourceContent
                                             navigator.push(
                                                 WebViewScreen(
                                                     url = httpSource.baseUrl,
