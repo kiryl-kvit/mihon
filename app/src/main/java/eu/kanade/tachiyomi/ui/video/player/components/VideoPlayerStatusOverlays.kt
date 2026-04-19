@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -31,6 +32,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -134,19 +136,40 @@ internal fun VideoPlayerSideGestureFeedback(
 @Composable
 internal fun VideoPlayerLockedOverlay(
     onUnlock: () -> Unit,
+    showPictureInPictureButton: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    VideoPlayerTransportButton(
-        onClick = onUnlock,
-        modifier = modifier,
-        icon = {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color.Black.copy(alpha = 0.76f), Color.Transparent),
+                ),
+            )
+            .statusBarsPadding()
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        VideoPlayerUtilityButton(onClick = onUnlock) {
             Icon(
                 imageVector = Icons.Outlined.LockOpen,
                 contentDescription = stringResource(MR.strings.anime_playback_unlock_controls),
                 tint = Color.White,
             )
-        },
-    )
+        }
+        if (showPictureInPictureButton) {
+            // Preserve the top-bar spacing so the unlock button stays in the lock button slot.
+            SpacerButtonPlaceholder()
+        }
+        SpacerButtonPlaceholder()
+    }
+}
+
+@Composable
+private fun SpacerButtonPlaceholder() {
+    Box(modifier = Modifier.size(48.dp))
 }
 
 private val sideGestureIndicatorHeight = 122.dp
