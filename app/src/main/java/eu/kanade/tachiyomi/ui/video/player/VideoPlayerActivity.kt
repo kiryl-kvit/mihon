@@ -84,12 +84,20 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 private const val SIDE_GESTURE_VERTICAL_RATIO = 1.35f
 private const val SIDE_GESTURE_ZONE_HORIZONTAL_INSET_FRACTION = 0.1f
 private const val SIDE_GESTURE_ZONE_WIDTH_FRACTION = 0.16f
 private const val SIDE_GESTURE_ZONE_HEIGHT_FRACTION = 0.58f
+private const val MIN_GESTURE_LEVEL = 0
+private const val MAX_GESTURE_LEVEL = 100
+private const val DEFAULT_GESTURE_LEVEL = 50
+private const val DEFAULT_SYSTEM_BRIGHTNESS = 127
+private const val SYSTEM_BRIGHTNESS_MAX = 255
+private const val MIN_POSITIVE_BRIGHTNESS = 0.01f
+private const val BRIGHTNESS_RESPONSE_GAMMA = 2.2f
 
 class VideoPlayerActivity : BaseActivity() {
 
@@ -1186,12 +1194,7 @@ class VideoPlayerActivity : BaseActivity() {
             playbackBrightnessLevel = readSystemBrightnessLevel()
             playbackBrightnessOverlayValue = 0
         } else {
-            playbackBrightnessLevel = when {
-                screenBrightness <= MIN_POSITIVE_BRIGHTNESS -> MIN_GESTURE_LEVEL
-                else -> (screenBrightness * MAX_GESTURE_LEVEL)
-                    .roundToInt()
-                    .coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
-            }
+            playbackBrightnessLevel = gestureLevelForScreenBrightness(screenBrightness)
             playbackBrightnessOverlayValue = brightnessOverlayLevelFor(playbackBrightnessLevel)
         }
     }
@@ -1200,7 +1203,7 @@ class VideoPlayerActivity : BaseActivity() {
         val normalizedLevel = level.coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
         val screenBrightness = when {
             isUsingSystemBrightness(level) -> WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            normalizedLevel > 0 -> normalizedLevel / MAX_GESTURE_LEVEL.toFloat()
+            normalizedLevel > 0 -> screenBrightnessForGestureLevel(normalizedLevel)
             else -> MIN_POSITIVE_BRIGHTNESS
         }
         window.attributes = window.attributes.apply {
@@ -1212,9 +1215,7 @@ class VideoPlayerActivity : BaseActivity() {
         val brightnessValue = runCatching {
             Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS)
         }.getOrDefault(DEFAULT_SYSTEM_BRIGHTNESS)
-        return ((brightnessValue / SYSTEM_BRIGHTNESS_MAX.toFloat()) * MAX_GESTURE_LEVEL)
-            .roundToInt()
-            .coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
+        return gestureLevelForScreenBrightness(brightnessValue / SYSTEM_BRIGHTNESS_MAX.toFloat())
     }
 
     private fun syncPlaybackVolumeState(
@@ -1405,12 +1406,6 @@ class VideoPlayerActivity : BaseActivity() {
         private const val PAUSED_PLAYBACK_SNAPSHOT_INTERVAL_MS = 750L
         private const val SEEK_INCREMENT_MS = 5_000L
         private const val SEEK_FEEDBACK_BURST_WINDOW_MS = 900L
-        private const val MIN_GESTURE_LEVEL = 0
-        private const val MAX_GESTURE_LEVEL = 100
-        private const val DEFAULT_GESTURE_LEVEL = 50
-        private const val DEFAULT_SYSTEM_BRIGHTNESS = 127
-        private const val SYSTEM_BRIGHTNESS_MAX = 255
-        private const val MIN_POSITIVE_BRIGHTNESS = 0.01f
         private val DEFAULT_PICTURE_IN_PICTURE_ASPECT_RATIO = Rational(16, 9)
 
         fun newIntent(
@@ -1473,6 +1468,30 @@ private fun resolveSideGestureType(
     }
 
     return null
+}
+
+private fun screenBrightnessForGestureLevel(level: Int): Float {
+    val normalizedLevel = level.coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
+    if (normalizedLevel <= MIN_GESTURE_LEVEL) {
+        return MIN_POSITIVE_BRIGHTNESS
+    }
+
+    val gestureFraction = normalizedLevel / MAX_GESTURE_LEVEL.toFloat()
+    return (
+        MIN_POSITIVE_BRIGHTNESS +
+            (1f - MIN_POSITIVE_BRIGHTNESS) * gestureFraction.pow(BRIGHTNESS_RESPONSE_GAMMA)
+        ).coerceIn(MIN_POSITIVE_BRIGHTNESS, 1f)
+}
+
+private fun gestureLevelForScreenBrightness(screenBrightness: Float): Int {
+    val clampedBrightness = screenBrightness.coerceIn(MIN_POSITIVE_BRIGHTNESS, 1f)
+    val brightnessFraction = (
+        (clampedBrightness - MIN_POSITIVE_BRIGHTNESS) /
+            (1f - MIN_POSITIVE_BRIGHTNESS)
+        ).coerceIn(0f, 1f)
+    return (brightnessFraction.pow(1f / BRIGHTNESS_RESPONSE_GAMMA) * MAX_GESTURE_LEVEL)
+        .roundToInt()
+        .coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
 }
 
 private fun AudioManager.safeMusicStreamMaxVolume(): Int =
