@@ -8,6 +8,8 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackOption
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.source.model.VideoStream
 import eu.kanade.tachiyomi.source.model.VideoSubtitle
+import eu.kanade.tachiyomi.ui.anime.AnimeEpisodeListEntry
+import eu.kanade.tachiyomi.ui.anime.buildAnimeEpisodeDisplayData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -25,11 +28,14 @@ import kotlinx.coroutines.withContext
 import tachiyomi.domain.anime.interactor.GetAnimeWithEpisodes
 import tachiyomi.domain.anime.model.AnimeEpisode
 import tachiyomi.domain.anime.model.AnimePlaybackPreferences
+import tachiyomi.domain.anime.model.AnimePlaybackState
+import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.domain.anime.model.PlayerQualityMode
 import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimeHistoryRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackPreferencesRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
+import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.service.sortedForReading
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -41,6 +47,9 @@ class VideoPlayerViewModel @JvmOverloads constructor(
     private val animeEpisodeRepository: AnimeEpisodeRepository = Injekt.get(),
     private val getAnimeWithEpisodes: GetAnimeWithEpisodes? = runCatching {
         Injekt.get<GetAnimeWithEpisodes>()
+    }.getOrNull(),
+    private val animeRepository: AnimeRepository? = runCatching {
+        Injekt.get<AnimeRepository>()
     }.getOrNull(),
     private val videoPlaybackStateRepository: AnimePlaybackStateRepository = Injekt.get(),
     private val videoHistoryRepository: AnimeHistoryRepository = Injekt.get(),
@@ -261,9 +270,12 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         val current = mutableState.value as? State.Ready ?: return
         val safePositionMs = positionMs.coerceAtLeast(0L)
         val safeDurationMs = durationMs.coerceAtLeast(0L)
-        mutableState.value = current.copy(resumePositionMs = safePositionMs)
         val session = playbackSession ?: VideoPlaybackSession(current.episodeId).also { playbackSession = it }
         val snapshot = session.snapshot(positionMs = safePositionMs, durationMs = safeDurationMs)
+        mutableState.value = current.copy(
+            resumePositionMs = safePositionMs,
+            playbackStateByEpisodeId = current.playbackStateByEpisodeId + (current.episodeId to snapshot.playbackState),
+        )
 
         viewModelScope.launch(persistenceDispatcher) {
             withContext(NonCancellable) {
@@ -296,6 +308,20 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         val nextEpisodeId = current.nextEpisodeId ?: return
         viewModelScope.launch {
             playEpisode(nextEpisodeId)
+        }
+    }
+
+    fun playEpisode(
+        visibleAnimeId: Long,
+        ownerAnimeId: Long,
+        episodeId: Long,
+    ) {
+        viewModelScope.launch {
+            this@VideoPlayerViewModel.visibleAnimeId = visibleAnimeId
+            this@VideoPlayerViewModel.ownerAnimeId = ownerAnimeId
+            savedState[VIDEO_ID_KEY] = visibleAnimeId
+            savedState[OWNER_VIDEO_ID_KEY] = ownerAnimeId
+            playEpisode(episodeId)
         }
     }
 
@@ -376,6 +402,40 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         )
     }
 
+    private suspend fun resolveEpisodeDrawerData(
+        anime: AnimeTitle,
+        ownerAnime: AnimeTitle,
+    ): EpisodeDrawerData {
+        val effectiveAnimeId = if (bypassMerge) ownerAnimeId else anime.id
+        val episodes = getAnimeWithEpisodes?.awaitEpisodes(id = effectiveAnimeId, bypassMerge = bypassMerge)
+            ?: animeEpisodeRepository.getEpisodesByAnimeId(
+                effectiveAnimeId,
+            )
+        val memberIds = episodes.map(AnimeEpisode::animeId).distinct()
+        val fallbackTitles = buildMap {
+            put(anime.id, anime.displayTitle)
+            put(ownerAnimeId, ownerAnime.displayTitle)
+        }
+        val memberTitleById = memberIds.associateWith { memberId ->
+            animeRepository
+                ?.let { repository ->
+                    runCatching { repository.getAnimeById(memberId).displayTitle }.getOrNull()
+                }
+                ?: fallbackTitles[memberId].orEmpty()
+        }
+        val playbackStateByEpisodeId = memberIds
+            .flatMap { memberId -> videoPlaybackStateRepository.getByAnimeIdAsFlow(memberId).first() }
+            .associateBy(AnimePlaybackState::episodeId)
+
+        return EpisodeDrawerData(
+            anime = anime,
+            episodes = episodes,
+            memberIds = memberIds,
+            memberTitleById = memberTitleById,
+            playbackStateByEpisodeId = playbackStateByEpisodeId,
+        )
+    }
+
     private suspend fun playEpisode(targetEpisodeId: Long) {
         mutableState.value as? State.Ready ?: return
         applySelectionJob?.cancel()
@@ -403,6 +463,10 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             visibleAnimeId = result.visibleAnime.id,
             episodeId = result.episode.id,
         )
+        val episodeDrawerData = resolveEpisodeDrawerData(
+            anime = result.visibleAnime,
+            ownerAnime = result.ownerAnime,
+        )
         val playback = buildPlaybackUiState(result.playbackData, result.stream, result.savedPreferences)
             .copy(
                 subtitles = result.subtitles,
@@ -415,6 +479,12 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             episodeId = result.episode.id,
             previousEpisodeId = navigation.previousEpisodeId,
             nextEpisodeId = navigation.nextEpisodeId,
+            anime = episodeDrawerData.anime,
+            allEpisodes = episodeDrawerData.episodes,
+            memberIds = episodeDrawerData.memberIds,
+            memberTitleById = episodeDrawerData.memberTitleById,
+            playbackStateByEpisodeId = episodeDrawerData.playbackStateByEpisodeId,
+            sourceAvailable = true,
             videoTitle = result.visibleAnime.displayTitle,
             episodeName = result.episode.name,
             streamLabel = playback.currentStreamLabel,
@@ -537,6 +607,12 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             val episodeId: Long,
             val previousEpisodeId: Long?,
             val nextEpisodeId: Long?,
+            val anime: AnimeTitle,
+            val allEpisodes: List<AnimeEpisode>,
+            val memberIds: List<Long>,
+            val memberTitleById: Map<Long, String>,
+            val playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
+            val sourceAvailable: Boolean,
             val videoTitle: String,
             val episodeName: String,
             val streamLabel: String,
@@ -545,7 +621,16 @@ class VideoPlayerViewModel @JvmOverloads constructor(
             val playback: VideoPlaybackUiState,
             val resumePositionMs: Long,
             val isSourceSwitching: Boolean = false,
-        ) : State
+        ) : State {
+            val episodeListItems: List<AnimeEpisodeListEntry>
+                get() = buildAnimeEpisodeDisplayData(
+                    anime = anime,
+                    episodes = allEpisodes,
+                    memberIds = memberIds,
+                    memberTitleById = memberTitleById,
+                    playbackStates = playbackStateByEpisodeId.values.toList(),
+                ).episodeListItems
+        }
 
         data class Error(val message: String) : State
     }
@@ -581,6 +666,14 @@ class VideoPlayerViewModel @JvmOverloads constructor(
         private const val SELECTION_CACHE_LIMIT = 12
     }
 }
+
+private data class EpisodeDrawerData(
+    val anime: AnimeTitle,
+    val episodes: List<AnimeEpisode>,
+    val memberIds: List<Long>,
+    val memberTitleById: Map<Long, String>,
+    val playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
+)
 
 private data class SelectionCacheKey(
     val episodeId: Long,

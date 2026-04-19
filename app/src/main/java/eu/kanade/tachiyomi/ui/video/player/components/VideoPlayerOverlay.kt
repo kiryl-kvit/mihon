@@ -23,8 +23,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import eu.kanade.tachiyomi.ui.anime.AnimeEpisodeListEntry
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerPlaybackSnapshot
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerSeekFeedbackState
+import tachiyomi.domain.anime.model.AnimeEpisode
+import tachiyomi.domain.anime.model.AnimePlaybackState
+import tachiyomi.domain.anime.model.AnimeTitle
 
 private val overlayBarsSlideAnimationSpec = tween<IntOffset>(190)
 private val overlayBarsFadeAnimationSpec = tween<Float>(125)
@@ -40,6 +44,12 @@ internal fun VideoPlayerOverlay(
     playbackSnapshot: VideoPlayerPlaybackSnapshot,
     displayedPositionMs: Long,
     isScrubbing: Boolean,
+    episodesDrawerVisible: Boolean,
+    anime: AnimeTitle,
+    currentEpisodeId: Long,
+    episodeListItems: List<AnimeEpisodeListEntry>,
+    playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
+    sourceAvailable: Boolean,
     hasPreviousEpisode: Boolean,
     hasNextEpisode: Boolean,
     seekFeedbackState: VideoPlayerSeekFeedbackState?,
@@ -52,6 +62,9 @@ internal fun VideoPlayerOverlay(
     onEnterPictureInPicture: () -> Unit,
     onToggleLock: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenEpisodes: () -> Unit,
+    onDismissEpisodes: () -> Unit,
+    onEpisodeSelected: (AnimeEpisode) -> Unit,
     onPreviousEpisode: () -> Unit,
     onSeekBackward: () -> Unit,
     onTogglePlayback: () -> Unit,
@@ -117,6 +130,9 @@ internal fun VideoPlayerOverlay(
                         onScrubStarted = onScrubStarted,
                         onScrubPositionChange = onScrubPositionChange,
                         onScrubFinished = onScrubFinished,
+                        footerContent = {
+                            VideoPlayerTimelineToolbar(onOpenEpisodes = onOpenEpisodes)
+                        },
                     )
                 }
             }
@@ -240,6 +256,20 @@ internal fun VideoPlayerOverlay(
             onDismissed = onSideGestureFeedbackDismissed,
             modifier = Modifier.fillMaxSize(),
         )
+
+        if (!locked) {
+            VideoPlayerEpisodesDrawer(
+                visible = episodesDrawerVisible,
+                anime = anime,
+                episodeListItems = episodeListItems,
+                currentEpisodeId = currentEpisodeId,
+                playbackStateByEpisodeId = playbackStateByEpisodeId,
+                sourceAvailable = sourceAvailable,
+                onEpisodeClick = onEpisodeSelected,
+                onDismissRequest = onDismissEpisodes,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

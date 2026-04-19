@@ -5,9 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -27,9 +24,6 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 private val youtubeLikeControlButtonSize = 60.dp
-private const val OUTER_CONTROL_SLOT_WEIGHT = 2f
-private const val SPACER_CONTROL_SLOT_WEIGHT = 0.5f
-private const val CENTER_CONTROL_SLOT_WEIGHT = 1f
 
 @Composable
 internal fun VideoPlayerCenterControls(
@@ -44,77 +38,45 @@ internal fun VideoPlayerCenterControls(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(30.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        VideoPlayerControlSlot(
-            weight = OUTER_CONTROL_SLOT_WEIGHT,
-            contentAlignment = Alignment.CenterEnd,
-        ) {
-            VideoPlayerTransportButton(
-                icon = {
-                    Icon(
-                        imageVector = Icons.Outlined.SkipPrevious,
-                        modifier = Modifier.size(24.dp),
-                        contentDescription = stringResource(MR.strings.action_previous_chapter),
-                        tint = Color.White,
-                    )
-                },
-                enabled = hasPreviousEpisode,
-                onClick = onPreviousEpisode,
-            )
-        }
-        VideoPlayerControlSlot(weight = SPACER_CONTROL_SLOT_WEIGHT) {
-            Spacer(modifier = Modifier.size(youtubeLikeControlButtonSize))
-        }
-        VideoPlayerControlSlot(weight = CENTER_CONTROL_SLOT_WEIGHT) {
-            VideoPlayerTransportButton(
-                icon = {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Filled.PlayArrow,
-                        modifier = Modifier.size(30.dp),
-                        contentDescription = if (isPlaying) stringResource(MR.strings.action_pause) else "Play",
-                        tint = Color.White,
-                    )
-                },
-                onClick = onTogglePlayback,
-            )
-        }
-        VideoPlayerControlSlot(weight = SPACER_CONTROL_SLOT_WEIGHT) {
-            Spacer(modifier = Modifier.size(youtubeLikeControlButtonSize))
-        }
-        VideoPlayerControlSlot(
-            weight = OUTER_CONTROL_SLOT_WEIGHT,
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            VideoPlayerTransportButton(
-                icon = {
-                    Icon(
-                        imageVector = Icons.Outlined.SkipNext,
-                        modifier = Modifier.size(24.dp),
-                        contentDescription = stringResource(MR.strings.action_next_chapter),
-                        tint = Color.White,
-                    )
-                },
-                enabled = hasNextEpisode,
-                onClick = onNextEpisode,
-            )
-        }
-    }
-}
-
-@Composable
-private fun RowScope.VideoPlayerControlSlot(
-    weight: Float,
-    contentAlignment: Alignment = Alignment.Center,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = Modifier.weight(weight),
-        contentAlignment = contentAlignment,
-    ) {
-        content()
+        VideoPlayerTransportButton(
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.SkipPrevious,
+                    modifier = Modifier.size(24.dp),
+                    contentDescription = stringResource(MR.strings.action_previous_chapter),
+                    tint = Color.White,
+                )
+            },
+            enabled = hasPreviousEpisode,
+            onClick = onPreviousEpisode,
+        )
+        VideoPlayerTransportButton(
+            icon = {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Outlined.Pause else Icons.Filled.PlayArrow,
+                    modifier = Modifier.size(30.dp),
+                    contentDescription = if (isPlaying) stringResource(MR.strings.action_pause) else "Play",
+                    tint = Color.White,
+                )
+            },
+            onClick = onTogglePlayback,
+        )
+        VideoPlayerTransportButton(
+            icon = {
+                Icon(
+                    imageVector = Icons.Outlined.SkipNext,
+                    modifier = Modifier.size(24.dp),
+                    contentDescription = stringResource(MR.strings.action_next_chapter),
+                    tint = Color.White,
+                )
+            },
+            enabled = hasNextEpisode,
+            onClick = onNextEpisode,
+        )
     }
 }
 

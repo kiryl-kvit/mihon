@@ -42,7 +42,6 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.CallSplit
-import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.PlayArrow
@@ -62,7 +61,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
@@ -111,6 +109,7 @@ import com.mikepenz.markdown.model.markdownAnnotatorConfig
 import com.mikepenz.markdown.utils.getUnescapedTextInNode
 import eu.kanade.domain.anime.model.toMangaCover
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.presentation.anime.animeEpisodeItems
 import eu.kanade.presentation.components.AdaptiveSheet
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
@@ -126,12 +125,9 @@ import eu.kanade.presentation.manga.components.MarkdownRender
 import eu.kanade.presentation.manga.components.MergeEditorDialog
 import eu.kanade.presentation.manga.components.MergeEditorEntry
 import eu.kanade.presentation.manga.components.getMarkdownLinkStyle
-import eu.kanade.presentation.util.formatChapterNumber
 import eu.kanade.presentation.util.isTabletUi
-import eu.kanade.presentation.util.toDurationString
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.source.model.SAnime
-import eu.kanade.tachiyomi.ui.anime.AnimeEpisodeListEntry
 import eu.kanade.tachiyomi.ui.anime.AnimeScreenModel
 import eu.kanade.tachiyomi.util.system.copyToClipboard
 import kotlinx.collections.immutable.persistentListOf
@@ -140,7 +136,6 @@ import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.findChildOfType
 import tachiyomi.domain.anime.model.AnimeEpisode
-import tachiyomi.domain.anime.model.AnimePlaybackState
 import tachiyomi.domain.anime.model.AnimeTitle
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.ListGroupHeader
@@ -149,7 +144,6 @@ import tachiyomi.presentation.core.components.TwoPanelBox
 import tachiyomi.presentation.core.components.VerticalFastScroller
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.PullRefresh
-import tachiyomi.presentation.core.components.material.SECONDARY_ALPHA
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
@@ -163,7 +157,6 @@ import uy.kohesive.injekt.api.get
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.roundToInt
-import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun AnimeScreen(
@@ -428,12 +421,11 @@ private fun AnimeScreenSmallImpl(
                             onClick = { onFilterClicked?.invoke() },
                         )
                     }
-                    episodeItems(
+                    animeEpisodeItems(
                         anime = state.anime,
                         episodeListItems = state.episodeListItems,
                         selectedEpisodeIds = state.selection,
                         selectionMode = state.isSelectionMode,
-                        memberTitleById = state.memberTitleById,
                         playbackStateByEpisodeId = state.playbackStateByEpisodeId,
                         sourceAvailable = state.sourceAvailable,
                         onEpisodeClick = onEpisodeClick,
@@ -617,12 +609,11 @@ private fun AnimeScreenLargeImpl(
                                     onClick = { onFilterClicked?.invoke() },
                                 )
                             }
-                            episodeItems(
+                            animeEpisodeItems(
                                 anime = state.anime,
                                 episodeListItems = state.episodeListItems,
                                 selectedEpisodeIds = state.selection,
                                 selectionMode = state.isSelectionMode,
-                                memberTitleById = state.memberTitleById,
                                 playbackStateByEpisodeId = state.playbackStateByEpisodeId,
                                 sourceAvailable = state.sourceAvailable,
                                 onEpisodeClick = onEpisodeClick,
@@ -1466,209 +1457,6 @@ private fun EpisodeHeader(
     }
 }
 
-private fun LazyListScope.episodeItems(
-    anime: AnimeTitle,
-    episodeListItems: List<AnimeEpisodeListEntry>,
-    selectedEpisodeIds: Set<Long>,
-    selectionMode: Boolean,
-    memberTitleById: Map<Long, String>,
-    playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
-    sourceAvailable: Boolean,
-    onEpisodeClick: (AnimeEpisode) -> Unit,
-    onEpisodeSelected: (AnimeEpisode, Boolean, Boolean) -> Unit,
-) {
-    if (episodeListItems.isEmpty()) {
-        item {
-            Text(
-                text = stringResource(MR.strings.anime_no_episodes),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        return
-    }
-
-    items(
-        items = episodeListItems,
-        key = {
-            when (it) {
-                is AnimeEpisodeListEntry.Item -> "episode-${it.episode.id}"
-                is AnimeEpisodeListEntry.MemberHeader -> "member-${it.animeId}"
-            }
-        },
-    ) { entry ->
-        when (entry) {
-            is AnimeEpisodeListEntry.MemberHeader -> {
-                ListGroupHeader(text = memberTitleById[entry.animeId].orEmpty().ifBlank { entry.title })
-            }
-            is AnimeEpisodeListEntry.Item -> {
-                val episode = entry.episode
-                AnimeEpisodeListItem(
-                    anime = anime,
-                    episode = episode,
-                    selected = episode.id in selectedEpisodeIds,
-                    selectionMode = selectionMode,
-                    playbackState = playbackStateByEpisodeId[episode.id],
-                    sourceAvailable = sourceAvailable,
-                    onClick = {
-                        if (selectionMode) {
-                            onEpisodeSelected(episode, episode.id !in selectedEpisodeIds, false)
-                        } else {
-                            onEpisodeClick(episode)
-                        }
-                    },
-                    onLongClick = {
-                        onEpisodeSelected(episode, true, true)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AnimeEpisodeListItem(
-    anime: AnimeTitle,
-    episode: AnimeEpisode,
-    selected: Boolean,
-    selectionMode: Boolean,
-    playbackState: AnimePlaybackState?,
-    sourceAvailable: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-) {
-    val context = LocalContext.current
-    val progress = playbackState.progressFraction()
-    val resumeText = playbackState
-        ?.takeIf { !it.completed && it.positionMs > 0L }
-        ?.positionMs
-        ?.milliseconds
-        ?.toDurationString(context, fallback = stringResource(MR.strings.not_applicable))
-    val subtitleDate = episode.dateUpload
-        .takeIf { it > 0L }
-        ?.let { relativeDateText(it) }
-    val subtitleStatus = when {
-        episode.completed || playbackState?.completed == true -> stringResource(MR.strings.completed)
-        resumeText != null -> stringResource(MR.strings.action_resume) + " " + resumeText
-        episode.watched -> stringResource(MR.strings.anime_watched)
-        else -> null
-    }
-    val titleAlpha = if (episode.completed || playbackState?.completed == true) DISABLED_ALPHA else 1f
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
-                } else {
-                    Color.Transparent
-                },
-            )
-            .clickableNoIndication(
-                onLongClick = onLongClick,
-                onClick = onClick,
-            )
-            .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (!episode.watched && !episode.completed && playbackState?.completed != true) {
-                    Icon(
-                        imageVector = Icons.Filled.Circle,
-                        contentDescription = stringResource(MR.strings.unread),
-                        modifier = Modifier
-                            .height(8.dp)
-                            .padding(end = 4.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Text(
-                    text = episode.displayTitle(anime),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = LocalContentColor.current.copy(alpha = titleAlpha),
-                )
-            }
-
-            if (subtitleDate != null || subtitleStatus != null) {
-                Row {
-                    val subtitleColor = LocalContentColor.current.copy(alpha = SECONDARY_ALPHA)
-                    val subtitleStyle = MaterialTheme.typography.bodySmall.copy(color = subtitleColor)
-                    ProvideTextStyle(value = subtitleStyle) {
-                        if (subtitleDate != null) {
-                            Text(
-                                text = subtitleDate,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            if (subtitleStatus != null) DotSeparatorText()
-                        }
-                        if (subtitleStatus != null) {
-                            Text(
-                                text = subtitleStatus,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                color = LocalContentColor.current.copy(alpha = DISABLED_ALPHA),
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (progress != null) {
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp),
-                )
-            }
-        }
-
-        if (!selectionMode) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = stringResource(
-                    if (playbackState?.positionMs?.let { it > 0L } == true) {
-                        MR.strings.action_resume
-                    } else {
-                        MR.strings.action_start
-                    },
-                ),
-                modifier = Modifier.padding(start = 4.dp),
-                tint = if (sourceAvailable) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-        }
-    }
-
-    HorizontalDivider()
-}
-
-@Composable
-private fun AnimeEpisode.displayTitle(anime: AnimeTitle): String {
-    return if (anime.displayMode == AnimeTitle.EPISODE_DISPLAY_NUMBER) {
-        val number = episodeNumber.takeIf { it >= 0.0 }
-            ?.let(::formatChapterNumber)
-            ?: url
-        stringResource(MR.strings.display_mode_chapter, number)
-    } else {
-        name.ifBlank { url }
-    }
-}
-
 @Composable
 private fun AnimeBottomActionMenu(
     visible: Boolean,
@@ -1686,11 +1474,6 @@ private fun AnimeBottomActionMenu(
         markAsReadLabel = MR.strings.action_mark_as_watched,
         markAsUnreadLabel = MR.strings.action_mark_as_unwatched,
     )
-}
-
-private fun AnimePlaybackState?.progressFraction(): Float? {
-    if (this == null || durationMs <= 0L || positionMs <= 0L || completed) return null
-    return (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
 }
 
 @Composable
