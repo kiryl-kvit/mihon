@@ -67,6 +67,18 @@ class GetEnabledAnimeSourcesTest {
         sources.map { it.id } shouldContainExactly listOf(1L, 1L)
         sources.last().isUsedLast shouldBe true
     }
+
+    @Test
+    fun `video list excludes sources whose language is disabled even when multi language is enabled`() = runTest {
+        preferences.enabledLanguages.set(setOf("all"))
+        videoSourceManager.sources.value = listOf(
+            FakeAnimeCatalogueSource(id = 1, name = "Russian source", lang = "ru"),
+        )
+
+        val sources = interactor.subscribe().firstValue()
+
+        sources shouldContainExactly emptyList()
+    }
 }
 
 private suspend fun <T> Flow<T>.firstValue(): T = this.first()

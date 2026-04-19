@@ -21,6 +21,7 @@ import eu.kanade.tachiyomi.ui.browse.extension.ExtensionsScreenModel
 import eu.kanade.tachiyomi.ui.browse.extension.extensionsTab
 import eu.kanade.tachiyomi.ui.browse.feed.feedsTab
 import eu.kanade.tachiyomi.ui.browse.migration.sources.migrateSourceTab
+import eu.kanade.tachiyomi.ui.browse.source.SourceCatalogKind
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.browse.source.sourcesTab
 import eu.kanade.tachiyomi.ui.main.MainActivity
@@ -73,13 +74,13 @@ data object BrowseTab : Tab {
         val tabs = if (feedsEnabled) {
             persistentListOf(
                 feedsTab(),
-                sourcesTab(),
+                sourcesTab(SourceCatalogKind.MANGA),
                 extensionsTab(extensionsScreenModel),
                 migrateSourceTab(),
             )
         } else {
             persistentListOf(
-                sourcesTab(),
+                sourcesTab(SourceCatalogKind.MANGA),
                 extensionsTab(extensionsScreenModel),
                 migrateSourceTab(),
             )

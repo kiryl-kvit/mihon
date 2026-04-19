@@ -11,24 +11,20 @@ import cafe.adriel.voyager.core.model.rememberScreenModel
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
-import eu.kanade.domain.source.interactor.SourceListListing
 import eu.kanade.presentation.browse.SourceOptionsDialog
 import eu.kanade.presentation.browse.SourcesScreen
 import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
-import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
-import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import tachiyomi.domain.source.interactor.GetRemoteManga
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
-fun Screen.sourcesTab(): TabContent {
+fun Screen.sourcesTab(kind: SourceCatalogKind = SourceCatalogKind.MANGA): TabContent {
     val navigator = LocalNavigator.currentOrThrow
-    val screenModel = rememberScreenModel { SourcesScreenModel() }
+    val screenModel = rememberScreenModel(tag = kind.name) { SourcesScreenModel(kind) }
     val state by screenModel.state.collectAsState()
 
     return TabContent(
@@ -37,12 +33,12 @@ fun Screen.sourcesTab(): TabContent {
             AppBar.Action(
                 title = stringResource(MR.strings.action_global_search),
                 icon = Icons.Outlined.TravelExplore,
-                onClick = { navigator.push(GlobalSearchScreen()) },
+                onClick = { navigator.push(kind.globalSearchScreen()) },
             ),
             AppBar.Action(
                 title = stringResource(MR.strings.action_filter),
                 icon = Icons.Outlined.FilterList,
-                onClick = { navigator.push(SourcesFilterScreen()) },
+                onClick = { navigator.push(SourcesFilterScreen(kind)) },
             ),
         ),
         content = { contentPadding, snackbarHostState ->
@@ -50,11 +46,7 @@ fun Screen.sourcesTab(): TabContent {
                 state = state.listState,
                 contentPadding = contentPadding,
                 onClickItem = { source, listing ->
-                    val listingQuery = when (listing) {
-                        SourceListListing.Popular -> GetRemoteManga.QUERY_POPULAR
-                        SourceListListing.Latest -> GetRemoteManga.QUERY_LATEST
-                    }
-                    navigator.push(BrowseSourceScreen(source.id, listingQuery))
+                    navigator.push(kind.browseSourceScreen(source.id, kind.listingQuery(listing)))
                 },
                 onClickPin = screenModel::togglePin,
                 onLongClickItem = screenModel::showSourceDialog,

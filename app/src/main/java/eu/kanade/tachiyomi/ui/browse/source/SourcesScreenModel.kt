@@ -2,12 +2,16 @@ package eu.kanade.tachiyomi.ui.browse.source
 
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.source.interactor.GetEnabledAnimeSources
 import eu.kanade.domain.source.interactor.GetEnabledSources
 import eu.kanade.domain.source.interactor.SourceListState
 import eu.kanade.domain.source.interactor.SourceListUiMapper
+import eu.kanade.domain.source.interactor.ToggleAnimeSource
+import eu.kanade.domain.source.interactor.ToggleAnimeSourcePin
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.interactor.ToggleSourcePin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -20,9 +24,13 @@ import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 class SourcesScreenModel(
+    private val kind: SourceCatalogKind,
     private val getEnabledSources: GetEnabledSources = Injekt.get(),
+    private val getEnabledAnimeSources: GetEnabledAnimeSources = Injekt.get(),
     private val toggleSource: ToggleSource = Injekt.get(),
+    private val toggleAnimeSource: ToggleAnimeSource = Injekt.get(),
     private val toggleSourcePin: ToggleSourcePin = Injekt.get(),
+    private val toggleAnimeSourcePin: ToggleAnimeSourcePin = Injekt.get(),
 ) : StateScreenModel<SourcesScreenModel.State>(State()) {
 
     private val _events = Channel<Event>(Int.MAX_VALUE)
@@ -30,12 +38,19 @@ class SourcesScreenModel(
 
     init {
         screenModelScope.launchIO {
-            getEnabledSources.subscribe()
+            sourcesFlow()
                 .catch {
                     logcat(LogPriority.ERROR, it)
                     _events.send(Event.FailedFetchingSources)
                 }
                 .collectLatest(::collectLatestSources)
+        }
+    }
+
+    private fun sourcesFlow(): Flow<List<Source>> {
+        return when (kind) {
+            SourceCatalogKind.MANGA -> getEnabledSources.subscribe()
+            SourceCatalogKind.ANIME -> getEnabledAnimeSources.subscribe()
         }
     }
 
@@ -46,11 +61,17 @@ class SourcesScreenModel(
     }
 
     fun toggleSource(source: Source) {
-        toggleSource.await(source)
+        when (kind) {
+            SourceCatalogKind.MANGA -> toggleSource.await(source)
+            SourceCatalogKind.ANIME -> toggleAnimeSource.await(source)
+        }
     }
 
     fun togglePin(source: Source) {
-        toggleSourcePin.await(source)
+        when (kind) {
+            SourceCatalogKind.MANGA -> toggleSourcePin.await(source)
+            SourceCatalogKind.ANIME -> toggleAnimeSourcePin.await(source)
+        }
     }
 
     fun showSourceDialog(source: Source) {

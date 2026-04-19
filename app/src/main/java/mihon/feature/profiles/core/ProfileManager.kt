@@ -118,16 +118,20 @@ class ProfileManager(
             isArchived = false,
         )
         clearProfileState(id)
-        val hiddenSourceIds = extensionManager.installedExtensionsFlow.value
+        val hiddenMangaSourceIds = extensionManager.installedExtensionsFlow.value
             .filterIsInstance<eu.kanade.tachiyomi.extension.model.Extension.InstalledManga>()
             .flatMap { extension -> extension.sources.map { source -> source.id.toString() } }
             .toSet()
+        val hiddenAnimeSourceIds = extensionManager.installedExtensionsFlow.value
+            .filterIsInstance<eu.kanade.tachiyomi.extension.model.Extension.InstalledAnime>()
+            .flatMap { extension -> extension.sources.map { source -> source.id.toString() } }
+            .toSet()
         profileStore.profileStore(id)
-            .getStringSet(SourcePreferences.MANGA_HIDDEN_SOURCES_KEY, hiddenSourceIds)
-            .set(hiddenSourceIds)
+            .getStringSet(SourcePreferences.MANGA_HIDDEN_SOURCES_KEY, hiddenMangaSourceIds)
+            .set(hiddenMangaSourceIds)
         profileStore.profileStore(id)
-            .getStringSet(SourcePreferences.ANIME_HIDDEN_SOURCES_KEY, emptySet())
-            .set(emptySet())
+            .getStringSet(SourcePreferences.ANIME_HIDDEN_SOURCES_KEY, hiddenAnimeSourceIds)
+            .set(hiddenAnimeSourceIds)
         val customPreferences = CustomPreferences(profileStore.appStateStore(id))
         customPreferences.homeScreenTabs.set(defaultHomeScreenTabsFor(type))
         customPreferences.homeScreenStartupTab.set(defaultHomeScreenStartupTabFor(type))

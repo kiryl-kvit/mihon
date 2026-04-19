@@ -84,7 +84,7 @@ class AnimeGlobalSearchScreenModel(
 
     private fun getEnabledSources(): List<AnimeCatalogueSource> {
         return animeSourceManager.getCatalogueSources()
-            .filter { it.lang in enabledLanguages || "all" in enabledLanguages }
+            .filter { it.lang in enabledLanguages }
             .filterNot { "${it.id}" in disabledSources }
             .filter { state.value.sourceFilter != SourceFilter.PinnedOnly || "${it.id}" in pinnedSources }
             .sortedWith(

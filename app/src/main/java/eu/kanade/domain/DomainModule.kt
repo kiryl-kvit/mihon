@@ -19,6 +19,7 @@ import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.source.interactor.GetEnabledAnimeSources
 import eu.kanade.domain.source.interactor.GetEnabledSources
 import eu.kanade.domain.source.interactor.GetIncognitoState
+import eu.kanade.domain.source.interactor.GetLanguagesWithAnimeSources
 import eu.kanade.domain.source.interactor.GetLanguagesWithSources
 import eu.kanade.domain.source.interactor.GetSourcesWithFavoriteCount
 import eu.kanade.domain.source.interactor.SetMigrateSorting
@@ -264,6 +265,7 @@ class DomainModule : InjektModule {
         addFactory { GetEnabledAnimeSources(get(), get()) }
         addSingletonFactory { BrowseFeedService(get()) }
         addFactory { GetLanguagesWithSources(get(), get()) }
+        addFactory { GetLanguagesWithAnimeSources(get(), get()) }
         addFactory { GetRemoteManga(get()) }
         addFactory { GetRemoteAnime(get()) }
         addFactory { GetSourcesWithFavoriteCount(get(), get()) }

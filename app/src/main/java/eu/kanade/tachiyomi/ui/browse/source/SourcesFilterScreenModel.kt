@@ -3,10 +3,13 @@ package eu.kanade.tachiyomi.ui.browse.source
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
+import eu.kanade.domain.source.interactor.GetLanguagesWithAnimeSources
 import eu.kanade.domain.source.interactor.GetLanguagesWithSources
+import eu.kanade.domain.source.interactor.ToggleAnimeSource
 import eu.kanade.domain.source.interactor.ToggleLanguage
 import eu.kanade.domain.source.interactor.ToggleSource
 import eu.kanade.domain.source.service.SourcePreferences
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -18,18 +21,21 @@ import uy.kohesive.injekt.api.get
 import java.util.SortedMap
 
 class SourcesFilterScreenModel(
+    private val kind: SourceCatalogKind,
     private val preferences: SourcePreferences = Injekt.get(),
     private val getLanguagesWithSources: GetLanguagesWithSources = Injekt.get(),
+    private val getLanguagesWithAnimeSources: GetLanguagesWithAnimeSources = Injekt.get(),
     private val toggleSource: ToggleSource = Injekt.get(),
+    private val toggleAnimeSource: ToggleAnimeSource = Injekt.get(),
     private val toggleLanguage: ToggleLanguage = Injekt.get(),
 ) : StateScreenModel<SourcesFilterScreenModel.State>(State.Loading) {
 
     init {
         screenModelScope.launch {
             combine(
-                getLanguagesWithSources.subscribe(),
+                languageItemsFlow(),
                 preferences.enabledLanguages.changes(),
-                preferences.disabledSources.changes(),
+                disabledSourcesFlow(),
             ) { a, b, c -> Triple(a, b, c) }
                 .catch { throwable ->
                     mutableState.update {
@@ -50,8 +56,25 @@ class SourcesFilterScreenModel(
         }
     }
 
+    private fun languageItemsFlow(): Flow<SortedMap<String, List<Source>>> {
+        return when (kind) {
+            SourceCatalogKind.MANGA -> getLanguagesWithSources.subscribe()
+            SourceCatalogKind.ANIME -> getLanguagesWithAnimeSources.subscribe()
+        }
+    }
+
+    private fun disabledSourcesFlow(): Flow<Set<String>> {
+        return when (kind) {
+            SourceCatalogKind.MANGA -> preferences.disabledSources.changes()
+            SourceCatalogKind.ANIME -> preferences.disabledAnimeSources.changes()
+        }
+    }
+
     fun toggleSource(source: Source) {
-        toggleSource.await(source)
+        when (kind) {
+            SourceCatalogKind.MANGA -> toggleSource.await(source)
+            SourceCatalogKind.ANIME -> toggleAnimeSource.await(source)
+        }
     }
 
     fun toggleLanguage(language: String) {

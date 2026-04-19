@@ -1,7 +1,6 @@
 package eu.kanade.domain.source.interactor
 
 import eu.kanade.domain.source.service.SourcePreferences
-import eu.kanade.tachiyomi.source.AnimeCatalogueSource
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -38,20 +37,5 @@ class GetEnabledAnimeSources(
                 }
         }
             .distinctUntilChanged()
-    }
-
-    private fun AnimeCatalogueSource.isEnabled(enabledLanguages: Set<String>): Boolean {
-        return lang in enabledLanguages || "all" in enabledLanguages
-    }
-
-    private fun AnimeCatalogueSource.toDomainSource(pin: Pins): Source {
-        return Source(
-            id = id,
-            lang = lang,
-            name = name,
-            supportsLatest = supportsLatest,
-            isStub = false,
-            pin = pin,
-        )
     }
 }

@@ -14,12 +14,14 @@ import eu.kanade.tachiyomi.util.system.toast
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.screens.LoadingScreen
 
-class SourcesFilterScreen : Screen() {
+class SourcesFilterScreen(
+    private val kind: SourceCatalogKind = SourceCatalogKind.MANGA,
+) : Screen() {
 
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
-        val screenModel = rememberScreenModel { SourcesFilterScreenModel() }
+        val screenModel = rememberScreenModel(tag = kind.name) { SourcesFilterScreenModel(kind) }
         val state by screenModel.state.collectAsState()
 
         if (state is SourcesFilterScreenModel.State.Loading) {
