@@ -1,5 +1,6 @@
 package eu.kanade.tachiyomi.ui.browse.migration.search
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material3.Icon
@@ -24,8 +25,10 @@ import eu.kanade.core.util.ifSourcesLoaded
 import eu.kanade.presentation.browse.BrowseSourceContent
 import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.source.AsyncCatalogueFilterSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
+import eu.kanade.tachiyomi.ui.browse.source.browse.FilterUiState
 import eu.kanade.tachiyomi.ui.browse.source.browse.SourceFilterDialog
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
@@ -41,6 +44,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.LocalSource
 import uy.kohesive.injekt.Injekt
@@ -68,6 +72,7 @@ data class MigrateSourceSearchScreen(
         val state by screenModel.state.collectAsState()
 
         val snackbarHostState = remember { SnackbarHostState() }
+        val mangaList = screenModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
 
         Scaffold(
             topBar = { scrollBehavior ->
@@ -85,7 +90,7 @@ data class MigrateSourceSearchScreen(
                     icon = { Icon(Icons.Outlined.FilterList, contentDescription = null) },
                     onClick = screenModel::openFilterSheet,
                     modifier = Modifier.animateFloatingActionButton(
-                        visible = state.filters.isNotEmpty(),
+                        visible = state.filters.isNotEmpty() || screenModel.source is AsyncCatalogueFilterSource,
                         alignment = Alignment.BottomEnd,
                     ),
                 )
@@ -104,32 +109,44 @@ data class MigrateSourceSearchScreen(
                     navigator.popUntil { screen -> screen is MigrationListScreen }
                 }
             }
-            BrowseSourceContent(
-                source = screenModel.source,
-                mangaList = screenModel.mangaPagerFlowFlow.collectAsLazyPagingItems(),
-                columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                displayMode = screenModel.displayMode,
-                snackbarHostState = snackbarHostState,
-                contentPadding = paddingValues,
-                onWebViewClick = {
-                    val source = screenModel.source as? HttpSource ?: return@BrowseSourceContent
-                    navigator.push(
-                        WebViewScreen(
-                            url = source.baseUrl,
-                            initialTitle = source.name,
-                            sourceId = source.id,
-                        ),
-                    )
-                },
-                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                onMangaClick = openMigrateDialog,
-                onMangaLongClick = {
-                    scope.launch {
-                        navigator.pushSourceMangaScreen(it.id, getMergedManga)
+            if (state.isWaitingForInitialFilterLoad) {
+                when (val filterState = state.filterState) {
+                    is FilterUiState.Error -> {
+                        EmptyScreen(
+                            message = filterState.throwable.message ?: stringResource(MR.strings.unknown_error),
+                            modifier = Modifier.padding(paddingValues),
+                        )
                     }
-                },
-            )
+                    else -> LoadingScreen(Modifier.padding(paddingValues))
+                }
+            } else {
+                BrowseSourceContent(
+                    source = screenModel.source,
+                    mangaList = mangaList,
+                    columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                    displayMode = screenModel.displayMode,
+                    snackbarHostState = snackbarHostState,
+                    contentPadding = paddingValues,
+                    onWebViewClick = {
+                        val source = screenModel.source as? HttpSource ?: return@BrowseSourceContent
+                        navigator.push(
+                            WebViewScreen(
+                                url = source.baseUrl,
+                                initialTitle = source.name,
+                                sourceId = source.id,
+                            ),
+                        )
+                    },
+                    onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                    onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
+                    onMangaClick = openMigrateDialog,
+                    onMangaLongClick = {
+                        scope.launch {
+                            navigator.pushSourceMangaScreen(it.id, getMergedManga)
+                        }
+                    },
+                )
+            }
         }
 
         val onDismissRequest = { screenModel.setDialog(null) }
@@ -138,6 +155,8 @@ data class MigrateSourceSearchScreen(
                 SourceFilterDialog(
                     onDismissRequest = onDismissRequest,
                     filters = state.filters,
+                    isLoading = state.filterState is FilterUiState.Loading,
+                    errorMessage = (state.filterState as? FilterUiState.Error)?.throwable?.message,
                     presets = emptyList(),
                     onReset = screenModel::resetFilters,
                     onApplyPreset = {},
@@ -147,6 +166,7 @@ data class MigrateSourceSearchScreen(
                     onSaveAsNewPreset = null,
                     onFilter = { screenModel.search(filters = state.filters) },
                     onUpdate = screenModel::setFilters,
+                    onRetry = screenModel::retryFilterLoad,
                 )
             }
             is BrowseSourceScreenModel.Dialog.Migrate -> {

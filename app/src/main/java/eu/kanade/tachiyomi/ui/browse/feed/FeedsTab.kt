@@ -83,8 +83,10 @@ import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.util.animateItemFastScroll
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
+import eu.kanade.tachiyomi.ui.browse.source.browse.FilterUiState
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.manga.pushSourceMangaScreen
@@ -265,6 +267,8 @@ private fun FeedsTabContent(
                 }
 
                 LaunchedEffect(activeFeed.id, activePreset.id, presetBehaviorKey) {
+                    if (browseModelState.isWaitingForInitialFilterLoad) return@LaunchedEffect
+
                     val savedListing = activePreset.toListing()
                     val currentFilters = browseModelState.filters.snapshot()
                     val shouldApplyPreset = when (activePreset.listingMode) {
@@ -278,7 +282,6 @@ private fun FeedsTabContent(
 
                     if (!shouldApplyPreset) return@LaunchedEffect
 
-                    val filters = source.getFilterList().applySnapshot(activePreset.filters)
                     when (activePreset.listingMode) {
                         FeedListingMode.Popular -> {
                             browseModel.resetFilters()
@@ -289,6 +292,7 @@ private fun FeedsTabContent(
                             browseModel.setListing(BrowseSourceScreenModel.Listing.Latest)
                         }
                         FeedListingMode.Search -> {
+                            val filters = source.resolveFilterList().applySnapshot(activePreset.filters)
                             browseModel.setFilters(filters)
                             browseModel.search(
                                 query = activePreset.query,
@@ -351,43 +355,69 @@ private fun FeedsTabContent(
                             }
                         } else {
                             val mangaList = browseModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
-                            val isRefreshing =
-                                mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
+                            val isRefreshing = when {
+                                browseModelState.isWaitingForInitialFilterLoad -> {
+                                    browseModelState.filterState is FilterUiState.Loading
+                                }
+                                else -> mangaList.itemCount > 0 && mangaList.loadState.refresh is LoadState.Loading
+                            }
 
                             PullRefresh(
                                 refreshing = isRefreshing,
                                 enabled = true,
-                                onRefresh = mangaList::refresh,
+                                onRefresh = {
+                                    if (browseModelState.isWaitingForInitialFilterLoad) {
+                                        browseModel.retryFilterLoad()
+                                    } else {
+                                        mangaList.refresh()
+                                    }
+                                },
                                 modifier = Modifier.fillMaxSize(),
                             ) {
-                                BrowseSourceContent(
-                                    source = browseModel.source,
-                                    mangaList = mangaList,
-                                    columns = browseModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                                    displayMode = browseModel.displayMode,
-                                    snackbarHostState = snackbarHostState,
-                                    contentPadding = feedContentPadding,
-                                    onWebViewClick = {
-                                        val httpSource = browseModel.source as? HttpSource ?: return@BrowseSourceContent
-                                        navigator.push(
-                                            WebViewScreen(
-                                                url = httpSource.baseUrl,
-                                                initialTitle = httpSource.name,
-                                                sourceId = httpSource.id,
-                                            ),
-                                        )
-                                    },
-                                    onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                                    onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
-                                    onMangaClick = { openSourceManga(it.id) },
-                                    onMangaLongClick = { manga ->
-                                        scope.launchIO {
-                                            if (browseModel.onMangaLongClick(manga)) {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            }
+                                if (browseModelState.isWaitingForInitialFilterLoad) {
+                                    when (val filterState = browseModelState.filterState) {
+                                        is FilterUiState.Error -> {
+                                            EmptyScreen(
+                                                message = filterState.throwable.message
+                                                    ?: stringResource(MR.strings.unknown_error),
+                                                modifier = Modifier.padding(feedContentPadding),
+                                            )
                                         }
-                                    },
-                                )
+                                        else -> LoadingScreen(Modifier.padding(feedContentPadding))
+                                    }
+                                } else {
+                                    BrowseSourceContent(
+                                        source = browseModel.source,
+                                        mangaList = mangaList,
+                                        columns = browseModel.getColumnsPreference(
+                                            LocalConfiguration.current.orientation,
+                                        ),
+                                        displayMode = browseModel.displayMode,
+                                        snackbarHostState = snackbarHostState,
+                                        contentPadding = feedContentPadding,
+                                        onWebViewClick = {
+                                            val httpSource =
+                                                browseModel.source as? HttpSource ?: return@BrowseSourceContent
+                                            navigator.push(
+                                                WebViewScreen(
+                                                    url = httpSource.baseUrl,
+                                                    initialTitle = httpSource.name,
+                                                    sourceId = httpSource.id,
+                                                ),
+                                            )
+                                        },
+                                        onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                                        onLocalSourceHelpClick = { uriHandler.openUri(LocalSource.HELP_URL) },
+                                        onMangaClick = { openSourceManga(it.id) },
+                                        onMangaLongClick = { manga ->
+                                            scope.launchIO {
+                                                if (browseModel.onMangaLongClick(manga)) {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                }
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
                     }

@@ -53,6 +53,7 @@ import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.RadioMenuItem
 import eu.kanade.presentation.components.SearchToolbar
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.source.AsyncAnimeCatalogueFilterSource
 import eu.kanade.tachiyomi.source.ConfigurableAnimeSource
 import eu.kanade.tachiyomi.source.online.AnimeHttpSource
 import eu.kanade.tachiyomi.ui.anime.AnimeScreen
@@ -125,6 +126,7 @@ data class AnimeBrowseSourceScreen(
         val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
+        val animeList = screenModel.animePagerFlow.collectAsLazyPagingItems()
         val httpSource = source as? AnimeHttpSource
         val configurableSource = source as? ConfigurableAnimeSource
         val onWebViewClick = httpSource?.let {
@@ -197,7 +199,7 @@ data class AnimeBrowseSourceScreen(
                                 label = { Text(text = stringResource(MR.strings.latest)) },
                             )
                         }
-                        if (state.filters.isNotEmpty()) {
+                        if (state.filters.isNotEmpty() || source is AsyncAnimeCatalogueFilterSource) {
                             FilterChip(
                                 selected = state.listing is AnimeBrowseSourceScreenModel.Listing.Search,
                                 onClick = screenModel::openFilterSheet,
@@ -218,27 +220,39 @@ data class AnimeBrowseSourceScreen(
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
-            AnimeBrowseSourceContent(
-                animeList = screenModel.animePagerFlow.collectAsLazyPagingItems(),
-                columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                displayMode = screenModel.displayMode,
-                snackbarHostState = snackbarHostState,
-                contentPadding = paddingValues,
-                onAnimeClick = { anime ->
-                    scope.launch {
-                        navigator.pushSourceAnimeScreen(anime.id, getMergedAnime)
+            if (state.isWaitingForInitialFilterLoad) {
+                when (val filterState = state.filterState) {
+                    is BrowseFilterUiState.Error -> {
+                        EmptyScreen(
+                            message = filterState.throwable.message ?: stringResource(MR.strings.unknown_error),
+                            modifier = Modifier.padding(paddingValues),
+                        )
                     }
-                },
-                onAnimeLongClick = { anime ->
-                    scope.launch {
-                        if (screenModel.onAnimeLongClick(anime)) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    else -> LoadingScreen(Modifier.padding(paddingValues))
+                }
+            } else {
+                AnimeBrowseSourceContent(
+                    animeList = animeList,
+                    columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                    displayMode = screenModel.displayMode,
+                    snackbarHostState = snackbarHostState,
+                    contentPadding = paddingValues,
+                    onAnimeClick = { anime ->
+                        scope.launch {
+                            navigator.pushSourceAnimeScreen(anime.id, getMergedAnime)
                         }
-                    }
-                },
-                onWebViewClick = onWebViewClick,
-                onSettingsClick = onSettingsClick,
-            )
+                    },
+                    onAnimeLongClick = { anime ->
+                        scope.launch {
+                            if (screenModel.onAnimeLongClick(anime)) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        }
+                    },
+                    onWebViewClick = onWebViewClick,
+                    onSettingsClick = onSettingsClick,
+                )
+            }
         }
 
         when (val dialog = state.dialog) {
@@ -246,6 +260,8 @@ data class AnimeBrowseSourceScreen(
                 SourceFilterDialog(
                     onDismissRequest = screenModel::dismissDialog,
                     filters = state.filters,
+                    isLoading = state.filterState is BrowseFilterUiState.Loading,
+                    errorMessage = (state.filterState as? BrowseFilterUiState.Error)?.throwable?.message,
                     presets = emptyList(),
                     onReset = screenModel::resetFilters,
                     onApplyPreset = {},
@@ -254,6 +270,7 @@ data class AnimeBrowseSourceScreen(
                     canDeletePreset = { false },
                     onFilter = { screenModel.search(filters = state.filters) },
                     onUpdate = screenModel::setFilters,
+                    onRetry = screenModel::retryFilterLoad,
                 )
             }
             is AnimeBrowseSourceScreenModel.Dialog.ChangeAnimeCategory -> {

@@ -24,7 +24,9 @@ import eu.kanade.presentation.anime.toMergeEditorEntry
 import eu.kanade.presentation.manga.components.MergeEditorEntry
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
+import eu.kanade.tachiyomi.source.AsyncAnimeCatalogueFilterSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.resolveFilterList
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
@@ -88,8 +90,17 @@ class AnimeBrowseSourceScreenModel(
 
     init {
         source?.let { animeSource ->
-            mutableState.update {
-                it.copy(filters = animeSource.getFilterList())
+            if (animeSource is AsyncAnimeCatalogueFilterSource && state.value.listing is Listing.Search) {
+                mutableState.update {
+                    it.copy(
+                        filterState = BrowseFilterUiState.Loading,
+                        isWaitingForInitialFilterLoad = true,
+                    )
+                }
+            }
+
+            screenModelScope.launchIO {
+                loadFilters()
             }
 
             if (!getIncognitoState.await(animeSource.id)) {
@@ -99,20 +110,24 @@ class AnimeBrowseSourceScreenModel(
     }
 
     private val hideInLibraryItems = sourcePreferences.hideInLibraryItems.get()
-    val animePagerFlow = state.map { it.listing }
+    val animePagerFlow = state.map { it.listing to it.isWaitingForInitialFilterLoad }
         .distinctUntilChanged()
-        .map { listing ->
-            Pager(PagingConfig(pageSize = 25)) {
-                getRemoteAnime(sourceId, listing.query ?: "", listing.filters)
-            }.flow.map { pagingData ->
-                pagingData.map { anime ->
-                    getAnime.subscribe(anime.url, anime.source)
-                        .map { it ?: anime }
-                        .stateIn(ioCoroutineScope)
+        .map { (listing, isWaitingForInitialFilterLoad) ->
+            if (isWaitingForInitialFilterLoad) {
+                emptyFlow()
+            } else {
+                Pager(PagingConfig(pageSize = 25)) {
+                    getRemoteAnime(sourceId, listing.query ?: "", listing.filters)
+                }.flow.map { pagingData ->
+                    pagingData.map { anime ->
+                        getAnime.subscribe(anime.url, anime.source)
+                            .map { it ?: anime }
+                            .stateIn(ioCoroutineScope)
+                    }
+                        .filter { !hideInLibraryItems || !it.value.favorite }
                 }
-                    .filter { !hideInLibraryItems || !it.value.favorite }
+                    .cachedIn(ioCoroutineScope)
             }
-                .cachedIn(ioCoroutineScope)
         }
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
 
@@ -127,8 +142,10 @@ class AnimeBrowseSourceScreenModel(
     }
 
     fun resetFilters() {
-        val animeSource = source ?: return
-        mutableState.update { it.copy(filters = animeSource.getFilterList()) }
+        if (source == null) return
+        screenModelScope.launchIO {
+            loadFilters()
+        }
     }
 
     fun setListing(listing: Listing) {
@@ -141,9 +158,9 @@ class AnimeBrowseSourceScreenModel(
     }
 
     fun search(query: String? = null, filters: FilterList? = null) {
-        val animeSource = source ?: return
+        if (source == null) return
         val input = state.value.listing as? Listing.Search
-            ?: Listing.Search(query = null, filters = animeSource.getFilterList())
+            ?: Listing.Search(query = null, filters = state.value.filters)
 
         mutableState.update {
             it.copy(
@@ -157,7 +174,50 @@ class AnimeBrowseSourceScreenModel(
     }
 
     fun openFilterSheet() {
+        if (source == null) return
         mutableState.update { it.copy(dialog = Dialog.Filter) }
+        if (state.value.filterState is BrowseFilterUiState.Uninitialized) {
+            screenModelScope.launchIO {
+                loadFilters()
+            }
+        }
+    }
+
+    fun retryFilterLoad() {
+        if (source == null) return
+        screenModelScope.launchIO {
+            loadFilters()
+        }
+    }
+
+    private suspend fun loadFilters() {
+        val animeSource = source ?: return
+
+        mutableState.update { it.copy(filterState = BrowseFilterUiState.Loading) }
+
+        runCatching {
+            animeSource.resolveFilterList()
+        }.onSuccess { filters ->
+            mutableState.update { currentState ->
+                val updatedListing = when (val listing = currentState.listing) {
+                    is Listing.Search -> listing.copy(filters = filters)
+                    else -> listing
+                }
+                currentState.copy(
+                    filters = filters,
+                    listing = updatedListing,
+                    filterState = BrowseFilterUiState.Ready,
+                    isWaitingForInitialFilterLoad = false,
+                )
+            }
+        }.onFailure { throwable ->
+            mutableState.update {
+                it.copy(
+                    filterState = BrowseFilterUiState.Error(throwable),
+                    isWaitingForInitialFilterLoad = it.isWaitingForInitialFilterLoad,
+                )
+            }
+        }
     }
 
     fun onAnimeLibraryAction(anime: AnimeTitle) {
@@ -569,9 +629,20 @@ class AnimeBrowseSourceScreenModel(
     data class State(
         val listing: Listing,
         val filters: FilterList = FilterList(),
+        val filterState: BrowseFilterUiState = BrowseFilterUiState.Uninitialized,
+        val isWaitingForInitialFilterLoad: Boolean = false,
         val toolbarQuery: String? = null,
         val dialog: Dialog? = null,
     ) {
         val isUserQuery get() = listing is Listing.Search && !listing.query.isNullOrEmpty()
+        val hasFilterCapability get() = filterState !is BrowseFilterUiState.Unavailable
     }
+}
+
+sealed interface BrowseFilterUiState {
+    data object Uninitialized : BrowseFilterUiState
+    data object Loading : BrowseFilterUiState
+    data object Ready : BrowseFilterUiState
+    data class Error(val throwable: Throwable) : BrowseFilterUiState
+    data object Unavailable : BrowseFilterUiState
 }

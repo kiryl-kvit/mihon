@@ -2,6 +2,7 @@
 .gradle
 .kotlin
 build
+gradle/tmp
 
 # IDE files
 *.iml

@@ -53,6 +53,7 @@ import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.source.AsyncCatalogueFilterSource
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.browse.extension.details.SourcePreferencesScreen
@@ -76,6 +77,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
+import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.LocalSource
 import uy.kohesive.injekt.Injekt
@@ -121,6 +123,7 @@ data class BrowseSourceScreen(
         val haptic = LocalHapticFeedback.current
         val uriHandler = LocalUriHandler.current
         val snackbarHostState = remember { SnackbarHostState() }
+        val mangaList = screenModel.mangaPagerFlowFlow.collectAsLazyPagingItems()
         val getMergedManga = remember { Injekt.get<GetMergedManga>() }
         var presetPendingDeletion by rememberSaveable { mutableStateOf<String?>(null) }
         val openSourceManga: (Long) -> Unit = { mangaId ->
@@ -218,7 +221,7 @@ data class BrowseSourceScreen(
                                 },
                             )
                         }
-                        if (state.filters.isNotEmpty()) {
+                        if (state.filters.isNotEmpty() || screenModel.source is AsyncCatalogueFilterSource) {
                             FilterChip(
                                 selected = state.listing is Listing.Search,
                                 onClick = screenModel::openFilterSheet,
@@ -242,25 +245,37 @@ data class BrowseSourceScreen(
             },
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         ) { paddingValues ->
-            BrowseSourceContent(
-                source = screenModel.source,
-                mangaList = screenModel.mangaPagerFlowFlow.collectAsLazyPagingItems(),
-                columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
-                displayMode = screenModel.displayMode,
-                snackbarHostState = snackbarHostState,
-                contentPadding = paddingValues,
-                onWebViewClick = onWebViewClick,
-                onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
-                onLocalSourceHelpClick = onHelpClick,
-                onMangaClick = { openSourceManga(it.id) },
-                onMangaLongClick = { manga ->
-                    scope.launchIO {
-                        if (screenModel.onMangaLongClick(manga)) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
+            if (state.isWaitingForInitialFilterLoad) {
+                when (val filterState = state.filterState) {
+                    is FilterUiState.Error -> {
+                        EmptyScreen(
+                            message = filterState.throwable.message ?: stringResource(MR.strings.unknown_error),
+                            modifier = Modifier.padding(paddingValues),
+                        )
                     }
-                },
-            )
+                    else -> LoadingScreen(Modifier.padding(paddingValues))
+                }
+            } else {
+                BrowseSourceContent(
+                    source = screenModel.source,
+                    mangaList = mangaList,
+                    columns = screenModel.getColumnsPreference(LocalConfiguration.current.orientation),
+                    displayMode = screenModel.displayMode,
+                    snackbarHostState = snackbarHostState,
+                    contentPadding = paddingValues,
+                    onWebViewClick = onWebViewClick,
+                    onHelpClick = { uriHandler.openUri(Constants.URL_HELP) },
+                    onLocalSourceHelpClick = onHelpClick,
+                    onMangaClick = { openSourceManga(it.id) },
+                    onMangaLongClick = { manga ->
+                        scope.launchIO {
+                            if (screenModel.onMangaLongClick(manga)) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                        }
+                    },
+                )
+            }
         }
 
         val onDismissRequest = screenModel::dismissDialog
@@ -270,6 +285,8 @@ data class BrowseSourceScreen(
                 SourceFilterDialog(
                     onDismissRequest = onDismissRequest,
                     filters = state.filters,
+                    isLoading = state.filterState is FilterUiState.Loading,
+                    errorMessage = (state.filterState as? FilterUiState.Error)?.throwable?.message,
                     presets = if (feedsEnabled) screenModel.feedPresets() else emptyList(),
                     onReset = screenModel::resetFilters,
                     onApplyPreset = screenModel::applyPreset,
@@ -281,6 +298,7 @@ data class BrowseSourceScreen(
                     onUpdateCurrentPreset = if (feedsEnabled) screenModel::showUpdateCurrentPresetDialog else null,
                     onFilter = { screenModel.search(filters = state.filters) },
                     onUpdate = screenModel::setFilters,
+                    onRetry = screenModel::retryFilterLoad,
                 )
             }
             is BrowseSourceScreenModel.Dialog.SavePreset -> if (feedsEnabled) {

@@ -12,6 +12,7 @@ import eu.kanade.domain.source.service.BrowseFeedService
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.resolveFilterList
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
@@ -40,6 +41,7 @@ class ChronologicalFeedScreenModel(
     private val hideInLibraryItems = sourcePreferences.hideInLibraryItems.get()
     private var currentSavedAnchor = browseFeedService.anchorSnapshot(feedId)
     private var persistedAnchor = currentSavedAnchor
+    private var resolvedFilters: FilterList? = null
 
     init {
         screenModelScope.launchIO {
@@ -120,7 +122,6 @@ class ChronologicalFeedScreenModel(
         val existingIds = currentState.mangaIds
         val existingIdSet = existingIds.toHashSet()
         val prependedIds = mutableListOf<Long>()
-        val pagingSource = newPagingSource()
         var nextPageKey: Long? = currentState.nextPageKey
         var currentPageKey: Long? = null
         var pageCount = 0
@@ -133,6 +134,20 @@ class ChronologicalFeedScreenModel(
                 newItemsAvailableCount = if (manual) 0 else it.newItemsAvailableCount,
                 error = null,
             )
+        }
+
+        val pagingSource = try {
+            newPagingSource()
+        } catch (e: Throwable) {
+            mutableState.update {
+                it.copy(
+                    isRefreshing = false,
+                    isManualRefresh = false,
+                    hasLoaded = true,
+                    error = e,
+                )
+            }
+            return
         }
 
         while (pageCount < MAX_REFRESH_PAGES) {
@@ -192,7 +207,6 @@ class ChronologicalFeedScreenModel(
 
     private suspend fun appendInternal() {
         val currentState = state.value
-        val pagingSource = newPagingSource()
         var currentPageKey = currentState.nextPageKey ?: return
         val currentIds = currentState.mangaIds.toMutableList()
         val currentIdSet = currentIds.toHashSet()
@@ -205,6 +219,19 @@ class ChronologicalFeedScreenModel(
                 isAppending = true,
                 error = null,
             )
+        }
+
+        val pagingSource = try {
+            newPagingSource()
+        } catch (e: Throwable) {
+            mutableState.update {
+                it.copy(
+                    isAppending = false,
+                    hasLoaded = true,
+                    error = e,
+                )
+            }
+            return
         }
 
         while (pagesScanned < MAX_APPEND_PAGE_SCANS) {
@@ -244,11 +271,11 @@ class ChronologicalFeedScreenModel(
         }
     }
 
-    private fun newPagingSource(): SourcePagingSource {
+    private suspend fun newPagingSource(): SourcePagingSource {
         return getRemoteManga(
             sourceId = sourceId,
             query = listingQuery.orEmpty(),
-            filterList = filters(),
+            filterList = ensureFiltersLoaded(),
         )
     }
 
@@ -277,8 +304,11 @@ class ChronologicalFeedScreenModel(
         }
     }
 
-    private fun filters(): FilterList {
-        return source.getFilterList().applySnapshot(initialFilterSnapshot)
+    private suspend fun ensureFiltersLoaded(): FilterList {
+        resolvedFilters?.let { return it }
+        val filters = source.resolveFilterList().applySnapshot(initialFilterSnapshot)
+        resolvedFilters = filters
+        return filters
     }
 
     private fun visibleIds(manga: List<Manga>): List<Long> {

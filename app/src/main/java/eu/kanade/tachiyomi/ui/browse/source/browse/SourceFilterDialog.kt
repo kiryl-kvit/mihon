@@ -49,6 +49,8 @@ import tachiyomi.presentation.core.i18n.stringResource
 fun SourceFilterDialog(
     onDismissRequest: () -> Unit,
     filters: FilterList,
+    isLoading: Boolean = false,
+    errorMessage: String? = null,
     presets: List<SourceFeedPreset>,
     onReset: () -> Unit,
     onApplyPreset: (String) -> Unit,
@@ -60,10 +62,12 @@ fun SourceFilterDialog(
     onUpdateCurrentPreset: (() -> Unit)? = null,
     onFilter: () -> Unit,
     onUpdate: (FilterList) -> Unit,
+    onRetry: (() -> Unit)? = null,
 ) {
     val updateFilters = { onUpdate(filters) }
     var presetMenuExpanded by remember { mutableStateOf(false) }
     var saveMenuExpanded by remember { mutableStateOf(false) }
+    val isError = errorMessage != null
 
     AdaptiveSheet(onDismissRequest = onDismissRequest) {
         LazyColumn {
@@ -73,7 +77,7 @@ fun SourceFilterDialog(
                         .background(MaterialTheme.colorScheme.background)
                         .padding(8.dp),
                 ) {
-                    TextButton(onClick = onReset) {
+                    TextButton(onClick = onReset, enabled = !isLoading) {
                         Text(
                             text = stringResource(MR.strings.action_reset),
                             style = LocalTextStyle.current.copy(
@@ -192,15 +196,34 @@ fun SourceFilterDialog(
                     Button(onClick = {
                         onFilter()
                         onDismissRequest()
-                    }) {
+                    }, enabled = !isLoading && !isError) {
                         Text(stringResource(MR.strings.action_filter))
                     }
                 }
                 HorizontalDivider()
             }
 
-            items(filters) {
-                FilterItem(it, updateFilters)
+            if (isLoading) {
+                item {
+                    HeadingItem(stringResource(MR.strings.loading))
+                }
+            } else if (isError) {
+                item {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        Text(text = errorMessage ?: stringResource(MR.strings.unknown_error))
+                        if (onRetry != null) {
+                            Button(onClick = onRetry, modifier = Modifier.padding(top = 12.dp)) {
+                                Text(stringResource(MR.strings.action_retry))
+                            }
+                        }
+                    }
+                }
+            } else {
+                items(filters) {
+                    FilterItem(it, updateFilters)
+                }
             }
         }
     }

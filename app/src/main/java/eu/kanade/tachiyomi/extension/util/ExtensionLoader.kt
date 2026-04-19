@@ -56,7 +56,7 @@ internal object ExtensionLoader {
     private const val METADATA_EXTENSION_TYPE = "tachiyomi.extension.type"
     private const val METADATA_NSFW = "tachiyomi.extension.nsfw"
     const val LIB_VERSION_MIN = 1.4
-    const val LIB_VERSION_MAX = 1.7
+    const val LIB_VERSION_MAX = 1.8
 
     @Suppress("DEPRECATION")
     private val PACKAGE_FLAGS = PackageManager.GET_CONFIGURATIONS or

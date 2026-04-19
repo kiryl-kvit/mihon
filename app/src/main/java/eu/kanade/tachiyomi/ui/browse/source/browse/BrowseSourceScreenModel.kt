@@ -37,8 +37,10 @@ import eu.kanade.presentation.manga.components.matchesQuery
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
+import eu.kanade.tachiyomi.source.AsyncCatalogueFilterSource
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
+import eu.kanade.tachiyomi.source.resolveFilterList
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
@@ -80,7 +82,7 @@ import eu.kanade.tachiyomi.source.model.Filter as SourceModelFilter
 class BrowseSourceScreenModel(
     private val sourceId: Long,
     listingQuery: String?,
-    initialFilterSnapshot: List<FilterStateNode> = emptyList(),
+    private val initialFilterSnapshot: List<FilterStateNode> = emptyList(),
     private val sourceManager: SourceManager = Injekt.get(),
     sourcePreferences: SourcePreferences = Injekt.get(),
     customPreferences: CustomPreferences = Injekt.get(),
@@ -101,7 +103,9 @@ class BrowseSourceScreenModel(
     private val downloadManager: DownloadManager = Injekt.get(),
     private val addTracks: AddTracks = Injekt.get(),
     private val getIncognitoState: GetIncognitoState = Injekt.get(),
-) : StateScreenModel<BrowseSourceScreenModel.State>(State(Listing.valueOf(listingQuery))) {
+) : StateScreenModel<BrowseSourceScreenModel.State>(
+    initialBrowseSourceState(listingQuery),
+) {
 
     var displayMode by sourcePreferences.sourceDisplayMode.asState(screenModelScope)
     var feedsEnabled by customPreferences.enableFeeds.asState(screenModelScope)
@@ -113,11 +117,18 @@ class BrowseSourceScreenModel(
 
     init {
         if (source is CatalogueSource) {
-            mutableState.update {
-                it.initializeForSource(
-                    sourceFilters = source.getFilterList(),
-                    initialFilterSnapshot = initialFilterSnapshot,
-                )
+            if (source is AsyncCatalogueFilterSource && state.value.listing is Listing.Search &&
+                !state.value.isWaitingForInitialFilterLoad
+            ) {
+                mutableState.update {
+                    it.copy(
+                        filterState = FilterUiState.Loading,
+                        isWaitingForInitialFilterLoad = true,
+                    )
+                }
+            }
+            screenModelScope.launchIO {
+                loadFilters(initialFilterSnapshot = initialFilterSnapshot)
             }
         }
 
@@ -130,20 +141,24 @@ class BrowseSourceScreenModel(
      * Flow of Pager flow tied to [State.listing]
      */
     private val hideInLibraryItems = sourcePreferences.hideInLibraryItems.get()
-    val mangaPagerFlowFlow = state.map { it.listing }
+    val mangaPagerFlowFlow = state.map { it.listing to it.isWaitingForInitialFilterLoad }
         .distinctUntilChanged()
-        .map { listing ->
-            Pager(PagingConfig(pageSize = 25)) {
-                getRemoteManga(sourceId, listing.query ?: "", listing.filters)
-            }.flow.map { pagingData ->
-                pagingData.map { manga ->
-                    getManga.subscribe(manga.url, manga.source)
-                        .map { it ?: manga }
-                        .stateIn(ioCoroutineScope)
+        .map { (listing, isWaitingForInitialFilterLoad) ->
+            if (isWaitingForInitialFilterLoad) {
+                emptyFlow()
+            } else {
+                Pager(PagingConfig(pageSize = 25)) {
+                    getRemoteManga(sourceId, listing.query ?: "", listing.filters)
+                }.flow.map { pagingData ->
+                    pagingData.map { manga ->
+                        getManga.subscribe(manga.url, manga.source)
+                            .map { it ?: manga }
+                            .stateIn(ioCoroutineScope)
+                    }
+                        .filter { !hideInLibraryItems || !it.value.favorite }
                 }
-                    .filter { !hideInLibraryItems || !it.value.favorite }
+                    .cachedIn(ioCoroutineScope)
             }
-                .cachedIn(ioCoroutineScope)
         }
         .stateIn(ioCoroutineScope, SharingStarted.Lazily, emptyFlow())
 
@@ -160,7 +175,9 @@ class BrowseSourceScreenModel(
     fun resetFilters() {
         if (source !is CatalogueSource) return
 
-        mutableState.update { it.copy(filters = source.getFilterList()) }
+        screenModelScope.launchIO {
+            loadFilters()
+        }
     }
 
     fun setListing(listing: Listing) {
@@ -181,7 +198,7 @@ class BrowseSourceScreenModel(
         if (source !is CatalogueSource) return
 
         val input = state.value.listing as? Listing.Search
-            ?: Listing.Search(query = null, filters = source.getFilterList())
+            ?: Listing.Search(query = null, filters = state.value.filters)
 
         mutableState.update {
             it.copy(
@@ -197,46 +214,115 @@ class BrowseSourceScreenModel(
     fun searchGenre(genreName: String) {
         if (source !is CatalogueSource) return
 
-        val defaultFilters = source.getFilterList()
-        var genreExists = false
+        screenModelScope.launchIO {
+            val defaultFilters = freshResolvedFilters() ?: return@launchIO
+            var genreExists = false
 
-        filter@ for (sourceFilter in defaultFilters) {
-            if (sourceFilter is SourceModelFilter.Group<*>) {
-                for (filter in sourceFilter.state) {
-                    if (filter is SourceModelFilter<*> && filter.name.equals(genreName, true)) {
-                        when (filter) {
-                            is SourceModelFilter.TriState -> filter.state = 1
-                            is SourceModelFilter.CheckBox -> filter.state = true
-                            else -> {}
+            filter@ for (sourceFilter in defaultFilters) {
+                if (sourceFilter is SourceModelFilter.Group<*>) {
+                    for (filter in sourceFilter.state) {
+                        if (filter is SourceModelFilter<*> && filter.name.equals(genreName, true)) {
+                            when (filter) {
+                                is SourceModelFilter.TriState -> filter.state = 1
+                                is SourceModelFilter.CheckBox -> filter.state = true
+                                else -> {}
+                            }
+                            genreExists = true
+                            break@filter
                         }
+                    }
+                } else if (sourceFilter is SourceModelFilter.Select<*>) {
+                    val index = sourceFilter.values.filterIsInstance<String>()
+                        .indexOfFirst { it.equals(genreName, true) }
+
+                    if (index != -1) {
+                        sourceFilter.state = index
                         genreExists = true
-                        break@filter
+                        break
                     }
                 }
-            } else if (sourceFilter is SourceModelFilter.Select<*>) {
-                val index = sourceFilter.values.filterIsInstance<String>()
-                    .indexOfFirst { it.equals(genreName, true) }
+            }
 
-                if (index != -1) {
-                    sourceFilter.state = index
-                    genreExists = true
-                    break
+            mutableState.update {
+                val listing = if (genreExists) {
+                    Listing.Search(query = null, filters = defaultFilters)
+                } else {
+                    Listing.Search(query = genreName, filters = defaultFilters)
                 }
+                it.copy(
+                    filters = defaultFilters,
+                    listing = listing,
+                    toolbarQuery = listing.query,
+                    filterState = FilterUiState.Ready,
+                    isWaitingForInitialFilterLoad = false,
+                )
             }
         }
+    }
 
-        mutableState.update {
-            val listing = if (genreExists) {
-                Listing.Search(query = null, filters = defaultFilters)
-            } else {
-                Listing.Search(query = genreName, filters = defaultFilters)
+    fun openFilterSheet() {
+        if (source !is CatalogueSource) return
+        mutableState.update { it.copy(dialog = Dialog.Filter) }
+        if (state.value.filterState is FilterUiState.Uninitialized) {
+            screenModelScope.launchIO {
+                loadFilters()
             }
-            it.copy(
-                filters = defaultFilters,
-                listing = listing,
-                toolbarQuery = listing.query,
+        }
+    }
+
+    fun retryFilterLoad() {
+        if (source !is CatalogueSource) return
+        screenModelScope.launchIO {
+            loadFilters(
+                initialFilterSnapshot = if (state.value.isWaitingForInitialFilterLoad) {
+                    initialFilterSnapshot
+                } else {
+                    emptyList()
+                },
             )
         }
+    }
+
+    private suspend fun loadFilters(initialFilterSnapshot: List<FilterStateNode> = emptyList()) {
+        val catalogueSource = source as? CatalogueSource ?: return
+        val keepWaitingOnFailure = state.value.isWaitingForInitialFilterLoad
+
+        mutableState.update { it.copy(filterState = FilterUiState.Loading) }
+
+        runCatching {
+            catalogueSource.resolveFilterList()
+        }.onSuccess { sourceFilters ->
+            mutableState.update {
+                it.initializeForSource(
+                    sourceFilters = sourceFilters,
+                    initialFilterSnapshot = initialFilterSnapshot,
+                ).copy(
+                    filterState = FilterUiState.Ready,
+                    isWaitingForInitialFilterLoad = false,
+                )
+            }
+        }.onFailure { throwable ->
+            mutableState.update {
+                it.copy(
+                    filterState = FilterUiState.Error(throwable),
+                    isWaitingForInitialFilterLoad = keepWaitingOnFailure,
+                )
+            }
+        }
+    }
+
+    private suspend fun freshResolvedFilters(): FilterList? {
+        val catalogueSource = source as? CatalogueSource ?: return null
+        return runCatching {
+            catalogueSource.resolveFilterList()
+        }.onFailure { throwable ->
+            mutableState.update {
+                it.copy(
+                    filterState = FilterUiState.Error(throwable),
+                    isWaitingForInitialFilterLoad = state.value.isWaitingForInitialFilterLoad,
+                )
+            }
+        }.getOrNull()
     }
 
     /**
@@ -474,10 +560,6 @@ class BrowseSourceScreenModel(
         }
     }
 
-    fun openFilterSheet() {
-        setDialog(Dialog.Filter)
-    }
-
     fun showSavePresetDialog() {
         if (!feedsEnabled) return
         setDialog(
@@ -557,12 +639,19 @@ class BrowseSourceScreenModel(
                 setListing(Listing.Latest)
             }
             FeedListingMode.Search -> {
-                val filters = source.getFilterList().applySnapshot(preset.filters)
-                setFilters(filters)
-                search(
-                    query = preset.query,
-                    filters = filters,
-                )
+                screenModelScope.launchIO {
+                    val filters = freshResolvedFilters()?.applySnapshot(preset.filters) ?: return@launchIO
+                    mutableState.update {
+                        it.copy(
+                            filters = filters,
+                            listing = Listing.Search(query = preset.query, filters = filters),
+                            toolbarQuery = preset.query,
+                            appliedCustomPresetId = preset.id.takeIf(::canDeletePreset),
+                            filterState = FilterUiState.Ready,
+                        )
+                    }
+                }
+                return
             }
         }
 
@@ -610,23 +699,28 @@ class BrowseSourceScreenModel(
             Dialog.SavePreset.Mode.Create -> {
                 if (source !is CatalogueSource) return
 
-                val presetState = state.value.toSavedPresetState(defaultFilters = source.getFilterList())
-                val preset = SourceFeedPreset(
-                    id = UUID.randomUUID().toString(),
-                    sourceId = sourceId,
-                    name = trimmed,
-                    listingMode = presetState.listingMode,
-                    chronological = chronological,
-                    query = presetState.query,
-                    filters = presetState.filters,
-                )
-                browseFeedService.savePreset(preset)
-                mutableState.update {
-                    it.copy(
-                        appliedCustomPresetId = preset.id,
-                        dialog = null,
+                screenModelScope.launchIO {
+                    val defaultFilters = freshResolvedFilters() ?: return@launchIO
+                    val presetState = state.value.toSavedPresetState(defaultFilters = defaultFilters)
+                    val preset = SourceFeedPreset(
+                        id = UUID.randomUUID().toString(),
+                        sourceId = sourceId,
+                        name = trimmed,
+                        listingMode = presetState.listingMode,
+                        chronological = chronological,
+                        query = presetState.query,
+                        filters = presetState.filters,
                     )
+                    browseFeedService.savePreset(preset)
+                    mutableState.update {
+                        it.copy(
+                            appliedCustomPresetId = preset.id,
+                            dialog = null,
+                            filterState = FilterUiState.Ready,
+                        )
+                    }
                 }
+                return
             }
             Dialog.SavePreset.Mode.EditMetadata -> {
                 val preset = customPreset(dialog.presetId) ?: return
@@ -642,22 +736,27 @@ class BrowseSourceScreenModel(
                 if (source !is CatalogueSource) return
 
                 val preset = customPreset(dialog.presetId) ?: return
-                val presetState = state.value.toSavedPresetState(defaultFilters = source.getFilterList())
-                browseFeedService.savePreset(
-                    preset.copy(
-                        name = trimmed,
-                        chronological = chronological,
-                        listingMode = presetState.listingMode,
-                        query = presetState.query,
-                        filters = presetState.filters,
-                    ),
-                )
-                mutableState.update {
-                    it.copy(
-                        appliedCustomPresetId = preset.id,
-                        dialog = null,
+                screenModelScope.launchIO {
+                    val defaultFilters = freshResolvedFilters() ?: return@launchIO
+                    val presetState = state.value.toSavedPresetState(defaultFilters = defaultFilters)
+                    browseFeedService.savePreset(
+                        preset.copy(
+                            name = trimmed,
+                            chronological = chronological,
+                            listingMode = presetState.listingMode,
+                            query = presetState.query,
+                            filters = presetState.filters,
+                        ),
                     )
+                    mutableState.update {
+                        it.copy(
+                            appliedCustomPresetId = preset.id,
+                            dialog = null,
+                            filterState = FilterUiState.Ready,
+                        )
+                    }
                 }
+                return
             }
         }
     }
@@ -844,12 +943,23 @@ class BrowseSourceScreenModel(
     data class State(
         val listing: Listing,
         val filters: FilterList = FilterList(),
+        val filterState: FilterUiState = FilterUiState.Uninitialized,
+        val isWaitingForInitialFilterLoad: Boolean = false,
         val toolbarQuery: String? = null,
         val appliedCustomPresetId: String? = null,
         val dialog: Dialog? = null,
     ) {
         val isUserQuery get() = listing is Listing.Search && !listing.query.isNullOrEmpty()
+        val hasFilterCapability get() = filterState !is FilterUiState.Unavailable
     }
+}
+
+sealed interface FilterUiState {
+    data object Uninitialized : FilterUiState
+    data object Loading : FilterUiState
+    data object Ready : FilterUiState
+    data class Error(val throwable: Throwable) : FilterUiState
+    data object Unavailable : FilterUiState
 }
 
 internal fun BrowseSourceScreenModel.State.initializeForSource(
@@ -867,6 +977,14 @@ internal fun BrowseSourceScreenModel.State.initializeForSource(
         listing = updatedListing,
         filters = filters,
         toolbarQuery = query,
+    )
+}
+
+private fun initialBrowseSourceState(
+    listingQuery: String?,
+): BrowseSourceScreenModel.State {
+    return BrowseSourceScreenModel.State(
+        listing = BrowseSourceScreenModel.Listing.valueOf(listingQuery),
     )
 }
 
