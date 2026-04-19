@@ -40,6 +40,7 @@ internal fun VideoPlayerTimeline(
     onScrubStarted: () -> Unit,
     onScrubPositionChange: (Long) -> Unit,
     onScrubFinished: () -> Unit,
+    footerContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val effectiveDurationMs = durationMs.coerceAtLeast(0L)
@@ -87,7 +88,7 @@ internal fun VideoPlayerTimeline(
             )
             .navigationBarsPadding()
             .padding(horizontal = 18.dp)
-            .padding(top = 6.dp, bottom = 40.dp),
+            .padding(top = 6.dp, bottom = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (isScrubbing) {
@@ -130,6 +131,16 @@ internal fun VideoPlayerTimeline(
                     .fillMaxWidth()
                     .height(timelineBarHeight),
             )
+
+            if (footerContent != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 6.dp),
+                ) {
+                    footerContent()
+                }
+            }
         }
     }
 }

@@ -110,6 +110,7 @@
     <string name="action_edit_cover">Edit cover</string>
     <string name="action_view_chapters">View chapters</string>
     <string name="action_view_episodes">View episodes</string>
+    <string name="episodes">Episodes</string>
     <string name="action_play">Play</string>
     <string name="action_pause">Pause</string>
     <string name="action_lock">Lock</string>

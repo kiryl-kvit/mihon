@@ -61,15 +61,11 @@ import tachiyomi.domain.anime.repository.AnimeEpisodeRepository
 import tachiyomi.domain.anime.repository.AnimePlaybackStateRepository
 import tachiyomi.domain.anime.repository.AnimeRepository
 import tachiyomi.domain.anime.repository.MergedAnimeRepository
-import tachiyomi.domain.anime.service.groupedByMergedMember
-import tachiyomi.domain.anime.service.sortedForMergedDisplay
-import tachiyomi.domain.anime.service.sortedForReading
 import tachiyomi.domain.category.interactor.GetAnimeCategories
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetAnimeCategories
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.AnimeSourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -916,21 +912,12 @@ class AnimeScreenModel(
                 get() = episodes.firstOrNull { it.id == primaryEpisodeId }
 
             val episodeListItems: List<AnimeEpisodeListEntry>
-                get() = if (!isMerged) {
-                    episodes.map(AnimeEpisodeListEntry::Item)
-                } else {
-                    buildList {
-                        episodes.groupedByMergedMember(memberIds).forEach { (memberId, memberEpisodes) ->
-                            add(
-                                AnimeEpisodeListEntry.MemberHeader(
-                                    animeId = memberId,
-                                    title = memberTitleById[memberId].orEmpty().ifBlank { anime.displayTitle },
-                                ),
-                            )
-                            addAll(memberEpisodes.map(AnimeEpisodeListEntry::Item))
-                        }
-                    }
-                }
+                get() = buildAnimeEpisodeListItems(
+                    episodes = episodes,
+                    memberIds = memberIds,
+                    memberTitleById = memberTitleById,
+                    fallbackTitle = anime.displayTitle,
+                )
 
             val scheduleSummary: ScheduleSummary
                 get() = when (val schedule = schedule) {
@@ -1199,14 +1186,13 @@ class AnimeScreenModel(
     ): State.Success {
         val currentSuccess = successState
         val immutableMemberIds = memberIds.toImmutableList()
-        val playbackStateByEpisodeId = playbackStates.associateBy(AnimePlaybackState::episodeId)
-        val filteredEpisodes = episodes
-            .filterEpisodes(anime, playbackStateByEpisodeId)
-        val displayedEpisodes = filteredEpisodes
-            .sortEpisodes(anime, memberIds)
-        val primaryEpisodeId = selectPrimaryEpisodeId(
-            filteredEpisodes.sortedForReading(anime, memberIds),
-            playbackStateByEpisodeId,
+        val memberTitleById = memberAnimes.associate { it.id to it.displayTitle }
+        val episodeDisplay = buildAnimeEpisodeDisplayData(
+            anime = anime,
+            episodes = episodes,
+            memberIds = memberIds,
+            memberTitleById = memberTitleById,
+            playbackStates = playbackStates,
         )
         val hasScheduleSupport = memberAnimes.any { memberAnime ->
             animeSourceManager.get(memberAnime.source) is AnimeScheduleSource
@@ -1223,7 +1209,7 @@ class AnimeScreenModel(
             anime = anime,
             sourceName = getSourceName(anime, memberIds),
             memberIds = immutableMemberIds,
-            memberTitleById = memberAnimes.associate { it.id to it.displayTitle },
+            memberTitleById = memberTitleById,
             mergedMemberTitles = memberAnimes.map(AnimeTitle::displayTitle)
                 .filter { it.isNotBlank() }
                 .distinct()
@@ -1231,10 +1217,10 @@ class AnimeScreenModel(
             mergeTargetId = mergeTargetId,
             mergeGroupMemberIds = mergeGroupMemberIds.toImmutableList(),
             isFromSource = fromSource,
-            episodes = displayedEpisodes.toImmutableList(),
-            playbackStateByEpisodeId = playbackStateByEpisodeId,
-            primaryEpisodeId = primaryEpisodeId,
-            selection = displayedEpisodes.asSequence()
+            episodes = episodeDisplay.episodes.toImmutableList(),
+            playbackStateByEpisodeId = episodeDisplay.playbackStateByEpisodeId,
+            primaryEpisodeId = episodeDisplay.primaryEpisodeId,
+            selection = episodeDisplay.episodes.asSequence()
                 .map(AnimeEpisode::id)
                 .filter(selectedEpisodeIds::contains)
                 .toSet()
@@ -1451,56 +1437,6 @@ sealed class AnimeEpisodeListEntry {
     data class Item(
         val episode: AnimeEpisode,
     ) : AnimeEpisodeListEntry()
-}
-
-private fun List<AnimeEpisode>.filterEpisodes(
-    anime: AnimeTitle,
-    playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
-): List<AnimeEpisode> {
-    val unwatchedFilter = anime.unwatchedFilter
-    val startedFilter = anime.startedFilter
-
-    return asSequence()
-        .filter { episode ->
-            applyFilter(unwatchedFilter) { !episode.completed }
-        }
-        .filter { episode ->
-            applyFilter(startedFilter) {
-                val playbackState = playbackStateByEpisodeId[episode.id]
-                playbackState?.let { !it.completed && it.positionMs > 0L && it.durationMs > 0L } == true ||
-                    episode.watched || episode.completed
-            }
-        }
-        .toList()
-}
-
-private fun List<AnimeEpisode>.sortEpisodes(
-    anime: AnimeTitle,
-    memberIds: List<Long> = map(AnimeEpisode::animeId).distinct(),
-): List<AnimeEpisode> {
-    if (memberIds.size > 1) {
-        return sortedForMergedDisplay(anime, memberIds)
-    }
-
-    val ascending = !anime.sortDescending()
-    val comparator = when (anime.sorting) {
-        AnimeTitle.EPISODE_SORTING_NUMBER -> compareBy<AnimeEpisode> {
-            it.episodeNumber.takeIf { number -> number >= 0.0 } ?: Double.MAX_VALUE
-        }.thenBy { it.sourceOrder }
-        AnimeTitle.EPISODE_SORTING_UPLOAD_DATE -> compareBy<AnimeEpisode> {
-            it.dateUpload.takeIf { date -> date > 0L } ?: Long.MAX_VALUE
-        }.thenBy { it.sourceOrder }
-        AnimeTitle.EPISODE_SORTING_ALPHABET -> compareBy<AnimeEpisode>(
-            { it.name.ifBlank { it.url } },
-            { it.sourceOrder },
-        )
-        else -> compareBy<AnimeEpisode> { it.sourceOrder }
-    }
-    return if (ascending) {
-        sortedWith(comparator)
-    } else {
-        sortedWith(comparator.reversed())
-    }
 }
 
 private data class ScheduleMemberTarget(

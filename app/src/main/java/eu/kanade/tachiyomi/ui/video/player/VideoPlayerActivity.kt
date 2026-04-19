@@ -25,6 +25,7 @@ import android.view.MotionEvent
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
@@ -262,6 +263,11 @@ class VideoPlayerActivity : BaseActivity() {
                     current.streamUrl,
                     subtitlePayloadKey,
                 ) { mutableStateOf(false) }
+                var episodesDrawerVisible by remember(
+                    current.episodeId,
+                    current.streamUrl,
+                    subtitlePayloadKey,
+                ) { mutableStateOf(false) }
                 var subtitleEditorVisible by remember(
                     current.episodeId,
                     current.streamUrl,
@@ -326,6 +332,7 @@ class VideoPlayerActivity : BaseActivity() {
                 val onPreviousEpisode = {
                     controlsVisible = true
                     settingsVisible = false
+                    episodesDrawerVisible = false
                     subtitleEditorVisible = false
                     isScrubbing = false
                     controllerInteractionSequence += 1L
@@ -335,6 +342,7 @@ class VideoPlayerActivity : BaseActivity() {
                 val onNextEpisode = {
                     controlsVisible = true
                     settingsVisible = false
+                    episodesDrawerVisible = false
                     subtitleEditorVisible = false
                     isScrubbing = false
                     controllerInteractionSequence += 1L
@@ -550,6 +558,7 @@ class VideoPlayerActivity : BaseActivity() {
                 LaunchedEffect(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     startupOverlayVisible = true
                     settingsVisible = false
+                    episodesDrawerVisible = false
                     subtitleEditorVisible = false
                     subtitleEditorDraft = current.playback.subtitleAppearance
                     resumePlaybackAfterSubtitleEditor = false
@@ -612,6 +621,7 @@ class VideoPlayerActivity : BaseActivity() {
                     playbackSnapshot.isLoading,
                     isScrubbing,
                     settingsVisible,
+                    episodesDrawerVisible,
                     startupOverlayVisible,
                 ) {
                     if (
@@ -620,6 +630,7 @@ class VideoPlayerActivity : BaseActivity() {
                         playbackSnapshot.isLoading ||
                         isScrubbing ||
                         settingsVisible ||
+                        episodesDrawerVisible ||
                         startupOverlayVisible
                     ) {
                         return@LaunchedEffect
@@ -641,11 +652,16 @@ class VideoPlayerActivity : BaseActivity() {
                 val latestResolveSeekDirectionFromTap by rememberUpdatedState(resolveSeekDirectionFromTap)
                 val latestPerformGestureSeek by rememberUpdatedState(performGestureSeek)
                 val latestSeekGestureModeActive by rememberUpdatedState(shouldHideChromeForSeekFeedback)
+                BackHandler(enabled = episodesDrawerVisible) {
+                    episodesDrawerVisible = false
+                    registerControllerInteraction(true)
+                }
                 LaunchedEffect(isInPictureInPictureMode) {
                     if (isInPictureInPictureMode) {
                         controlsLocked = false
                         controlsVisible = false
                         settingsVisible = false
+                        episodesDrawerVisible = false
                         subtitleEditorVisible = false
                         isScrubbing = false
                         ignoreNextGestureSeekTapUp = false
@@ -879,6 +895,12 @@ class VideoPlayerActivity : BaseActivity() {
                             playbackSnapshot = playbackSnapshot,
                             displayedPositionMs = displayedPositionMs,
                             isScrubbing = isScrubbing,
+                            episodesDrawerVisible = episodesDrawerVisible,
+                            anime = current.anime,
+                            currentEpisodeId = current.episodeId,
+                            episodeListItems = current.episodeListItems,
+                            playbackStateByEpisodeId = current.playbackStateByEpisodeId,
+                            sourceAvailable = current.sourceAvailable,
                             hasPreviousEpisode = current.previousEpisodeId != null,
                             hasNextEpisode = current.nextEpisodeId != null,
                             seekFeedbackState = seekFeedbackState,
@@ -898,12 +920,35 @@ class VideoPlayerActivity : BaseActivity() {
                                 controlsLocked = !controlsLocked
                                 controlsVisible = true
                                 settingsVisible = false
+                                episodesDrawerVisible = false
                                 isScrubbing = false
                                 registerControllerInteraction(true)
                             },
                             onOpenSettings = {
+                                episodesDrawerVisible = false
                                 settingsVisible = true
                                 registerControllerInteraction(true)
+                            },
+                            onOpenEpisodes = {
+                                settingsVisible = false
+                                episodesDrawerVisible = true
+                                registerControllerInteraction(true)
+                            },
+                            onDismissEpisodes = {
+                                episodesDrawerVisible = false
+                                registerControllerInteraction(true)
+                            },
+                            onEpisodeSelected = { episode ->
+                                if (episode.id != current.episodeId) {
+                                    episodesDrawerVisible = false
+                                    controlsVisible = true
+                                    flushPlaybackState()
+                                    viewModel.playEpisode(
+                                        visibleAnimeId = current.visibleAnimeId,
+                                        ownerAnimeId = episode.animeId,
+                                        episodeId = episode.id,
+                                    )
+                                }
                             },
                             onPreviousEpisode = onPreviousEpisode,
                             onSeekBackward = {
@@ -965,6 +1010,7 @@ class VideoPlayerActivity : BaseActivity() {
                             onSelectSubtitle = viewModel::selectSubtitle,
                             onOpenSubtitleSettings = {
                                 settingsVisible = false
+                                episodesDrawerVisible = false
                                 subtitleEditorDraft = current.playback.subtitleAppearance
                                 resumePlaybackAfterSubtitleEditor = currentPlayer.isPlaying
                                 currentPlayer.pause()
