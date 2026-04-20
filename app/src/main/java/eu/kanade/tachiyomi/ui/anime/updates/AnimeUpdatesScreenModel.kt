@@ -246,22 +246,22 @@ class AnimeUpdatesScreenModel(
 
     private suspend fun List<AnimeUpdatesWithRelations>.toUpdateItems(): List<AnimeUpdatesItem> {
         val visibleTargetCache = mutableMapOf<Long, Long>()
-        val visibleAnimeTitleCache = mutableMapOf<Long, Pair<String, MangaCover>?>()
+        val animeCache = mutableMapOf<Long, Pair<String, MangaCover>?>()
 
         return map { update ->
             val visibleAnimeId = visibleTargetCache.getOrPut(update.animeId) {
                 getMergedAnime.awaitVisibleTargetId(update.animeId)
             }
-            val visibleAnime = visibleAnimeTitleCache.getOrPut(visibleAnimeId) {
-                getAnime.await(visibleAnimeId)?.let { anime ->
+            val anime = animeCache.getOrPut(update.animeId) {
+                getAnime.await(update.animeId)?.let { anime ->
                     anime.displayTitle to anime.toMangaCover()
                 }
             }
             AnimeUpdatesItem(
                 update = update,
                 visibleAnimeId = visibleAnimeId,
-                visibleAnimeTitle = visibleAnime?.first ?: update.animeTitle,
-                visibleCoverData = visibleAnime?.second ?: update.coverData,
+                visibleAnimeTitle = anime?.first ?: update.animeTitle,
+                visibleCoverData = anime?.second ?: update.coverData,
                 selected = update.episodeId in selectedEpisodeIds,
             )
         }

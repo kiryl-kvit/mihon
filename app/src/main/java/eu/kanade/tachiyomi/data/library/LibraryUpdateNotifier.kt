@@ -173,7 +173,7 @@ class LibraryUpdateNotifier(
      * @param updates a list of manga with new updates.
      */
     fun showUpdateNotifications(updates: List<Pair<Manga, Array<Chapter>>>) {
-        val visibleUpdates = runBlocking {
+        val childUpdates = runBlocking {
             updates.map { (manga, chapters) ->
                 NotificationMangaUpdate(
                     originManga = manga,
@@ -189,22 +189,22 @@ class LibraryUpdateNotifier(
             Notifications.CHANNEL_NEW_CHAPTERS,
         ) {
             setContentTitle(context.stringResource(MR.strings.notification_new_chapters))
-            if (visibleUpdates.size == 1 && !securityPreferences.hideNotificationContent.get()) {
-                setContentText(visibleUpdates.first().visibleManga.presentationTitle().chop(NOTIF_TITLE_MAX_LEN))
+            if (childUpdates.size == 1 && !securityPreferences.hideNotificationContent.get()) {
+                setContentText(childUpdates.first().originManga.presentationTitle().chop(NOTIF_TITLE_MAX_LEN))
             } else {
                 setContentText(
                     context.pluralStringResource(
                         MR.plurals.notification_new_chapters_summary,
-                        visibleUpdates.size,
-                        visibleUpdates.size,
+                        childUpdates.size,
+                        childUpdates.size,
                     ),
                 )
 
                 if (!securityPreferences.hideNotificationContent.get()) {
                     setStyle(
                         NotificationCompat.BigTextStyle().bigText(
-                            visibleUpdates.joinToString("\n") {
-                                it.visibleManga.presentationTitle().chop(NOTIF_TITLE_MAX_LEN)
+                            childUpdates.joinToString("\n") {
+                                it.originManga.presentationTitle().chop(NOTIF_TITLE_MAX_LEN)
                             },
                         ),
                     )
@@ -227,7 +227,7 @@ class LibraryUpdateNotifier(
         if (!securityPreferences.hideNotificationContent.get()) {
             launchUI {
                 context.notify(
-                    visibleUpdates.map { update ->
+                    childUpdates.map { update ->
                         NotificationManagerCompat.NotificationWithIdAndTag(
                             update.originManga.id.hashCode(),
                             createNewChaptersNotification(update.originManga, update.visibleManga, update.chapters),
@@ -243,9 +243,9 @@ class LibraryUpdateNotifier(
         visibleManga: Manga,
         chapters: Array<Chapter>,
     ): Notification {
-        val icon = getMangaIcon(visibleManga)
+        val icon = getMangaIcon(manga)
         return context.notificationBuilder(Notifications.CHANNEL_NEW_CHAPTERS) {
-            setContentTitle(visibleManga.presentationTitle())
+            setContentTitle(manga.presentationTitle())
 
             val description = getNewChaptersDescription(chapters)
             setContentText(description)

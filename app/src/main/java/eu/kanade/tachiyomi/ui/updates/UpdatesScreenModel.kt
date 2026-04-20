@@ -166,14 +166,14 @@ class UpdatesScreenModel(
 
     private suspend fun List<UpdatesWithRelations>.toUpdateItems(): List<UpdatesItem> {
         val visibleTargetCache = mutableMapOf<Long, Long>()
-        val visibleMangaCache = mutableMapOf<Long, tachiyomi.domain.manga.model.Manga?>()
+        val mangaCache = mutableMapOf<Long, tachiyomi.domain.manga.model.Manga?>()
 
         return map { update ->
             val visibleMangaId = visibleTargetCache.getOrPut(update.mangaId) {
                 getMergedManga.awaitVisibleTargetId(update.mangaId)
             }
-            val visibleManga = visibleMangaCache.getOrPut(visibleMangaId) {
-                getManga.await(visibleMangaId)
+            val manga = mangaCache.getOrPut(update.mangaId) {
+                getManga.await(update.mangaId)
             }
             val activeDownload = downloadManager.getQueuedDownloadOrNull(update.chapterId)
             val downloaded = downloadManager.isChapterDownloaded(
@@ -191,8 +191,8 @@ class UpdatesScreenModel(
             UpdatesItem(
                 update = update,
                 visibleMangaId = visibleMangaId,
-                visibleMangaTitle = visibleManga?.presentationTitle() ?: update.mangaTitle,
-                visibleCoverData = visibleManga?.asMangaCover() ?: update.coverData,
+                visibleMangaTitle = manga?.presentationTitle() ?: update.mangaTitle,
+                visibleCoverData = manga?.asMangaCover() ?: update.coverData,
                 downloadStateProvider = { downloadState },
                 downloadProgressProvider = { activeDownload?.progress ?: 0 },
                 selected = update.chapterId in selectedChapterIds,

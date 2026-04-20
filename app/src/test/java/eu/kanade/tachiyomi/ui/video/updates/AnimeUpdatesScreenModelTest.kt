@@ -86,7 +86,16 @@ class AnimeUpdatesScreenModelTest {
     }
 
     @Test
-    fun `remaps update item to visible merged anime metadata`() = runTest(dispatcher) {
+    fun `preserves child metadata while keeping visible merged anime id`() = runTest(dispatcher) {
+        val childAnime = AnimeTitle.create().copy(
+            id = 1L,
+            source = 1L,
+            url = "/child",
+            title = "Child Anime",
+            displayName = "Child Display",
+            thumbnailUrl = "https://example.com/child.jpg",
+            initialized = true,
+        )
         val visibleAnime = AnimeTitle.create().copy(
             id = 10L,
             source = 1L,
@@ -96,7 +105,7 @@ class AnimeUpdatesScreenModelTest {
             initialized = true,
         )
         val model = AnimeUpdatesScreenModel(
-            getAnime = GetAnime(FakeAnimeRepository(listOf(visibleAnime))),
+            getAnime = GetAnime(FakeAnimeRepository(listOf(childAnime, visibleAnime))),
             getMergedAnime = GetMergedAnime(
                 FakeMergedAnimeRepository(
                     visibleTargetIds = mapOf(1L to visibleAnime.id),
@@ -122,8 +131,8 @@ class AnimeUpdatesScreenModelTest {
         eventually(2.seconds) {
             val item = model.state.value.items.single()
             item.visibleAnimeId shouldBe visibleAnime.id
-            item.visibleAnimeTitle shouldBe visibleAnime.displayTitle
-            item.visibleCoverData shouldBe visibleAnime.toMangaCover()
+            item.visibleAnimeTitle shouldBe childAnime.displayTitle
+            item.visibleCoverData shouldBe childAnime.toMangaCover()
         }
     }
 
