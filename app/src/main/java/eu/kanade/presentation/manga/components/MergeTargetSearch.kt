@@ -11,11 +11,11 @@ private val nonTextRegex = Regex("[^\\p{L}0-9 ]")
 private val consecutiveSpacesRegex = Regex("\\s+")
 private val aliasSeparatorRegex = Regex("\\s*/\\s*")
 
-private const val minEligibleScore = 0.56
-private const val minSeededQueryLength = 3
-private const val minTokenSimilarity = 0.86
-private const val minComparableTokenLength = 3
-private const val minSingleTokenLength = 4
+private const val MIN_ELIGIBLE_SCORE = 0.56
+private const val MIN_SEEDED_QUERY_LENGTH = 3
+private const val MIN_TOKEN_SIMILARITY = 0.86
+private const val MIN_COMPARABLE_TOKEN_LENGTH = 3
+private const val MIN_SINGLE_TOKEN_LENGTH = 4
 
 interface MergeSearchTarget {
     val mergeSearchTitle: String
@@ -36,7 +36,7 @@ fun buildMergeTargetQuery(
         .replace(consecutiveSpacesRegex, " ")
         .trim()
 
-    return stripped.takeIf { it.length >= minSeededQueryLength } ?: trimmed
+    return stripped.takeIf { it.length >= MIN_SEEDED_QUERY_LENGTH } ?: trimmed
 }
 
 fun <T : MergeSearchTarget> rankMergeTargets(
@@ -51,7 +51,7 @@ fun <T : MergeSearchTarget> rankMergeTargets(
 
     return targets.asSequence()
         .map { target -> target to target.searchScore(queryVariants) }
-        .filter { (_, score) -> score >= minEligibleScore }
+        .filter { (_, score) -> score >= MIN_ELIGIBLE_SCORE }
         .sortedWith(
             compareByDescending<Pair<T, Double>> { it.second }
                 .thenBy { it.first.mergeSearchTitle.lowercase(Locale.ROOT) },
@@ -101,7 +101,7 @@ private fun score(query: String, haystack: String): Double {
     val haystackTokens = haystack.split(' ').filter { it.isNotBlank() }
     if (queryTokens.isEmpty() || haystackTokens.isEmpty()) return 0.0
 
-    val significantQueryTokens = queryTokens.filter { it.length >= minSingleTokenLength }
+    val significantQueryTokens = queryTokens.filter { it.length >= MIN_SINGLE_TOKEN_LENGTH }
     if (significantQueryTokens.isNotEmpty() && significantQueryTokens.none { queryToken ->
             haystackTokens.any { token ->
                 isStrongTokenMatch(queryToken, token)
@@ -147,7 +147,7 @@ private fun buildQueryVariants(query: String): List<String> {
 
     val aliases = query.split(aliasSeparatorRegex)
         .map(::normalizeForSearch)
-        .filter { it.length >= minSeededQueryLength }
+        .filter { it.length >= MIN_SEEDED_QUERY_LENGTH }
 
     return if (aliases.size > 1) {
         aliases.distinct()
@@ -158,10 +158,10 @@ private fun buildQueryVariants(query: String): List<String> {
 
 private fun isStrongTokenMatch(queryToken: String, token: String): Boolean {
     if (queryToken == token) return true
-    if (minOf(queryToken.length, token.length) < minComparableTokenLength) return false
+    if (minOf(queryToken.length, token.length) < MIN_COMPARABLE_TOKEN_LENGTH) return false
 
     return token.contains(queryToken) ||
         queryToken.contains(token) ||
         token.startsWith(queryToken) ||
-        normalizedLevenshtein.similarity(queryToken, token) >= minTokenSimilarity
+        normalizedLevenshtein.similarity(queryToken, token) >= MIN_TOKEN_SIMILARITY
 }

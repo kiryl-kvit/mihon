@@ -10,8 +10,8 @@ import eu.kanade.domain.anime.model.episodesFiltered
 import eu.kanade.presentation.anime.AnimeMergeTarget
 import eu.kanade.presentation.anime.buildAnimeMergeTargets
 import eu.kanade.presentation.anime.toMergeEditorEntry
-import eu.kanade.presentation.manga.components.buildMergeTargetQuery
 import eu.kanade.presentation.manga.components.MergeEditorEntry
+import eu.kanade.presentation.manga.components.buildMergeTargetQuery
 import eu.kanade.presentation.manga.components.rankMergeTargets
 import eu.kanade.presentation.updates.UpdatesSelectionState
 import eu.kanade.presentation.util.formattedMessage

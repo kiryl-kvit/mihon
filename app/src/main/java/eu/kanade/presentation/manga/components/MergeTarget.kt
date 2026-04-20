@@ -15,7 +15,7 @@ data class MergeTarget(
     val memberMangas: ImmutableList<Manga>,
     val categoryIds: List<Long>,
     val entry: MergeEditorEntry,
-): MergeSearchTarget {
+) : MergeSearchTarget {
     override val mergeSearchTitle: String
         get() = entry.title
 

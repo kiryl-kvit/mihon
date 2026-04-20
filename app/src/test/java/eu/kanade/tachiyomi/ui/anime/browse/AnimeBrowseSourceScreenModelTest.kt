@@ -272,7 +272,9 @@ class AnimeBrowseSourceScreenModelTest {
     }
 
     @Test
-    fun `show merge target picker strips duplicate patterns from browse anime title and prefilters targets`() = runTest(dispatcher) {
+    fun `show merge target picker strips duplicate patterns from browse anime title and prefilters targets`() = runTest(
+        dispatcher,
+    ) {
         val current = anime(id = 10L, favorite = false, title = "Current Search [1080p] Season 2")
         val matching = anime(id = 20L, favorite = true, title = "Current Search Results")
         val other = anime(id = 30L, favorite = true, title = "Other Target")

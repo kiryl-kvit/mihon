@@ -931,7 +931,9 @@ class AnimeScreenModelTest {
     }
 
     @Test
-    fun `show merge target picker strips duplicate patterns from visible title and prefilters targets`() = runTest(dispatcher) {
+    fun `show merge target picker strips duplicate patterns from visible title and prefilters targets`() = runTest(
+        dispatcher,
+    ) {
         val anime = AnimeTitle.create().copy(
             id = 1L,
             source = 99L,

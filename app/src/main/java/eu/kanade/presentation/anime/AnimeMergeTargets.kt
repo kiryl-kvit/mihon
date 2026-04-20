@@ -20,7 +20,7 @@ data class AnimeMergeTarget(
     val memberAnimes: ImmutableList<AnimeTitle>,
     val categoryIds: List<Long>,
     val entry: MergeEditorEntry,
-): MergeSearchTarget {
+) : MergeSearchTarget {
     override val mergeSearchTitle: String
         get() = entry.title
 

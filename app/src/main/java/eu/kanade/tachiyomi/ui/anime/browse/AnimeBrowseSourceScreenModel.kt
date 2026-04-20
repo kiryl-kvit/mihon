@@ -20,8 +20,8 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.anime.AnimeMergeTarget
 import eu.kanade.presentation.anime.buildAnimeMergeTargets
 import eu.kanade.presentation.anime.toMergeEditorEntry
-import eu.kanade.presentation.manga.components.buildMergeTargetQuery
 import eu.kanade.presentation.manga.components.MergeEditorEntry
+import eu.kanade.presentation.manga.components.buildMergeTargetQuery
 import eu.kanade.presentation.manga.components.rankMergeTargets
 import eu.kanade.presentation.util.ioCoroutineScope
 import eu.kanade.tachiyomi.source.AnimeCatalogueSource
