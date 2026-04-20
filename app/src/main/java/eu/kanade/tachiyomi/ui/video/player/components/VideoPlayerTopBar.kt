@@ -106,7 +106,7 @@ internal fun VideoPlayerTopBar(
 }
 
 @Composable
-private fun VideoPlayerUtilityButton(
+internal fun VideoPlayerUtilityButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit,
 ) {

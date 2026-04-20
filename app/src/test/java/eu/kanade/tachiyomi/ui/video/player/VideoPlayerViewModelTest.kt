@@ -177,6 +177,28 @@ class VideoPlayerViewModelTest {
     }
 
     @Test
+    fun `session playback speed restores from saved state`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(mapOf("session_playback_speed" to 1.5f)),
+            resolveVideoStream = fakeResolver(animeId = 1L, episodeId = 2L),
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(episodes = emptyList()),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 2L)
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.playback.sessionPlaybackSpeed shouldBe 1.5f
+    }
+
+    @Test
     fun `play next episode resolves adjacent episode in source order`() = runTest(dispatcher) {
         val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
         val historyRepository = FakeAnimeHistoryRepository()
@@ -208,6 +230,38 @@ class VideoPlayerViewModelTest {
         state.episodeId shouldBe 20L
         state.previousEpisodeId shouldBe 10L
         state.nextEpisodeId shouldBe 30L
+    }
+
+    @Test
+    fun `session playback speed survives next episode navigation`() = runTest(dispatcher) {
+        val playbackRepository = FakeAnimePlaybackStateRepository(existingState = null)
+        val historyRepository = FakeAnimeHistoryRepository()
+        val resolver = RecordingVideoStreamResolver()
+        val viewModel = VideoPlayerViewModel(
+            savedState = SavedStateHandle(),
+            resolveVideoStream = resolver,
+            animePlaybackPreferencesRepository = FakeAnimePlaybackPreferencesRepository(),
+            animeEpisodeRepository = FakeAnimeEpisodeRepository(
+                episodes = listOf(
+                    videoEpisode(id = 10L, animeId = 1L, sourceOrder = 1L),
+                    videoEpisode(id = 20L, animeId = 1L, sourceOrder = 2L),
+                ),
+            ),
+            videoPlaybackStateRepository = playbackRepository,
+            videoHistoryRepository = historyRepository,
+            resolveDispatcher = dispatcher,
+            persistenceDispatcher = dispatcher,
+        )
+
+        viewModel.init(animeId = 1L, episodeId = 10L)
+        advanceUntilIdle()
+        viewModel.updateSessionPlaybackSpeed(1.25f)
+        viewModel.playNextEpisode()
+        advanceUntilIdle()
+
+        val state = viewModel.state.value as VideoPlayerViewModel.State.Ready
+        state.episodeId shouldBe 20L
+        state.playback.sessionPlaybackSpeed shouldBe 1.25f
     }
 
     @Test

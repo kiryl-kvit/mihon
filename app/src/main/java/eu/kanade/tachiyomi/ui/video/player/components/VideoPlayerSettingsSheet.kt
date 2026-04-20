@@ -31,11 +31,14 @@ import eu.kanade.tachiyomi.source.model.VideoPlaybackOption
 import eu.kanade.tachiyomi.source.model.VideoPlaybackSelection
 import eu.kanade.tachiyomi.ui.video.player.VideoAdaptiveQualityPreference
 import eu.kanade.tachiyomi.ui.video.player.VideoPlaybackUiState
+import eu.kanade.tachiyomi.ui.video.player.VideoPlayerSettingsDraft
 import eu.kanade.tachiyomi.ui.video.player.VideoPlayerSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.defaultSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.externalSubtitleOptions
 import eu.kanade.tachiyomi.ui.video.player.resolvePreviewSubtitleSelection
 import eu.kanade.tachiyomi.ui.video.player.subtitleSelectionKey
+import eu.kanade.tachiyomi.ui.video.player.toSettingsDraft
+import eu.kanade.tachiyomi.ui.video.player.videoPlaybackSpeedOptions
 import eu.kanade.tachiyomi.ui.video.player.withSelectedDub
 import eu.kanade.tachiyomi.ui.video.player.withSelectedSourceQuality
 import eu.kanade.tachiyomi.ui.video.player.withSelectedStream
@@ -50,24 +53,23 @@ import tachiyomi.presentation.core.theme.header
 internal fun VideoPlayerSettingsSheet(
     playback: VideoPlaybackUiState,
     onDismissRequest: () -> Unit,
-    onApplySourceSelection: (VideoPlaybackSelection) -> Unit,
+    onApplySettings: (VideoPlayerSettingsDraft) -> Unit,
     onPreviewSourceSelection: (VideoPlaybackSelection) -> Unit,
-    onSelectAdaptiveQuality: (VideoAdaptiveQualityPreference) -> Unit,
-    onSelectSubtitle: (VideoPlayerSubtitleSelection) -> Unit,
     onOpenSubtitleSettings: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val originalSelection = remember(playback.sourceSelection, playback.preferredSourceQualityKey) {
-        playback.sourceSelection.copy(
-            sourceQualityKey = playback.preferredSourceQualityKey ?: playback.sourceSelection.sourceQualityKey,
-        )
+    val initialDraft = remember(
+        playback.sourceSelection,
+        playback.preferredSourceQualityKey,
+        playback.currentAdaptiveQuality,
+        playback.sessionPlaybackSpeed,
+        playback.currentSubtitle,
+    ) {
+        playback.toSettingsDraft()
     }
-    var draftSelection by remember(originalSelection) { mutableStateOf(originalSelection) }
-    var draftSubtitleSelection by remember(playback.currentSubtitle, originalSelection) {
-        mutableStateOf(playback.currentSubtitle)
-    }
-    var draftSubtitleTouched by remember(originalSelection) { mutableStateOf(false) }
-    val draftDubMatchesActive = draftSelection.dubKey == playback.sourceSelection.dubKey
+    var draft by remember(initialDraft) { mutableStateOf(initialDraft) }
+    var draftSubtitleTouched by remember(initialDraft) { mutableStateOf(false) }
+    val draftDubMatchesActive = draft.sourceSelection.dubKey == playback.sourceSelection.dubKey
     val previewSelection = playback.preview.selection
     val sourceQualityOptions = if (draftDubMatchesActive) {
         playback.playbackData.sourceQualities
@@ -76,7 +78,7 @@ internal fun VideoPlayerSettingsSheet(
     }
     val qualityOptionsLoading = !draftDubMatchesActive &&
         playback.isPreviewLoading &&
-        previewSelection?.dubKey == draftSelection.dubKey &&
+        previewSelection?.dubKey == draft.sourceSelection.dubKey &&
         sourceQualityOptions.isEmpty()
     val previewSubtitles = if (draftDubMatchesActive) {
         playback.subtitles
@@ -94,34 +96,36 @@ internal fun VideoPlayerSettingsSheet(
     }
     val subtitleOptionsLoading = !draftDubMatchesActive &&
         playback.isPreviewLoading &&
-        previewSelection?.dubKey == draftSelection.dubKey &&
+        previewSelection?.dubKey == draft.sourceSelection.dubKey &&
         playback.preview.subtitles == null
     val hasSelectableSubtitleOptions = subtitleOptions.any { it.selection != VideoPlayerSubtitleSelection.None }
-    val selectedSubtitle = draftSubtitleSelection
-    val hasPendingSourceChanges = draftSelection != originalSelection
-    val hasPendingSubtitleChanges = draftSubtitleSelection != playback.currentSubtitle
-    val hasPendingChanges = hasPendingSourceChanges || hasPendingSubtitleChanges
+    val selectedSubtitle = draft.subtitleSelection
+    val hasPendingChanges = draft != initialDraft
     val streamOptionsEnabled = draftDubMatchesActive &&
-        draftSelection.sourceQualityKey == playback.sourceSelection.sourceQualityKey
+        draft.sourceSelection.sourceQualityKey == playback.sourceSelection.sourceQualityKey
 
-    LaunchedEffect(draftSelection.dubKey) {
+    LaunchedEffect(draft.sourceSelection.dubKey) {
         if (draftDubMatchesActive) {
-            draftSubtitleSelection = playback.currentSubtitle
+            draft = draft.copy(subtitleSelection = playback.currentSubtitle)
             draftSubtitleTouched = false
             onPreviewSourceSelection(playback.sourceSelection)
         } else {
-            draftSubtitleSelection = resolvePreviewSubtitleSelection(playback.currentSubtitle, previewSubtitles)
+            draft = draft.copy(
+                subtitleSelection = resolvePreviewSubtitleSelection(playback.currentSubtitle, previewSubtitles),
+            )
             draftSubtitleTouched = false
-            onPreviewSourceSelection(draftSelection)
+            onPreviewSourceSelection(draft.sourceSelection)
         }
     }
 
     LaunchedEffect(draftDubMatchesActive, previewSubtitles, playback.currentSubtitle) {
         if (draftDubMatchesActive) {
-            draftSubtitleSelection = playback.currentSubtitle
+            draft = draft.copy(subtitleSelection = playback.currentSubtitle)
             draftSubtitleTouched = false
         } else if (!draftSubtitleTouched) {
-            draftSubtitleSelection = resolvePreviewSubtitleSelection(playback.currentSubtitle, previewSubtitles)
+            draft = draft.copy(
+                subtitleSelection = resolvePreviewSubtitleSelection(playback.currentSubtitle, previewSubtitles),
+            )
         }
     }
 
@@ -145,8 +149,15 @@ internal fun VideoPlayerSettingsSheet(
                         PlaybackOptionRow(
                             options = playback.playbackData.dubs,
                             titleRes = MR.strings.anime_playback_dub,
-                            selectedKey = draftSelection.dubKey,
-                            onSelect = { draftSelection = draftSelection.withSelectedDub(it, originalSelection) },
+                            selectedKey = draft.sourceSelection.dubKey,
+                            onSelect = {
+                                draft = draft.copy(
+                                    sourceSelection = draft.sourceSelection.withSelectedDub(
+                                        it,
+                                        initialDraft.sourceSelection,
+                                    ),
+                                )
+                            },
                         )
                     }
                 }
@@ -156,9 +167,13 @@ internal fun VideoPlayerSettingsSheet(
                         PlaybackOptionRow(
                             options = playback.streamOptions,
                             titleRes = MR.strings.anime_playback_stream,
-                            selectedKey = draftSelection.streamKey,
+                            selectedKey = draft.sourceSelection.streamKey,
                             enabled = streamOptionsEnabled,
-                            onSelect = { draftSelection = draftSelection.withSelectedStream(it) },
+                            onSelect = {
+                                draft = draft.copy(
+                                    sourceSelection = draft.sourceSelection.withSelectedStream(it),
+                                )
+                            },
                         )
                     }
                 }
@@ -171,9 +186,14 @@ internal fun VideoPlayerSettingsSheet(
                             PlaybackOptionRow(
                                 options = sourceQualityOptions,
                                 titleRes = MR.strings.anime_playback_source_quality,
-                                selectedKey = draftSelection.sourceQualityKey,
+                                selectedKey = draft.sourceSelection.sourceQualityKey,
                                 onSelect = {
-                                    draftSelection = draftSelection.withSelectedSourceQuality(it, originalSelection)
+                                    draft = draft.copy(
+                                        sourceSelection = draft.sourceSelection.withSelectedSourceQuality(
+                                            it,
+                                            initialDraft.sourceSelection,
+                                        ),
+                                    )
                                 },
                             )
                         }
@@ -185,11 +205,25 @@ internal fun VideoPlayerSettingsSheet(
                         SettingsChipRow(MR.strings.anime_playback_quality) {
                             playback.adaptiveQualities.forEach { option ->
                                 FilterChip(
-                                    selected = option.preference == playback.currentAdaptiveQuality,
-                                    onClick = { onSelectAdaptiveQuality(option.preference) },
+                                    selected = option.preference == draft.adaptiveQuality,
+                                    onClick = {
+                                        draft = draft.copy(adaptiveQuality = option.preference)
+                                    },
                                     label = { Text(option.label) },
                                 )
                             }
+                        }
+                    }
+                }
+
+                item {
+                    SettingsChipRow(MR.strings.anime_playback_speed) {
+                        videoPlaybackSpeedOptions.forEach { option ->
+                            FilterChip(
+                                selected = option.speed == draft.playbackSpeed,
+                                onClick = { draft = draft.copy(playbackSpeed = option.speed) },
+                                label = { Text(option.label) },
+                            )
                         }
                     }
                 }
@@ -216,7 +250,7 @@ internal fun VideoPlayerSettingsSheet(
                                         } else {
                                             defaultSubtitleSelection(previewSubtitles)
                                         }
-                                    draftSubtitleSelection = selection
+                                    draft = draft.copy(subtitleSelection = selection)
                                     draftSubtitleTouched = true
                                 },
                                 onOpenSubtitleSettings = if (hasSelectableSubtitleOptions) {
@@ -244,19 +278,20 @@ internal fun VideoPlayerSettingsSheet(
                 Button(
                     enabled = hasPendingChanges,
                     onClick = {
-                        onSelectSubtitle(
-                            if (draftDubMatchesActive) {
-                                draftSubtitleSelection
-                            } else {
-                                when (draftSubtitleSelection) {
-                                    is VideoPlayerSubtitleSelection.Embedded -> defaultSubtitleSelection(
-                                        previewSubtitles,
-                                    )
-                                    else -> draftSubtitleSelection
-                                }
-                            },
+                        onApplySettings(
+                            draft.copy(
+                                subtitleSelection = if (draftDubMatchesActive) {
+                                    draft.subtitleSelection
+                                } else {
+                                    when (draft.subtitleSelection) {
+                                        is VideoPlayerSubtitleSelection.Embedded -> {
+                                            defaultSubtitleSelection(previewSubtitles)
+                                        }
+                                        else -> draft.subtitleSelection
+                                    }
+                                },
+                            ),
                         )
-                        onApplySourceSelection(draftSelection)
                         onDismissRequest()
                     },
                 ) {

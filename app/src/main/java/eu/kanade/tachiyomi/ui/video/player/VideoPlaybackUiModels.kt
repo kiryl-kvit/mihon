@@ -12,6 +12,7 @@ import tachiyomi.domain.anime.model.PlayerQualityMode
 data class VideoPlaybackUiState(
     val sourceSelection: VideoPlaybackSelection,
     val preferredSourceQualityKey: String?,
+    val sessionPlaybackSpeed: Float,
     val currentStream: VideoStream,
     val subtitles: List<VideoSubtitle>,
     val currentStreamLabel: String,
@@ -72,6 +73,18 @@ sealed interface VideoAdaptiveQualityPreference {
 data class VideoAdaptiveQualityOption(
     val label: String,
     val preference: VideoAdaptiveQualityPreference,
+)
+
+data class VideoPlaybackSpeedOption(
+    val speed: Float,
+    val label: String,
+)
+
+data class VideoPlayerSettingsDraft(
+    val sourceSelection: VideoPlaybackSelection,
+    val adaptiveQuality: VideoAdaptiveQualityPreference,
+    val playbackSpeed: Float,
+    val subtitleSelection: VideoPlayerSubtitleSelection,
 )
 
 data class VideoSubtitleAppearance(
@@ -220,6 +233,24 @@ internal fun subtitleSelectionKey(selection: VideoPlayerSubtitleSelection): Stri
         is VideoPlayerSubtitleSelection.External -> subtitleChoiceKey(selection.subtitle)
         is VideoPlayerSubtitleSelection.Embedded -> selection.key
     }
+}
+
+internal val videoPlaybackSpeedOptions = listOf(
+    VideoPlaybackSpeedOption(speed = 0.5f, label = "0.5x"),
+    VideoPlaybackSpeedOption(speed = 0.75f, label = "0.75x"),
+    VideoPlaybackSpeedOption(speed = 1f, label = "1x"),
+    VideoPlaybackSpeedOption(speed = 1.25f, label = "1.25x"),
+    VideoPlaybackSpeedOption(speed = 1.5f, label = "1.5x"),
+    VideoPlaybackSpeedOption(speed = 2f, label = "2x"),
+)
+
+internal fun VideoPlaybackUiState.toSettingsDraft(): VideoPlayerSettingsDraft {
+    return VideoPlayerSettingsDraft(
+        sourceSelection = persistedSourceSelection,
+        adaptiveQuality = currentAdaptiveQuality,
+        playbackSpeed = sessionPlaybackSpeed,
+        subtitleSelection = currentSubtitle,
+    )
 }
 
 internal fun AnimePlaybackPreferences.toAdaptiveQualityPreference(): VideoAdaptiveQualityPreference {

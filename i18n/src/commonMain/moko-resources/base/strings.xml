@@ -789,6 +789,7 @@
     <string name="anime_playback_stream">Stream</string>
     <string name="anime_playback_source_quality">Source quality</string>
     <string name="anime_playback_quality">Playback quality</string>
+    <string name="anime_playback_speed">Playback speed</string>
     <string name="anime_playback_subtitles">Subtitles</string>
     <string name="anime_playback_subtitle_settings">Subtitle settings</string>
     <string name="anime_playback_subtitle_position">Position</string>
@@ -801,6 +802,7 @@
     <string name="anime_playback_subtitle_sample">Subtitle preview</string>
     <string name="anime_playback_brightness">Brightness</string>
     <string name="anime_playback_volume">Volume</string>
+    <string name="anime_playback_next_episode">Next episode</string>
     <string name="anime_playback_lock_controls">Lock controls</string>
     <string name="anime_playback_unlock_controls">Unlock controls</string>
     <string name="anime_playback_controls_locked">Controls locked</string>

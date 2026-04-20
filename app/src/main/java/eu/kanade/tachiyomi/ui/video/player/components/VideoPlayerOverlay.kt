@@ -188,7 +188,7 @@ internal fun VideoPlayerOverlay(
 
         AnimatedVisibility(
             visible = lockedChromeVisible,
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier.align(Alignment.TopCenter),
             enter = fadeIn(animationSpec = overlayCenterFadeAnimationSpec) +
                 scaleIn(
                     animationSpec = tween(120),
@@ -200,27 +200,14 @@ internal fun VideoPlayerOverlay(
                     targetScale = 0.97f,
                 ),
         ) {
-            Box(
-                modifier = Modifier
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.24f),
-                                Color.Black.copy(alpha = 0.1f),
-                                Color.Transparent,
-                            ),
-                            radius = 380f,
-                        ),
-                    )
-                    .fillMaxSize(),
-                contentAlignment = Alignment.Center,
+            VideoPlayerChromeContainer(
+                contentAlignment = Alignment.TopCenter,
             ) {
-                VideoPlayerChromeContainer(
-                    modifier = Modifier.fillMaxSize(),
-                    matchParentHeight = true,
-                ) {
-                    VideoPlayerLockedOverlay(onUnlock = onToggleLock)
-                }
+                VideoPlayerLockedOverlay(
+                    onUnlock = onToggleLock,
+                    showPictureInPictureButton = showPictureInPictureButton,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 

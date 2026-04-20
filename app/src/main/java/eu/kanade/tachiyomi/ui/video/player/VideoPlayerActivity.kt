@@ -18,6 +18,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Rational
 import android.view.GestureDetector
@@ -67,6 +68,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.ui.base.activity.BaseActivity
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerLoadingOverlay
+import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerNextEpisodeOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerOverlay
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSettingsSheet
 import eu.kanade.tachiyomi.ui.video.player.components.VideoPlayerSwitchingOverlay
@@ -84,7 +86,32 @@ import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 import kotlin.math.abs
+import kotlin.math.pow
 import kotlin.math.roundToInt
+
+private const val SIDE_GESTURE_VERTICAL_RATIO = 1.35f
+private const val SIDE_GESTURE_ZONE_HORIZONTAL_INSET_FRACTION = 0.1f
+private const val SIDE_GESTURE_ZONE_WIDTH_FRACTION = 0.16f
+private const val SIDE_GESTURE_ZONE_HEIGHT_FRACTION = 0.58f
+private const val MIN_GESTURE_LEVEL = 0
+private const val MAX_GESTURE_LEVEL = 100
+private const val DEFAULT_GESTURE_LEVEL = 50
+private const val DEFAULT_SYSTEM_BRIGHTNESS = 127
+private const val SYSTEM_BRIGHTNESS_MAX = 255
+private const val MIN_POSITIVE_BRIGHTNESS = 0.01f
+private const val BRIGHTNESS_RESPONSE_GAMMA = 2.2f
+private const val NEXT_EPISODE_COUNTDOWN_VISIBLE_BEFORE_END_MS = 5_000L
+private const val NEXT_EPISODE_COUNTDOWN_DURATION_MS = 8_000L
+private const val NEXT_EPISODE_COUNTDOWN_TICK_MS = 33L
+private const val TEMPORARY_SPEED_BOOST = 2f
+private const val HOLD_SPEED_ZONE_START_FRACTION = 0.25f
+private const val HOLD_SPEED_ZONE_END_FRACTION = 0.75f
+private const val HOLD_SPEED_ZONE_TOP_FRACTION = 0.18f
+private const val HOLD_SPEED_ZONE_BOTTOM_FRACTION = 0.78f
+private const val HOLD_SPEED_TOP_ZONE_LEFT_FRACTION = 0.1f
+private const val HOLD_SPEED_TOP_ZONE_RIGHT_FRACTION = 0.9f
+private const val HOLD_SPEED_TOP_ZONE_TOP_FRACTION = 0f
+private const val HOLD_SPEED_TOP_ZONE_BOTTOM_FRACTION = 0.2f
 
 class VideoPlayerActivity : BaseActivity() {
 
@@ -106,6 +133,7 @@ class VideoPlayerActivity : BaseActivity() {
     private var playbackBrightnessOverlayValue by mutableStateOf(0)
     private var playbackVolumeLevel by mutableStateOf(0)
     private var playbackVolumeMaxLevel by mutableStateOf(1)
+    private var controlsLocked by mutableStateOf(false)
     private var pictureInPictureActionReceiverRegistered = false
     private var brightnessObserverRegistered = false
     private val brightnessObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -312,9 +340,6 @@ class VideoPlayerActivity : BaseActivity() {
                 var ignoreNextGestureSeekTapUp by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf(false)
                 }
-                var controlsLocked by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
-                    mutableStateOf(false)
-                }
                 var sideGestureFeedbackSequence by remember(
                     current.episodeId,
                     current.streamUrl,
@@ -323,33 +348,65 @@ class VideoPlayerActivity : BaseActivity() {
                 var sideGestureFeedbackState by remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     mutableStateOf<VideoPlayerSideGestureFeedbackState?>(null)
                 }
+                var nextEpisodeCountdownProgress by remember { mutableStateOf(0f) }
+                var nextEpisodeCountdownStartedAtMs by remember { mutableStateOf<Long?>(null) }
+                var nextEpisodeAdvanceInFlight by remember { mutableStateOf(false) }
+                var temporarySpeedBoostActive by remember { mutableStateOf(false) }
                 val isInPictureInPictureMode = isInPictureInPictureModeState
                 val shouldHideChromeForSeekFeedback = seekFeedbackState?.hidePlayerChrome == true
                 val hidePlayerChrome = shouldHideChromeForSeekFeedback || isInPictureInPictureMode
+                val nextEpisodeAvailable = current.nextEpisodeId != null
+                val playbackRemainingMs = (playbackSnapshot.durationMs - playbackSnapshot.positionMs).coerceAtLeast(0L)
+                val shouldShowNextEpisodeCountdown =
+                    playbackSnapshot.durationMs > 0L &&
+                        playbackRemainingMs <= NEXT_EPISODE_COUNTDOWN_VISIBLE_BEFORE_END_MS
+                val showNextEpisodeCta = nextEpisodeCountdownStartedAtMs != null &&
+                    nextEpisodeAvailable &&
+                    !nextEpisodeAdvanceInFlight &&
+                    !controlsVisible &&
+                    !isInPictureInPictureMode &&
+                    !subtitleEditorVisible
                 val showPictureInPictureButton =
                     pictureInPictureEnabled && supportsPictureInPicture &&
                         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                val effectivePlaybackSpeed = if (temporarySpeedBoostActive) {
+                    TEMPORARY_SPEED_BOOST
+                } else {
+                    current.playback.sessionPlaybackSpeed
+                }
                 val onPreviousEpisode = {
-                    controlsVisible = true
+                    temporarySpeedBoostActive = false
+                    controlsVisible = !controlsLocked
                     settingsVisible = false
                     episodesDrawerVisible = false
                     subtitleEditorVisible = false
                     isScrubbing = false
+                    nextEpisodeCountdownStartedAtMs = null
+                    nextEpisodeAdvanceInFlight = true
+                    nextEpisodeCountdownProgress = 0f
                     controllerInteractionSequence += 1L
                     flushPlaybackState()
                     viewModel.playPreviousEpisode()
                 }
                 val onNextEpisode = {
-                    controlsVisible = true
-                    settingsVisible = false
-                    episodesDrawerVisible = false
-                    subtitleEditorVisible = false
-                    isScrubbing = false
-                    controllerInteractionSequence += 1L
-                    flushPlaybackState()
-                    viewModel.playNextEpisode()
+                    if (!nextEpisodeAdvanceInFlight && nextEpisodeAvailable) {
+                        temporarySpeedBoostActive = false
+                        nextEpisodeCountdownStartedAtMs = null
+                        nextEpisodeAdvanceInFlight = true
+                        nextEpisodeCountdownProgress = 0f
+                        controlsVisible = !controlsLocked
+                        settingsVisible = false
+                        episodesDrawerVisible = false
+                        subtitleEditorVisible = false
+                        isScrubbing = false
+                        controllerInteractionSequence += 1L
+                        flushPlaybackState()
+                        viewModel.playNextEpisode()
+                    }
                 }
                 val latestPlayback by rememberUpdatedState(current.playback)
+                val latestTemporarySpeedBoostActive by rememberUpdatedState(temporarySpeedBoostActive)
+                val initialSettingsDraft = remember(current.playback) { current.playback.toSettingsDraft() }
                 val currentPlayer = remember(current.episodeId, current.streamUrl, subtitlePayloadKey) {
                     buildVideoPlayer(
                         context = context,
@@ -562,8 +619,11 @@ class VideoPlayerActivity : BaseActivity() {
                     subtitleEditorVisible = false
                     subtitleEditorDraft = current.playback.subtitleAppearance
                     resumePlaybackAfterSubtitleEditor = false
-                    controlsLocked = false
-                    controlsVisible = !isInPictureInPictureMode
+                    temporarySpeedBoostActive = false
+                    nextEpisodeCountdownStartedAtMs = null
+                    nextEpisodeCountdownProgress = 0f
+                    nextEpisodeAdvanceInFlight = false
+                    controlsVisible = !isInPictureInPictureMode && !controlsLocked
                     isScrubbing = false
                     ignoreNextGestureSeekTapUp = false
                     seekFeedbackState = null
@@ -594,6 +654,10 @@ class VideoPlayerActivity : BaseActivity() {
 
                 LaunchedEffect(current.playback.currentSubtitle, currentPlayer) {
                     currentPlayer.applySubtitleSelection(current.playback.currentSubtitle)
+                }
+
+                LaunchedEffect(effectivePlaybackSpeed, currentPlayer) {
+                    currentPlayer.setPlaybackSpeed(effectivePlaybackSpeed)
                 }
 
                 LaunchedEffect(currentPlayer) {
@@ -652,13 +716,20 @@ class VideoPlayerActivity : BaseActivity() {
                 val latestResolveSeekDirectionFromTap by rememberUpdatedState(resolveSeekDirectionFromTap)
                 val latestPerformGestureSeek by rememberUpdatedState(performGestureSeek)
                 val latestSeekGestureModeActive by rememberUpdatedState(shouldHideChromeForSeekFeedback)
+                val latestSpeedBoostEligibility by rememberUpdatedState(
+                    !controlsVisible &&
+                        !controlsLocked &&
+                        !settingsVisible &&
+                        !subtitleEditorVisible &&
+                        !shouldHideChromeForSeekFeedback,
+                )
                 BackHandler(enabled = episodesDrawerVisible) {
                     episodesDrawerVisible = false
                     registerControllerInteraction(true)
                 }
                 LaunchedEffect(isInPictureInPictureMode) {
                     if (isInPictureInPictureMode) {
-                        controlsLocked = false
+                        temporarySpeedBoostActive = false
                         controlsVisible = false
                         settingsVisible = false
                         episodesDrawerVisible = false
@@ -669,6 +740,75 @@ class VideoPlayerActivity : BaseActivity() {
                         sideGestureFeedbackState = null
                     } else {
                         hideSystemUi()
+                    }
+                }
+                LaunchedEffect(
+                    shouldShowNextEpisodeCountdown,
+                    nextEpisodeAvailable,
+                    playbackSnapshot.playbackEnded,
+                    playbackRemainingMs,
+                    subtitleEditorVisible,
+                    isInPictureInPictureMode,
+                    nextEpisodeAdvanceInFlight,
+                ) {
+                    if (!nextEpisodeAvailable || nextEpisodeAdvanceInFlight || subtitleEditorVisible) {
+                        nextEpisodeCountdownStartedAtMs = null
+                        nextEpisodeCountdownProgress = 0f
+                        return@LaunchedEffect
+                    }
+
+                    if (
+                        nextEpisodeCountdownStartedAtMs != null &&
+                        !playbackSnapshot.playbackEnded &&
+                        playbackRemainingMs > NEXT_EPISODE_COUNTDOWN_VISIBLE_BEFORE_END_MS
+                    ) {
+                        nextEpisodeCountdownStartedAtMs = null
+                        nextEpisodeCountdownProgress = 0f
+                        return@LaunchedEffect
+                    }
+
+                    if (
+                        nextEpisodeCountdownStartedAtMs == null &&
+                        shouldShowNextEpisodeCountdown &&
+                        !isInPictureInPictureMode
+                    ) {
+                        nextEpisodeCountdownStartedAtMs = SystemClock.elapsedRealtime()
+                        viewModel.preloadNextEpisode()
+                    }
+                }
+
+                LaunchedEffect(nextEpisodeCountdownStartedAtMs, current.nextEpisodeId) {
+                    val startedAt = nextEpisodeCountdownStartedAtMs ?: run {
+                        nextEpisodeCountdownProgress = 0f
+                        return@LaunchedEffect
+                    }
+
+                    nextEpisodeCountdownProgress = 0f
+                    while (isActive && !nextEpisodeAdvanceInFlight && nextEpisodeCountdownStartedAtMs == startedAt) {
+                        val elapsed = SystemClock.elapsedRealtime() - startedAt
+                        val progress = (elapsed / NEXT_EPISODE_COUNTDOWN_DURATION_MS.toFloat()).coerceIn(0f, 1f)
+                        nextEpisodeCountdownProgress = progress
+                        if (progress >= 1f) {
+                            onNextEpisode()
+                            break
+                        }
+                        delay(NEXT_EPISODE_COUNTDOWN_TICK_MS)
+                    }
+                }
+                LaunchedEffect(
+                    playbackSnapshot.playbackEnded,
+                    current.nextEpisodeId,
+                    isInPictureInPictureMode,
+                    subtitleEditorVisible,
+                ) {
+                    if (
+                        playbackSnapshot.playbackEnded &&
+                        current.nextEpisodeId != null &&
+                        isInPictureInPictureMode &&
+                        !subtitleEditorVisible &&
+                        !nextEpisodeAdvanceInFlight
+                    ) {
+                        onNextEpisode()
                     }
                 }
                 Box(
@@ -710,12 +850,39 @@ class VideoPlayerActivity : BaseActivity() {
                             )
                             val touchSlop = ViewConfiguration.get(playerView.context).scaledTouchSlop
                             var sideGestureState: SideGestureState? = null
+                            var holdSpeedGestureState: HoldSpeedGestureState? = null
                             val gestureDetector = GestureDetector(
                                 playerView.context,
                                 object : GestureDetector.SimpleOnGestureListener() {
                                     override fun onDown(e: MotionEvent): Boolean = true
 
+                                    override fun onLongPress(e: MotionEvent) {
+                                        val currentHoldState = holdSpeedGestureState ?: return
+                                        if (
+                                            currentHoldState.cancelled ||
+                                            currentHoldState.longPressTriggered ||
+                                            !latestSpeedBoostEligibility
+                                        ) {
+                                            return
+                                        }
+                                        if (
+                                            isTouchInHoldSpeedZone(
+                                                touchX = currentHoldState.startX,
+                                                touchY = currentHoldState.startY,
+                                                playerWidth = playerView.width,
+                                                playerHeight = playerView.height,
+                                            )
+                                        ) {
+                                            holdSpeedGestureState = currentHoldState.copy(longPressTriggered = true)
+                                            temporarySpeedBoostActive = true
+                                            latestRegisterControllerInteraction(false)
+                                        }
+                                    }
+
                                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                                        if (latestTemporarySpeedBoostActive) {
+                                            return true
+                                        }
                                         if (latestControlsLocked) {
                                             if (latestControlsVisible) {
                                                 controlsVisible = false
@@ -738,6 +905,9 @@ class VideoPlayerActivity : BaseActivity() {
                                     }
 
                                     override fun onDoubleTap(e: MotionEvent): Boolean {
+                                        if (latestTemporarySpeedBoostActive) {
+                                            return true
+                                        }
                                         if (latestControlsLocked) {
                                             return true
                                         }
@@ -768,14 +938,42 @@ class VideoPlayerActivity : BaseActivity() {
 
                                 when (motionEvent.actionMasked) {
                                     MotionEvent.ACTION_DOWN -> {
+                                        temporarySpeedBoostActive = false
                                         sideGestureState = SideGestureState(
                                             startX = motionEvent.x,
                                             startY = motionEvent.y,
                                             initialLevel = 0,
                                         )
+                                        holdSpeedGestureState = HoldSpeedGestureState(
+                                            startX = motionEvent.x,
+                                            startY = motionEvent.y,
+                                        )
                                     }
 
                                     MotionEvent.ACTION_MOVE -> {
+                                        val currentHoldState = holdSpeedGestureState
+                                        if (currentHoldState != null) {
+                                            val movedBeyondSlop =
+                                                abs(motionEvent.x - currentHoldState.startX) > touchSlop ||
+                                                    abs(motionEvent.y - currentHoldState.startY) > touchSlop
+                                            if (
+                                                currentHoldState.longPressTriggered &&
+                                                !isTouchInHoldSpeedZone(
+                                                    touchX = motionEvent.x,
+                                                    touchY = motionEvent.y,
+                                                    playerWidth = playerView.width,
+                                                    playerHeight = playerView.height,
+                                                )
+                                            ) {
+                                                temporarySpeedBoostActive = false
+                                                holdSpeedGestureState = currentHoldState.copy(
+                                                    cancelled = true,
+                                                    longPressTriggered = false,
+                                                )
+                                            } else if (!currentHoldState.longPressTriggered && movedBeyondSlop) {
+                                                holdSpeedGestureState = currentHoldState.copy(cancelled = true)
+                                            }
+                                        }
                                         val currentSideGestureState = sideGestureState
                                         if (
                                             currentSideGestureState != null &&
@@ -789,24 +987,25 @@ class VideoPlayerActivity : BaseActivity() {
                                                 abs(deltaY) > touchSlop &&
                                                 abs(deltaY) > abs(deltaX) * SIDE_GESTURE_VERTICAL_RATIO
                                             ) {
-                                                val gestureType = if (currentSideGestureState.startX <
-                                                    playerView.width / 2f
-                                                ) {
-                                                    VideoPlayerSideGestureType.Brightness
-                                                } else {
-                                                    VideoPlayerSideGestureType.Volume
-                                                }
-                                                sideGestureState = currentSideGestureState.copy(
-                                                    type = gestureType,
-                                                    initialLevel = if (gestureType ==
-                                                        VideoPlayerSideGestureType.Brightness
-                                                    ) {
-                                                        playbackBrightnessLevel
-                                                    } else {
-                                                        playbackVolumeLevel
-                                                    },
-                                                    active = true,
+                                                val gestureType = resolveSideGestureType(
+                                                    startX = currentSideGestureState.startX,
+                                                    startY = currentSideGestureState.startY,
+                                                    playerWidth = playerView.width,
+                                                    playerHeight = playerView.height,
                                                 )
+                                                if (gestureType != null) {
+                                                    sideGestureState = currentSideGestureState.copy(
+                                                        type = gestureType,
+                                                        initialLevel = if (gestureType ==
+                                                            VideoPlayerSideGestureType.Brightness
+                                                        ) {
+                                                            playbackBrightnessLevel
+                                                        } else {
+                                                            playbackVolumeLevel
+                                                        },
+                                                        active = true,
+                                                    )
+                                                }
                                             }
 
                                             val activeSideGestureState = sideGestureState
@@ -844,6 +1043,8 @@ class VideoPlayerActivity : BaseActivity() {
                                     MotionEvent.ACTION_UP,
                                     MotionEvent.ACTION_CANCEL,
                                     -> {
+                                        temporarySpeedBoostActive = false
+                                        holdSpeedGestureState = null
                                         if (sideGestureState?.active == true) {
                                             sideGestureState = null
                                             if (motionEvent.actionMasked == MotionEvent.ACTION_UP) {
@@ -856,6 +1057,9 @@ class VideoPlayerActivity : BaseActivity() {
                                 }
 
                                 val handled = gestureDetector.onTouchEvent(motionEvent)
+                                if (latestTemporarySpeedBoostActive) {
+                                    return@setOnTouchListener true
+                                }
                                 if (
                                     !latestSettingsVisible &&
                                     latestSeekGestureModeActive &&
@@ -917,6 +1121,7 @@ class VideoPlayerActivity : BaseActivity() {
                             showPictureInPictureButton = showPictureInPictureButton,
                             onEnterPictureInPicture = ::enterPictureInPictureFromControls,
                             onToggleLock = {
+                                temporarySpeedBoostActive = false
                                 controlsLocked = !controlsLocked
                                 controlsVisible = true
                                 settingsVisible = false
@@ -925,11 +1130,13 @@ class VideoPlayerActivity : BaseActivity() {
                                 registerControllerInteraction(true)
                             },
                             onOpenSettings = {
+                                temporarySpeedBoostActive = false
                                 episodesDrawerVisible = false
                                 settingsVisible = true
                                 registerControllerInteraction(true)
                             },
                             onOpenEpisodes = {
+                                temporarySpeedBoostActive = false
                                 settingsVisible = false
                                 episodesDrawerVisible = true
                                 registerControllerInteraction(true)
@@ -940,8 +1147,9 @@ class VideoPlayerActivity : BaseActivity() {
                             },
                             onEpisodeSelected = { episode ->
                                 if (episode.id != current.episodeId) {
+                                    temporarySpeedBoostActive = false
                                     episodesDrawerVisible = false
-                                    controlsVisible = true
+                                    controlsVisible = !controlsLocked
                                     flushPlaybackState()
                                     viewModel.playEpisode(
                                         visibleAnimeId = current.visibleAnimeId,
@@ -986,6 +1194,13 @@ class VideoPlayerActivity : BaseActivity() {
                         )
                     }
 
+                    VideoPlayerNextEpisodeOverlay(
+                        visible = showNextEpisodeCta,
+                        progress = nextEpisodeCountdownProgress,
+                        onClick = onNextEpisode,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+
                     if (startupOverlayVisible && !isInPictureInPictureMode && !subtitleEditorVisible) {
                         VideoPlayerLoadingOverlay(modifier = Modifier.fillMaxSize())
                     }
@@ -998,17 +1213,29 @@ class VideoPlayerActivity : BaseActivity() {
                         VideoPlayerSettingsSheet(
                             playback = current.playback,
                             onDismissRequest = {
+                                temporarySpeedBoostActive = false
                                 settingsVisible = false
                                 registerControllerInteraction(true)
                             },
-                            onApplySourceSelection = { selection ->
+                            onApplySettings = { draft ->
+                                temporarySpeedBoostActive = false
                                 persistPlayback(currentPlayer)
-                                viewModel.applySourceSelection(selection)
+                                if (draft.playbackSpeed != initialSettingsDraft.playbackSpeed) {
+                                    viewModel.updateSessionPlaybackSpeed(draft.playbackSpeed)
+                                }
+                                if (draft.adaptiveQuality != initialSettingsDraft.adaptiveQuality) {
+                                    viewModel.selectAdaptiveQuality(draft.adaptiveQuality)
+                                }
+                                if (draft.subtitleSelection != initialSettingsDraft.subtitleSelection) {
+                                    viewModel.selectSubtitle(draft.subtitleSelection)
+                                }
+                                if (draft.sourceSelection != initialSettingsDraft.sourceSelection) {
+                                    viewModel.applySourceSelection(draft.sourceSelection)
+                                }
                             },
                             onPreviewSourceSelection = viewModel::previewSourceSelection,
-                            onSelectAdaptiveQuality = viewModel::selectAdaptiveQuality,
-                            onSelectSubtitle = viewModel::selectSubtitle,
                             onOpenSubtitleSettings = {
+                                temporarySpeedBoostActive = false
                                 settingsVisible = false
                                 episodesDrawerVisible = false
                                 subtitleEditorDraft = current.playback.subtitleAppearance
@@ -1033,6 +1260,7 @@ class VideoPlayerActivity : BaseActivity() {
                                 ?: stringResource(MR.strings.anime_playback_subtitle_sample),
                             onDraftChange = { subtitleEditorDraft = it.normalized() },
                             onDismissRequest = {
+                                temporarySpeedBoostActive = false
                                 subtitleEditorVisible = false
                                 if (resumePlaybackAfterSubtitleEditor) {
                                     currentPlayer.play()
@@ -1040,6 +1268,7 @@ class VideoPlayerActivity : BaseActivity() {
                             },
                             onReset = { subtitleEditorDraft = VideoSubtitleAppearance() },
                             onDone = {
+                                temporarySpeedBoostActive = false
                                 val normalizedAppearance = subtitleEditorDraft.normalized()
                                 subtitleEditorVisible = false
                                 viewModel.updateSubtitleAppearance(normalizedAppearance)
@@ -1181,12 +1410,7 @@ class VideoPlayerActivity : BaseActivity() {
             playbackBrightnessLevel = readSystemBrightnessLevel()
             playbackBrightnessOverlayValue = 0
         } else {
-            playbackBrightnessLevel = when {
-                screenBrightness <= MIN_POSITIVE_BRIGHTNESS -> MIN_GESTURE_LEVEL
-                else -> (screenBrightness * MAX_GESTURE_LEVEL)
-                    .roundToInt()
-                    .coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
-            }
+            playbackBrightnessLevel = gestureLevelForScreenBrightness(screenBrightness)
             playbackBrightnessOverlayValue = brightnessOverlayLevelFor(playbackBrightnessLevel)
         }
     }
@@ -1195,7 +1419,7 @@ class VideoPlayerActivity : BaseActivity() {
         val normalizedLevel = level.coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
         val screenBrightness = when {
             isUsingSystemBrightness(level) -> WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
-            normalizedLevel > 0 -> normalizedLevel / MAX_GESTURE_LEVEL.toFloat()
+            normalizedLevel > 0 -> screenBrightnessForGestureLevel(normalizedLevel)
             else -> MIN_POSITIVE_BRIGHTNESS
         }
         window.attributes = window.attributes.apply {
@@ -1207,9 +1431,7 @@ class VideoPlayerActivity : BaseActivity() {
         val brightnessValue = runCatching {
             Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS)
         }.getOrDefault(DEFAULT_SYSTEM_BRIGHTNESS)
-        return ((brightnessValue / SYSTEM_BRIGHTNESS_MAX.toFloat()) * MAX_GESTURE_LEVEL)
-            .roundToInt()
-            .coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
+        return gestureLevelForScreenBrightness(brightnessValue / SYSTEM_BRIGHTNESS_MAX.toFloat())
     }
 
     private fun syncPlaybackVolumeState(
@@ -1400,13 +1622,6 @@ class VideoPlayerActivity : BaseActivity() {
         private const val PAUSED_PLAYBACK_SNAPSHOT_INTERVAL_MS = 750L
         private const val SEEK_INCREMENT_MS = 5_000L
         private const val SEEK_FEEDBACK_BURST_WINDOW_MS = 900L
-        private const val MIN_GESTURE_LEVEL = 0
-        private const val MAX_GESTURE_LEVEL = 100
-        private const val DEFAULT_GESTURE_LEVEL = 50
-        private const val DEFAULT_SYSTEM_BRIGHTNESS = 127
-        private const val SYSTEM_BRIGHTNESS_MAX = 255
-        private const val MIN_POSITIVE_BRIGHTNESS = 0.01f
-        private const val SIDE_GESTURE_VERTICAL_RATIO = 1.35f
         private val DEFAULT_PICTURE_IN_PICTURE_ASPECT_RATIO = Rational(16, 9)
 
         fun newIntent(
@@ -1435,8 +1650,118 @@ private data class SideGestureState(
     val active: Boolean = false,
 )
 
+private data class HoldSpeedGestureState(
+    val startX: Float,
+    val startY: Float,
+    val longPressTriggered: Boolean = false,
+    val cancelled: Boolean = false,
+)
+
 private fun brightnessOverlayLevelFor(level: Int): Int {
     return if (level <= 0) -75 else 0
+}
+
+internal data class PlayerTouchZoneBounds(
+    val leftFraction: Float,
+    val topFraction: Float,
+    val rightFraction: Float,
+    val bottomFraction: Float,
+) {
+    fun contains(xFraction: Float, yFraction: Float): Boolean {
+        return xFraction in leftFraction..rightFraction && yFraction in topFraction..bottomFraction
+    }
+}
+
+internal fun holdSpeedZoneBounds(): List<PlayerTouchZoneBounds> {
+    return listOf(
+        PlayerTouchZoneBounds(
+            leftFraction = HOLD_SPEED_TOP_ZONE_LEFT_FRACTION,
+            topFraction = HOLD_SPEED_TOP_ZONE_TOP_FRACTION,
+            rightFraction = HOLD_SPEED_TOP_ZONE_RIGHT_FRACTION,
+            bottomFraction = HOLD_SPEED_TOP_ZONE_BOTTOM_FRACTION,
+        ),
+        PlayerTouchZoneBounds(
+            leftFraction = HOLD_SPEED_ZONE_START_FRACTION,
+            topFraction = HOLD_SPEED_ZONE_TOP_FRACTION,
+            rightFraction = HOLD_SPEED_ZONE_END_FRACTION,
+            bottomFraction = HOLD_SPEED_ZONE_BOTTOM_FRACTION,
+        ),
+    )
+}
+
+private fun isTouchInHoldSpeedZone(
+    touchX: Float,
+    touchY: Float,
+    playerWidth: Int,
+    playerHeight: Int,
+): Boolean {
+    if (playerWidth <= 0 || playerHeight <= 0) {
+        return false
+    }
+
+    val width = playerWidth.toFloat()
+    val height = playerHeight.toFloat()
+    val xFraction = (touchX / width).coerceIn(0f, 1f)
+    val yFraction = (touchY / height).coerceIn(0f, 1f)
+    return holdSpeedZoneBounds().any { zone ->
+        zone.contains(xFraction = xFraction, yFraction = yFraction)
+    }
+}
+
+private fun resolveSideGestureType(
+    startX: Float,
+    startY: Float,
+    playerWidth: Int,
+    playerHeight: Int,
+): VideoPlayerSideGestureType? {
+    if (playerWidth <= 0 || playerHeight <= 0) {
+        return null
+    }
+
+    val width = playerWidth.toFloat()
+    val height = playerHeight.toFloat()
+    val zoneTop = (height * (1f - SIDE_GESTURE_ZONE_HEIGHT_FRACTION)) / 2f
+    val zoneBottom = height - zoneTop
+    if (startY !in zoneTop..zoneBottom) {
+        return null
+    }
+
+    val zoneWidth = width * SIDE_GESTURE_ZONE_WIDTH_FRACTION
+    val leftZoneStart = width * SIDE_GESTURE_ZONE_HORIZONTAL_INSET_FRACTION
+    if (startX in leftZoneStart..(leftZoneStart + zoneWidth)) {
+        return VideoPlayerSideGestureType.Brightness
+    }
+
+    val rightZoneEnd = width * (1f - SIDE_GESTURE_ZONE_HORIZONTAL_INSET_FRACTION)
+    if (startX in (rightZoneEnd - zoneWidth)..rightZoneEnd) {
+        return VideoPlayerSideGestureType.Volume
+    }
+
+    return null
+}
+
+private fun screenBrightnessForGestureLevel(level: Int): Float {
+    val normalizedLevel = level.coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
+    if (normalizedLevel <= MIN_GESTURE_LEVEL) {
+        return MIN_POSITIVE_BRIGHTNESS
+    }
+
+    val gestureFraction = normalizedLevel / MAX_GESTURE_LEVEL.toFloat()
+    return (
+        MIN_POSITIVE_BRIGHTNESS +
+            (1f - MIN_POSITIVE_BRIGHTNESS) * gestureFraction.pow(BRIGHTNESS_RESPONSE_GAMMA)
+        ).coerceIn(MIN_POSITIVE_BRIGHTNESS, 1f)
+}
+
+private fun gestureLevelForScreenBrightness(screenBrightness: Float): Int {
+    val clampedBrightness = screenBrightness.coerceIn(MIN_POSITIVE_BRIGHTNESS, 1f)
+    val brightnessFraction = (
+        (clampedBrightness - MIN_POSITIVE_BRIGHTNESS) /
+            (1f - MIN_POSITIVE_BRIGHTNESS)
+        ).coerceIn(0f, 1f)
+    return (brightnessFraction.pow(1f / BRIGHTNESS_RESPONSE_GAMMA) * MAX_GESTURE_LEVEL)
+        .roundToInt()
+        .coerceIn(MIN_GESTURE_LEVEL, MAX_GESTURE_LEVEL)
 }
 
 private fun AudioManager.safeMusicStreamMaxVolume(): Int =
