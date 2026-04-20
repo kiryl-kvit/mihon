@@ -803,6 +803,16 @@ class BrowseSourceScreenModel(
         }
 
         val entries = buildList {
+            if (target.isMerged && orderedMembers.none { it.id == remoteManga.id }) {
+                add(
+                    MergeEditorEntry(
+                        id = remoteManga.id,
+                        manga = remoteManga,
+                        subtitle = getSourceSubtitle(remoteManga) + " • New",
+                        isRemovable = false,
+                    ),
+                )
+            }
             orderedMembers.forEach { member ->
                 add(
                     MergeEditorEntry(
@@ -814,7 +824,7 @@ class BrowseSourceScreenModel(
                     ),
                 )
             }
-            if (none { it.id == remoteManga.id }) {
+            if (!target.isMerged && none { it.id == remoteManga.id }) {
                 add(
                     MergeEditorEntry(
                         id = remoteManga.id,

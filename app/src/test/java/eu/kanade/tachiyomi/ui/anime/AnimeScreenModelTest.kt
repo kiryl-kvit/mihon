@@ -976,6 +976,65 @@ class AnimeScreenModelTest {
         }
     }
 
+    @Test
+    fun `open merge editor places newly added anime before existing merge members`() = runTest(dispatcher) {
+        val current = AnimeTitle.create().copy(
+            id = 1L,
+            source = 99L,
+            title = "Current",
+            favorite = true,
+            initialized = true,
+            url = "/anime/1",
+        )
+        val target = AnimeTitle.create().copy(
+            id = 2L,
+            source = 100L,
+            title = "Target",
+            favorite = true,
+            initialized = true,
+            url = "/anime/2",
+        )
+        val member = AnimeTitle.create().copy(
+            id = 3L,
+            source = 101L,
+            title = "Member",
+            favorite = true,
+            initialized = true,
+            url = "/anime/3",
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+        val model = createModel(
+            anime = current,
+            episodes = emptyList(),
+            animeRepository = FakeAnimeRepository(listOf(current, target, member)),
+            mergedRepository = mergedRepository,
+        )
+
+        advanceUntilIdle()
+        awaitSuccess(model)
+        model.showMergeTargetPicker()
+
+        eventually(2.seconds) {
+            val state = model.state.value as AnimeScreenModel.State.Success
+            val dialog = state.dialog as AnimeScreenModel.Dialog.SelectMergeTarget
+            dialog.targets.map { it.id } shouldContainExactly listOf(target.id)
+        }
+
+        model.openMergeEditor(target.id)
+
+        eventually(2.seconds) {
+            val state = model.state.value as AnimeScreenModel.State.Success
+            val dialog = state.dialog as AnimeScreenModel.Dialog.EditMerge
+            dialog.entries.map { it.id } shouldContainExactly listOf(current.id, target.id, member.id)
+            dialog.targetId shouldBe target.id
+        }
+    }
+
     private fun createModel(
         anime: AnimeTitle,
         episodes: List<AnimeEpisode>,

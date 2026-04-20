@@ -653,17 +653,31 @@ class AnimeLibraryScreenModel(
             val mergedSelections = selection.filter(AnimeLibraryItem::isMerged)
             if (mergedSelections.size > 1) return@launchIO
 
-            val entries = selection
+            val newEntries = selection
+                .filterNot(AnimeLibraryItem::isMerged)
                 .flatMap { item ->
                     item.memberAnimes.map { memberAnime ->
                         MergeEntry(
                             id = memberAnime.id,
                             anime = memberAnime,
-                            isFromExistingMerge = item.isMerged,
+                            isFromExistingMerge = false,
                             subtitle = buildMergeSubtitle(memberAnime),
                         )
                     }
                 }
+            val existingEntries = selection
+                .filter(AnimeLibraryItem::isMerged)
+                .flatMap { item ->
+                    item.memberAnimes.map { memberAnime ->
+                        MergeEntry(
+                            id = memberAnime.id,
+                            anime = memberAnime,
+                            isFromExistingMerge = true,
+                            subtitle = buildMergeSubtitle(memberAnime),
+                        )
+                    }
+                }
+            val entries = (newEntries + existingEntries)
                 .distinctBy(MergeEntry::id)
                 .toImmutableList()
             if (entries.size < 2) return@launchIO

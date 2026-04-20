@@ -1988,6 +1988,16 @@ class MangaScreenModel(
         }
 
         val entries = buildList {
+            if (target.isMerged && orderedMembers.none { it.id == localManga.id }) {
+                add(
+                    MergeEditorEntry(
+                        id = localManga.id,
+                        manga = localManga,
+                        subtitle = getMergeSubtitle(localManga) + " • New",
+                        isRemovable = false,
+                    ),
+                )
+            }
             orderedMembers.forEach { member ->
                 add(
                     MergeEditorEntry(
@@ -1999,7 +2009,7 @@ class MangaScreenModel(
                     ),
                 )
             }
-            if (none { it.id == localManga.id }) {
+            if (!target.isMerged && none { it.id == localManga.id }) {
                 add(
                     MergeEditorEntry(
                         id = localManga.id,

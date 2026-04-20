@@ -294,6 +294,44 @@ class AnimeBrowseSourceScreenModelTest {
         }
     }
 
+    @Test
+    fun `open merge editor places newly added anime before existing merge members`() = runTest(dispatcher) {
+        val current = anime(id = 10L, favorite = false, title = "Current")
+        val target = anime(id = 20L, favorite = true, title = "Target")
+        val member = anime(id = 21L, favorite = true, title = "Member")
+        val animeRepository = FakeAnimeRepository(
+            anime = listOf(current, target, member),
+            favorites = listOf(target, member),
+        )
+        val mergedRepository = FakeMergedAnimeRepository(
+            merges = listOf(
+                AnimeMerge(targetId = target.id, animeId = target.id, position = 0L),
+                AnimeMerge(targetId = target.id, animeId = member.id, position = 1L),
+            ),
+        )
+
+        val model = createModel(
+            anime = current,
+            animeRepository = animeRepository,
+            getMergedAnime = GetMergedAnime(mergedRepository),
+        )
+
+        model.showMergeTargetPicker(current)
+
+        eventually(2.seconds) {
+            val dialog = model.state.value.dialog as AnimeBrowseSourceScreenModel.Dialog.SelectMergeTarget
+            dialog.targets.map { it.id } shouldContainExactly listOf(target.id)
+        }
+
+        model.openMergeEditor(target.id)
+
+        eventually(2.seconds) {
+            val dialog = model.state.value.dialog as AnimeBrowseSourceScreenModel.Dialog.EditMerge
+            dialog.entries.map { it.id } shouldContainExactly listOf(current.id, target.id, member.id)
+            dialog.targetId shouldBe target.id
+        }
+    }
+
     private fun createModel(
         anime: AnimeTitle,
         animeRepository: FakeAnimeRepository = FakeAnimeRepository(listOf(anime)),

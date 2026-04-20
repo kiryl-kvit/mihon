@@ -809,7 +809,7 @@ class AnimeLibraryScreenModelTest {
     }
 
     @Test
-    fun `library merge dialog flattens existing merged selection into member entries`() = runTest(dispatcher) {
+    fun `library merge dialog places new selection before existing merged entries`() = runTest(dispatcher) {
         val target = AnimeTitle.create().copy(
             id = 1L,
             source = 99L,
@@ -873,7 +873,7 @@ class AnimeLibraryScreenModelTest {
 
         eventually(2.seconds) {
             val dialog = model.state.value.dialog as AnimeLibraryScreenModel.Dialog.MergeAnime
-            dialog.entries.map { it.id } shouldBe listOf(target.id, member.id, extra.id)
+            dialog.entries.map { it.id } shouldBe listOf(extra.id, target.id, member.id)
             dialog.targetId shouldBe target.id
             dialog.targetLocked shouldBe false
             dialog.entries.count { it.isFromExistingMerge } shouldBe 2

@@ -73,7 +73,7 @@ class LibraryScreenModelTest {
     }
 
     @Test
-    fun `buildMergeDialog expands existing merge into individual ordered rows`() {
+    fun `buildMergeDialog places new selections before existing merge rows`() {
         val existingMerge = libraryManga(
             id = 1L,
             title = "Root",
@@ -89,8 +89,8 @@ class LibraryScreenModelTest {
 
         dialog?.targetLocked shouldBe false
         dialog?.targetId shouldBe 1L
-        dialog?.entries?.map { it.id } shouldBe listOf(1L, 2L, 3L, 4L)
-        dialog?.entries?.map { it.isFromExistingMerge } shouldBe listOf(true, true, true, false)
+        dialog?.entries?.map { it.id } shouldBe listOf(4L, 1L, 2L, 3L)
+        dialog?.entries?.map { it.isFromExistingMerge } shouldBe listOf(false, true, true, true)
     }
 
     @Test

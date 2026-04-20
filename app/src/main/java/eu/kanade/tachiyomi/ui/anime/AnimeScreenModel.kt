@@ -1337,6 +1337,13 @@ class AnimeScreenModel(
         }
 
         val entries = buildList {
+            if (target.isMerged && orderedMembers.none { it.id == localAnime.id }) {
+                add(
+                    localAnime.toMergeEditorEntry(
+                        subtitle = buildMergeSubtitle(localAnime) + " • New",
+                    ),
+                )
+            }
             orderedMembers.forEach { member ->
                 add(
                     member.toMergeEditorEntry(
@@ -1346,7 +1353,7 @@ class AnimeScreenModel(
                     ),
                 )
             }
-            if (none { it.id == localAnime.id }) {
+            if (!target.isMerged && none { it.id == localAnime.id }) {
                 add(
                     localAnime.toMergeEditorEntry(
                         subtitle = buildMergeSubtitle(localAnime) + " • New",

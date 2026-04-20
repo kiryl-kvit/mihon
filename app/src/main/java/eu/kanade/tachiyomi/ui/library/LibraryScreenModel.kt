@@ -1173,16 +1173,29 @@ internal fun buildMergeDialog(selection: List<LibraryManga>): LibraryScreenModel
     if (mergedSelections.size > 1) return null
 
     val existingMerge = mergedSelections.firstOrNull()
-    val entries = selection
+    val newEntries = selection
+        .filterNot(LibraryManga::isMerged)
         .flatMap { libraryManga ->
             libraryManga.memberMangas.map { memberManga ->
                 LibraryScreenModel.MergeEntry(
                     id = memberManga.id,
                     manga = memberManga,
-                    isFromExistingMerge = libraryManga.isMerged,
+                    isFromExistingMerge = false,
                 )
             }
         }
+    val existingEntries = selection
+        .filter(LibraryManga::isMerged)
+        .flatMap { libraryManga ->
+            libraryManga.memberMangas.map { memberManga ->
+                LibraryScreenModel.MergeEntry(
+                    id = memberManga.id,
+                    manga = memberManga,
+                    isFromExistingMerge = true,
+                )
+            }
+        }
+    val entries = (newEntries + existingEntries)
         .distinctBy(LibraryScreenModel.MergeEntry::id)
         .toImmutableList()
 
