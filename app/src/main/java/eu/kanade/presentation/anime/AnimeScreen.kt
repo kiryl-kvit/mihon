@@ -427,7 +427,6 @@ private fun AnimeScreenSmallImpl(
                         selectedEpisodeIds = state.selection,
                         selectionMode = state.isSelectionMode,
                         playbackStateByEpisodeId = state.playbackStateByEpisodeId,
-                        sourceAvailable = state.sourceAvailable,
                         onEpisodeClick = onEpisodeClick,
                         onEpisodeSelected = onEpisodeSelected,
                     )
@@ -615,7 +614,6 @@ private fun AnimeScreenLargeImpl(
                                 selectedEpisodeIds = state.selection,
                                 selectionMode = state.isSelectionMode,
                                 playbackStateByEpisodeId = state.playbackStateByEpisodeId,
-                                sourceAvailable = state.sourceAvailable,
                                 onEpisodeClick = onEpisodeClick,
                                 onEpisodeSelected = onEpisodeSelected,
                             )

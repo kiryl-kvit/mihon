@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,7 +47,6 @@ fun LazyListScope.animeEpisodeItems(
     selectedEpisodeIds: Set<Long>,
     selectionMode: Boolean,
     playbackStateByEpisodeId: Map<Long, AnimePlaybackState>,
-    sourceAvailable: Boolean,
     showPlaybackStatus: Boolean = true,
     onEpisodeClick: (AnimeEpisode) -> Unit,
     onEpisodeSelected: ((AnimeEpisode, Boolean, Boolean) -> Unit)? = null,
@@ -84,9 +82,7 @@ fun LazyListScope.animeEpisodeItems(
                     anime = anime,
                     episode = episode,
                     selected = episode.id in selectedEpisodeIds,
-                    selectionMode = selectionMode,
                     playbackState = playbackStateByEpisodeId[episode.id],
-                    sourceAvailable = sourceAvailable,
                     showPlaybackStatus = showPlaybackStatus,
                     onClick = {
                         if (selectionMode && onEpisodeSelected != null) {
@@ -111,9 +107,7 @@ private fun AnimeEpisodeListItem(
     anime: AnimeTitle,
     episode: AnimeEpisode,
     selected: Boolean,
-    selectionMode: Boolean,
     playbackState: AnimePlaybackState?,
-    sourceAvailable: Boolean,
     showPlaybackStatus: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
@@ -213,25 +207,6 @@ private fun AnimeEpisodeListItem(
                         .height(4.dp),
                 )
             }
-        }
-
-        if (!selectionMode) {
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = stringResource(
-                    if (playbackState?.positionMs?.let { it > 0L } == true) {
-                        MR.strings.action_resume
-                    } else {
-                        MR.strings.action_start
-                    },
-                ),
-                modifier = Modifier.padding(start = 4.dp),
-                tint = if (sourceAvailable) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
         }
     }
 
