@@ -175,6 +175,30 @@ fun ChronologicalFeedBrowseContent(
         }
     }
 
+    LaunchedEffect(displayMode, state.isRefreshing, state.isAppending, state.nextPageKey, state.mangaIds.size) {
+        if (displayMode != LibraryDisplayMode.List) return@LaunchedEffect
+
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .distinctUntilChanged()
+            .collectLatest { lastVisibleItemIndex ->
+                if (shouldLoadMore(lastVisibleItemIndex, state)) {
+                    screenModel.loadMore()
+                }
+            }
+    }
+
+    LaunchedEffect(displayMode, state.isRefreshing, state.isAppending, state.nextPageKey, state.mangaIds.size) {
+        if (displayMode == LibraryDisplayMode.List) return@LaunchedEffect
+
+        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+            .distinctUntilChanged()
+            .collectLatest { lastVisibleItemIndex ->
+                if (shouldLoadMore(lastVisibleItemIndex, state)) {
+                    screenModel.loadMore()
+                }
+            }
+    }
+
     if (!state.hasLoaded && state.isRefreshing && state.mangaIds.isEmpty()) {
         LoadingScreen(Modifier.padding(contentPadding))
         return
@@ -492,4 +516,15 @@ private fun Manga.browseCoverAlpha(): Float {
     return if (favorite) CommonMangaItemDefaults.BrowseFavoriteCoverAlpha else 1f
 }
 
+private fun shouldLoadMore(
+    lastVisibleItemIndex: Int,
+    state: ChronologicalFeedScreenModel.State,
+): Boolean {
+    if (lastVisibleItemIndex < 0) return false
+    if (state.isRefreshing || state.isAppending || state.nextPageKey == null) return false
+
+    return lastVisibleItemIndex >= state.mangaIds.lastIndex - LOAD_MORE_VISIBLE_THRESHOLD
+}
+
 private const val ANCHOR_SAVE_DEBOUNCE_MILLIS = 150L
+private const val LOAD_MORE_VISIBLE_THRESHOLD = 3

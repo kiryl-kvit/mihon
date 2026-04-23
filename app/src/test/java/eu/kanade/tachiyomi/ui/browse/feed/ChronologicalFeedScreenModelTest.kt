@@ -238,6 +238,57 @@ class ChronologicalFeedScreenModelTest {
     }
 
     @Test
+    fun `load more appends next page from saved cursor`() = runTest {
+        val preferences = SourcePreferences(TestPreferenceStore(), testJson)
+        val browseFeedService = BrowseFeedService(preferences)
+        browseFeedService.saveTimeline(
+            FEED_ID,
+            SourceFeedTimeline(mangaIds = listOf(12L), nextPageKey = 3L),
+        )
+
+        val pagingSources = mutableListOf<RecordingPagingSource>()
+        val screenModel = ChronologicalFeedScreenModel(
+            feedId = FEED_ID,
+            sourceId = SOURCE_ID,
+            listingQuery = null,
+            initialFilterSnapshot = emptyList(),
+            browseFeedService = browseFeedService,
+            sourcePreferences = preferences,
+            sourceManager = fakeSourceManager(),
+            getRemoteManga = fakeGetRemoteManga {
+                RecordingPagingSource(
+                    pages = mapOf(
+                        3L to pageResult(listOf(13L, 14L), nextKey = 4L),
+                    ),
+                ).also(pagingSources::add)
+            },
+            getManga = fakeGetManga(manga(12L), manga(13L), manga(14L)),
+        )
+
+        try {
+            eventually(2.seconds) {
+                screenModel.state.value.mangaIds shouldBe listOf(12L)
+                screenModel.state.value.nextPageKey shouldBe 3L
+            }
+
+            screenModel.loadMore()
+
+            eventually(2.seconds) {
+                screenModel.state.value.mangaIds shouldBe listOf(12L, 13L, 14L)
+                screenModel.state.value.nextPageKey shouldBe 4L
+                screenModel.state.value.isAppending shouldBe false
+                browseFeedService.timelineSnapshot(FEED_ID) shouldBe SourceFeedTimeline(
+                    mangaIds = listOf(12L, 13L, 14L),
+                    nextPageKey = 4L,
+                )
+                pagingSources.single().loadKeys shouldBe listOf(3L)
+            }
+        } finally {
+            screenModel.onDispose()
+        }
+    }
+
+    @Test
     fun `save anchor skips redundant writes`() = runTest {
         val preferences = SourcePreferences(TestPreferenceStore(), testJson)
         val browseFeedService = BrowseFeedService(preferences)
