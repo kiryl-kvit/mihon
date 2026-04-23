@@ -320,16 +320,6 @@ class AnimeBrowseSourceScreenModel(
         }
     }
 
-    fun openMergeEditorForDuplicate(targetId: Long) {
-        val dialog = state.value.dialog as? Dialog.DuplicateAnime ?: return
-        screenModelScope.launchIO {
-            val target = getMergeTargets(excludedAnimeIds = getMergeMemberIds(dialog.anime.id).toSet())
-                .firstOrNull { it.id == targetId }
-                ?: return@launchIO
-            setDialog(createMergeEditorDialog(dialog.anime, target))
-        }
-    }
-
     fun moveMergeEntry(fromIndex: Int, toIndex: Int) {
         val dialog = state.value.dialog as? Dialog.EditMerge ?: return
         val entries = dialog.entries.toMutableList()

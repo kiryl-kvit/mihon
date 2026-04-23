@@ -193,7 +193,6 @@
     <string name="action_open_merged_entry">Open merged entry</string>
     <string name="action_add_to_merge">Add to merge</string>
     <string name="action_merge_into_library">Merge into library...</string>
-    <string name="action_merge_with_this">Merge with this</string>
     <string name="action_duplicates">Duplicate</string>
     <string name="action_keep">Keep</string>
     <string name="action_keep_in_library">Keep in library</string>

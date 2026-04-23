@@ -571,19 +571,6 @@ class AnimeScreenModel(
         }
     }
 
-    fun openMergeEditorForDuplicate(targetId: Long) {
-        val dialog = successState?.dialog as? Dialog.DuplicateAnime ?: return
-        val currentState = successState ?: return
-        screenModelScope.launchIO {
-            val target = getMergeTargets(currentState.mergeGroupMemberIds.toSet())
-                .firstOrNull { it.id == targetId }
-                ?: return@launchIO
-            updateSuccessState {
-                it.copy(dialog = createMergeEditorDialog(dialog.anime, target))
-            }
-        }
-    }
-
     fun moveMergeEntry(fromIndex: Int, toIndex: Int) {
         updateSuccessState { state ->
             val dialog = state.dialog as? Dialog.EditMerge ?: return@updateSuccessState state

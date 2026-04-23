@@ -794,19 +794,35 @@ class BrowseSourceScreenModel(
         manga: Manga,
         target: MergeTarget,
     ): Dialog.EditMerge {
+        return createBrowseMergeDialog(
+            manga = manga,
+            targetId = target.id,
+            memberMangas = target.memberMangas,
+            categoryIds = target.categoryIds,
+            isMerged = target.isMerged,
+        )
+    }
+
+    private suspend fun createBrowseMergeDialog(
+        manga: Manga,
+        targetId: Long,
+        memberMangas: List<Manga>,
+        categoryIds: List<Long>,
+        isMerged: Boolean,
+    ): Dialog.EditMerge {
         val remoteManga = networkToLocalManga(manga)
-        val orderedMembers = if (target.isMerged) {
-            val membersById = target.memberMangas.associateBy(Manga::id)
-            getMergedManga.awaitGroupByTargetId(target.id)
+        val orderedMembers = if (isMerged) {
+            val membersById = memberMangas.associateBy(Manga::id)
+            getMergedManga.awaitGroupByTargetId(targetId)
                 .sortedBy { it.position }
                 .mapNotNull { merge -> membersById[merge.mangaId] }
-                .ifEmpty { target.memberMangas }
+                .ifEmpty { memberMangas }
         } else {
-            target.memberMangas
+            memberMangas
         }
 
         val entries = buildList {
-            if (target.isMerged && orderedMembers.none { it.id == remoteManga.id }) {
+            if (isMerged && orderedMembers.none { it.id == remoteManga.id }) {
                 add(
                     MergeEditorEntry(
                         id = remoteManga.id,
@@ -827,7 +843,7 @@ class BrowseSourceScreenModel(
                     ),
                 )
             }
-            if (!target.isMerged && none { it.id == remoteManga.id }) {
+            if (!isMerged && none { it.id == remoteManga.id }) {
                 add(
                     MergeEditorEntry(
                         id = remoteManga.id,
@@ -841,12 +857,12 @@ class BrowseSourceScreenModel(
 
         return Dialog.EditMerge(
             manga = remoteManga,
-            targetId = target.id,
+            targetId = targetId,
             targetLocked = false,
             entries = entries,
             removedIds = emptySet(),
             libraryRemovalIds = emptySet(),
-            categoryIds = target.categoryIds,
+            categoryIds = categoryIds,
         )
     }
 

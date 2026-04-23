@@ -308,7 +308,6 @@ data class AnimeBrowseSourceScreen(
                     onDismissRequest = screenModel::dismissDialog,
                     onConfirm = { screenModel.addFavorite(dialog.anime) },
                     onOpenAnime = { navigator.push(AnimeScreen(it.id)) },
-                    onMerge = { screenModel.openMergeEditorForDuplicate(it.anime.id) },
                 )
             }
             is AnimeBrowseSourceScreenModel.Dialog.SelectMergeTarget -> {

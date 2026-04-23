@@ -167,7 +167,6 @@ data class AnimeScreen(
                             onDismissRequest = screenModel::dismissDialog,
                             onConfirm = { screenModel.toggleFavorite(checkDuplicate = false) },
                             onOpenAnime = { navigator.push(AnimeScreen(it.id)) },
-                            onMerge = { screenModel.openMergeEditorForDuplicate(it.anime.id) },
                         )
                     }
                     AnimeScreenModel.Dialog.Schedule -> {
