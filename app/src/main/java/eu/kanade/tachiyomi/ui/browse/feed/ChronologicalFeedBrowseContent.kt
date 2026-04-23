@@ -1,9 +1,15 @@
 package eu.kanade.tachiyomi.ui.browse.feed
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -35,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import eu.kanade.presentation.browse.components.BrowseSourceLoadingItem
@@ -43,6 +50,7 @@ import eu.kanade.presentation.library.components.CommonMangaItemDefaults
 import eu.kanade.presentation.library.components.MangaComfortableGridItem
 import eu.kanade.presentation.library.components.MangaCompactGridItem
 import eu.kanade.presentation.library.components.MangaListItem
+import eu.kanade.presentation.manga.components.MangaCover as CoverType
 import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.source.Source
 import kotlinx.collections.immutable.persistentListOf
@@ -436,7 +444,11 @@ private fun ChronologicalFeedMangaListItem(
     onMangaClick: (Manga) -> Unit,
     onMangaLongClick: (Manga) -> Unit,
 ) {
-    val manga = rememberChronologicalManga(mangaId, screenModel) ?: return
+    val manga = rememberChronologicalManga(mangaId, screenModel)
+    if (manga == null) {
+        ChronologicalFeedListItemPlaceholder()
+        return
+    }
 
     MangaListItem(
         title = manga.title,
@@ -455,7 +467,11 @@ private fun ChronologicalFeedMangaCompactGridItem(
     onMangaClick: (Manga) -> Unit,
     onMangaLongClick: (Manga) -> Unit,
 ) {
-    val manga = rememberChronologicalManga(mangaId, screenModel) ?: return
+    val manga = rememberChronologicalManga(mangaId, screenModel)
+    if (manga == null) {
+        ChronologicalFeedCompactGridItemPlaceholder()
+        return
+    }
 
     MangaCompactGridItem(
         title = manga.title,
@@ -474,7 +490,11 @@ private fun ChronologicalFeedMangaComfortableGridItem(
     onMangaClick: (Manga) -> Unit,
     onMangaLongClick: (Manga) -> Unit,
 ) {
-    val manga = rememberChronologicalManga(mangaId, screenModel) ?: return
+    val manga = rememberChronologicalManga(mangaId, screenModel)
+    if (manga == null) {
+        ChronologicalFeedComfortableGridItemPlaceholder()
+        return
+    }
 
     MangaComfortableGridItem(
         title = manga.title,
@@ -500,6 +520,84 @@ private fun rememberChronologicalManga(
     }
 
     return manga
+}
+
+@Composable
+private fun ChronologicalFeedListItemPlaceholder() {
+    Row(
+        modifier = Modifier
+            .height(56.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        ChronologicalFeedPlaceholderBlock(
+            modifier = Modifier
+                .fillMaxHeight()
+                .aspectRatio(CoverType.Square.ratio),
+        )
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            ChronologicalFeedPlaceholderBlock(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(12.dp),
+            )
+            ChronologicalFeedPlaceholderBlock(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .height(12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChronologicalFeedCompactGridItemPlaceholder() {
+    ChronologicalFeedPlaceholderBlock(
+        modifier = Modifier
+            .padding(4.dp)
+            .fillMaxWidth()
+            .aspectRatio(CoverType.Book.ratio),
+    )
+}
+
+@Composable
+private fun ChronologicalFeedComfortableGridItemPlaceholder() {
+    Column(
+        modifier = Modifier.padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ChronologicalFeedPlaceholderBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(CoverType.Book.ratio),
+        )
+        ChronologicalFeedPlaceholderBlock(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp),
+        )
+        ChronologicalFeedPlaceholderBlock(
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .height(12.dp),
+        )
+    }
+}
+
+@Composable
+private fun ChronologicalFeedPlaceholderBlock(
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(MaterialTheme.shapes.extraSmall)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+    )
 }
 
 private fun Manga.toCoverData(): MangaCover {
