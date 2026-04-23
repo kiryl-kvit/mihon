@@ -443,7 +443,6 @@ private fun FeedsTabContent(
                             onMigrate = {
                                 browseModel.setDialog(BrowseSourceScreenModel.Dialog.Migrate(dialog.manga, it))
                             },
-                            onMerge = { browseModel.showMergeTargetPicker(it.manga) },
                         )
                     }
                     is BrowseSourceScreenModel.Dialog.LibraryActionChooser -> {

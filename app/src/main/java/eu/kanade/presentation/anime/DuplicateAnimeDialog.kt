@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.CallSplit
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.PersonOutline
@@ -79,7 +78,6 @@ fun DuplicateAnimeDialog(
     onDismissRequest: () -> Unit,
     onConfirm: () -> Unit,
     onOpenAnime: (anime: AnimeTitle) -> Unit,
-    onMerge: ((duplicate: DuplicateAnimeCandidate) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val sourceManager = remember { Injekt.get<AnimeSourceManager>() }
@@ -129,7 +127,6 @@ fun DuplicateAnimeDialog(
                         duplicate = duplicate,
                         sourceName = sourceName,
                         isStubSource = sourceManager.get(duplicate.anime.source) == null,
-                        onMerge = { onMerge?.invoke(duplicate) },
                         onDismissRequest = onDismissRequest,
                         onOpenAnime = { onOpenAnime(duplicate.anime) },
                     )
@@ -176,7 +173,6 @@ private fun DuplicateAnimeListItem(
     isStubSource: Boolean,
     onDismissRequest: () -> Unit,
     onOpenAnime: () -> Unit,
-    onMerge: (() -> Unit)?,
 ) {
     val anime = duplicate.anime
     val duplicatePreferences = remember { Injekt.get<DuplicatePreferences>() }
@@ -330,25 +326,6 @@ private fun DuplicateAnimeListItem(
                             text = stringResource(MR.strings.action_open),
                             modifier = Modifier.padding(start = MaterialTheme.padding.extraSmall),
                         )
-                    }
-
-                    onMerge?.let {
-                        Button(
-                            onClick = {
-                                it()
-                            },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.CallSplit,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Text(
-                                text = stringResource(MR.strings.action_merge_with_this),
-                                modifier = Modifier.padding(start = MaterialTheme.padding.extraSmall),
-                            )
-                        }
                     }
                 }
             }
