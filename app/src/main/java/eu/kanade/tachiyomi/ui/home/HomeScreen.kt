@@ -37,7 +37,6 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
-import eu.kanade.domain.source.service.GlobalSourcePreferences
 import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
@@ -474,12 +473,36 @@ object HomeScreen : Screen() {
                             }
                         }
                     }
-                    BrowseTab::class.isInstance(tab) -> {
+                    tab is BrowseTab -> {
                         val count by produceState(initialValue = 0) {
-                            val preferences = Injekt.get<GlobalSourcePreferences>()
                             val extensionManager = Injekt.get<ExtensionManager>()
                             combine(
-                                preferences.extensionUpdatesCount.changes(),
+                                extensionManager.pendingMangaUpdatesCount,
+                                extensionManager.isAutoUpdateInProgress,
+                            ) { pendingCount, inProgress ->
+                                if (inProgress) 0 else pendingCount
+                            }
+                                .collectLatest { value = it }
+                        }
+                        if (count > 0) {
+                            Badge {
+                                val desc = pluralStringResource(
+                                    MR.plurals.update_check_notification_ext_updates,
+                                    count = count,
+                                    count,
+                                )
+                                Text(
+                                    text = count.toString(),
+                                    modifier = Modifier.semantics { contentDescription = desc },
+                                )
+                            }
+                        }
+                    }
+                    tab is AnimeBrowseTab -> {
+                        val count by produceState(initialValue = 0) {
+                            val extensionManager = Injekt.get<ExtensionManager>()
+                            combine(
+                                extensionManager.pendingAnimeUpdatesCount,
                                 extensionManager.isAutoUpdateInProgress,
                             ) { pendingCount, inProgress ->
                                 if (inProgress) 0 else pendingCount

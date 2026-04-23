@@ -122,6 +122,7 @@ import mihon.feature.profiles.core.Profile
 import mihon.feature.profiles.core.ProfileManager
 import mihon.feature.profiles.core.ProfilesPreferences
 import mihon.feature.profiles.ui.ProfilePickerScene
+import mihon.feature.profiles.ui.switchToProfile
 import mihon.feature.support.SupportUsScreen
 import tachiyomi.core.common.Constants
 import tachiyomi.core.common.i18n.stringResource
@@ -129,6 +130,7 @@ import tachiyomi.core.common.util.lang.launchIO
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.GlobalLibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences
+import tachiyomi.domain.profile.model.ProfileType
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -691,7 +693,7 @@ class MainActivity : BaseActivity() {
         }
     }
 
-    private fun handleIntentAction(intent: Intent, navigator: Navigator): Boolean {
+    private suspend fun handleIntentAction(intent: Intent, navigator: Navigator): Boolean {
         val notificationId = intent.getIntExtra("notificationId", -1)
         if (notificationId > -1) {
             NotificationReceiver.dismissNotification(
@@ -711,6 +713,29 @@ class MainActivity : BaseActivity() {
             Constants.SHORTCUT_EXTENSIONS,
             Constants.SHORTCUT_DOWNLOADS,
             -> {
+                if (intent.action == Constants.SHORTCUT_EXTENSIONS) {
+                    val requestedProfileType = intent.getStringExtra(INTENT_PROFILE_TYPE)
+                        ?.let { profileTypeName ->
+                            ProfileType.entries.firstOrNull { it.name == profileTypeName }
+                        }
+                    val activeProfileId = profileManager.activeProfile.value?.id ?: profileManager.activeProfileId
+                    val targetProfile = resolveExtensionShortcutProfile(
+                        profiles = profileManager.visibleProfiles.value,
+                        activeProfileId = activeProfileId,
+                        requestedType = requestedProfileType,
+                    )
+                    if (targetProfile != null && targetProfile.id != activeProfileId) {
+                        val switched = switchToProfile(
+                            context = this,
+                            profileManager = profileManager,
+                            uiPreferences = uiPreferences,
+                            profile = targetProfile,
+                            showToast = false,
+                        )
+                        if (!switched) return false
+                    }
+                }
+
                 val tab = resolveShortcutTab(
                     action = intent.action,
                     mangaIdToOpen = intent.extras
@@ -771,7 +796,7 @@ class MainActivity : BaseActivity() {
         return true
     }
 
-    private fun completeStartup(isLaunch: Boolean, navigator: Navigator) {
+    private suspend fun completeStartup(isLaunch: Boolean, navigator: Navigator) {
         if (startupCompleted) {
             ready = true
             return
@@ -824,6 +849,7 @@ class MainActivity : BaseActivity() {
         const val INTENT_SEARCH = "eu.kanade.tachiyomi.SEARCH"
         const val INTENT_SEARCH_QUERY = "query"
         const val INTENT_SEARCH_FILTER = "filter"
+        internal const val INTENT_PROFILE_TYPE = "profile_type"
 
         private const val STATE_STARTUP_COMPLETED = "startup_completed"
         private const val STATE_ALLOW_APP_UNLOCK_PROMPT = "allow_app_unlock_prompt"
@@ -851,6 +877,20 @@ internal fun resolveShortcutTab(
         Constants.SHORTCUT_EXTENSIONS -> HomeScreen.Tab.Browse(true)
         Constants.SHORTCUT_DOWNLOADS -> HomeScreen.Tab.More(toDownloads = true)
         else -> null
+    }
+}
+
+internal fun resolveExtensionShortcutProfile(
+    profiles: List<Profile>,
+    activeProfileId: Long?,
+    requestedType: ProfileType?,
+): Profile? {
+    val activeProfile = profiles.firstOrNull { it.id == activeProfileId } ?: profiles.firstOrNull()
+
+    return when {
+        requestedType == null -> activeProfile
+        activeProfile?.type == requestedType -> activeProfile
+        else -> profiles.firstOrNull { it.type == requestedType } ?: activeProfile
     }
 }
 

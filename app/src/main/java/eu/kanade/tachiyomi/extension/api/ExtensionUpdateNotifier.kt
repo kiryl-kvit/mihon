@@ -6,9 +6,11 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.core.security.SecurityPreferences
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
+import eu.kanade.tachiyomi.extension.model.ExtensionType
 import eu.kanade.tachiyomi.util.system.cancelNotification
 import eu.kanade.tachiyomi.util.system.notify
 import tachiyomi.core.common.i18n.pluralStringResource
+import tachiyomi.domain.profile.model.ProfileType
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -17,14 +19,14 @@ class ExtensionUpdateNotifier(
     private val context: Context,
     private val securityPreferences: SecurityPreferences = Injekt.get(),
 ) {
-    fun autoUpdated(names: List<String>) {
+    fun autoUpdated(type: ExtensionType, names: List<String>) {
         if (names.isEmpty()) {
-            context.cancelNotification(Notifications.ID_EXTENSIONS_AUTO_UPDATED)
+            context.cancelNotification(type.autoUpdatedNotificationId())
             return
         }
 
         context.notify(
-            Notifications.ID_EXTENSIONS_AUTO_UPDATED,
+            type.autoUpdatedNotificationId(),
             Notifications.CHANNEL_EXTENSIONS_UPDATE,
         ) {
             setContentTitle(
@@ -40,14 +42,19 @@ class ExtensionUpdateNotifier(
                 setStyle(NotificationCompat.BigTextStyle().bigText(extNames))
             }
             setSmallIcon(R.drawable.ic_extension_24dp)
-            setContentIntent(NotificationReceiver.openExtensionsPendingActivity(context))
+            setContentIntent(NotificationReceiver.openExtensionsPendingActivity(context, type.toProfileType()))
             setAutoCancel(true)
         }
     }
 
-    fun promptUpdates(names: List<String>) {
+    fun promptUpdates(type: ExtensionType, names: List<String>) {
+        if (names.isEmpty()) {
+            context.cancelNotification(type.pendingUpdatesNotificationId())
+            return
+        }
+
         context.notify(
-            Notifications.ID_UPDATES_TO_EXTS,
+            type.pendingUpdatesNotificationId(),
             Notifications.CHANNEL_EXTENSIONS_UPDATE,
         ) {
             setContentTitle(
@@ -63,13 +70,34 @@ class ExtensionUpdateNotifier(
                 setStyle(NotificationCompat.BigTextStyle().bigText(extNames))
             }
             setSmallIcon(R.drawable.ic_extension_24dp)
-            setContentIntent(NotificationReceiver.openExtensionsPendingActivity(context))
+            setContentIntent(NotificationReceiver.openExtensionsPendingActivity(context, type.toProfileType()))
             setAutoCancel(true)
         }
     }
 
-    fun dismiss() {
-        context.cancelNotification(Notifications.ID_UPDATES_TO_EXTS)
-        context.cancelNotification(Notifications.ID_EXTENSIONS_AUTO_UPDATED)
+    fun dismiss(type: ExtensionType) {
+        context.cancelNotification(type.pendingUpdatesNotificationId())
+        context.cancelNotification(type.autoUpdatedNotificationId())
+    }
+
+    private fun ExtensionType.pendingUpdatesNotificationId(): Int {
+        return when (this) {
+            ExtensionType.MANGA -> Notifications.ID_UPDATES_TO_MANGA_EXTS
+            ExtensionType.ANIME -> Notifications.ID_UPDATES_TO_ANIME_EXTS
+        }
+    }
+
+    private fun ExtensionType.autoUpdatedNotificationId(): Int {
+        return when (this) {
+            ExtensionType.MANGA -> Notifications.ID_MANGA_EXTENSIONS_AUTO_UPDATED
+            ExtensionType.ANIME -> Notifications.ID_ANIME_EXTENSIONS_AUTO_UPDATED
+        }
+    }
+
+    private fun ExtensionType.toProfileType(): ProfileType {
+        return when (this) {
+            ExtensionType.MANGA -> ProfileType.MANGA
+            ExtensionType.ANIME -> ProfileType.ANIME
+        }
     }
 }

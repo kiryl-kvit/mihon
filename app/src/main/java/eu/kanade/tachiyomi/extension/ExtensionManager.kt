@@ -8,6 +8,7 @@ import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.api.ExtensionApi
 import eu.kanade.tachiyomi.extension.api.ExtensionUpdateNotifier
 import eu.kanade.tachiyomi.extension.model.Extension
+import eu.kanade.tachiyomi.extension.model.ExtensionType
 import eu.kanade.tachiyomi.extension.model.InstallStep
 import eu.kanade.tachiyomi.extension.model.LoadResult
 import eu.kanade.tachiyomi.extension.util.ExtensionInstallReceiver
@@ -102,6 +103,10 @@ class ExtensionManager(
     private val _isAutoUpdateInProgress = MutableStateFlow(false)
     val isAutoUpdateInProgress: StateFlow<Boolean> = _isAutoUpdateInProgress.asStateFlow()
     private val updateCheckInProgress = AtomicBoolean(false)
+    private val _pendingMangaUpdatesCount = MutableStateFlow(globalPreferences.mangaExtensionUpdatesCount.get())
+    val pendingMangaUpdatesCount: StateFlow<Int> = _pendingMangaUpdatesCount.asStateFlow()
+    private val _pendingAnimeUpdatesCount = MutableStateFlow(globalPreferences.animeExtensionUpdatesCount.get())
+    val pendingAnimeUpdatesCount: StateFlow<Int> = _pendingAnimeUpdatesCount.asStateFlow()
 
     init {
         initExtensions()
@@ -275,7 +280,14 @@ class ExtensionManager(
      */
     private fun updatedInstalledExtensionsStatuses(availableExtensions: List<Extension.Available>) {
         if (availableExtensions.isEmpty()) {
+            _pendingMangaUpdatesCount.value = 0
+            _pendingAnimeUpdatesCount.value = 0
+            globalPreferences.mangaExtensionUpdatesCount.set(0)
+            globalPreferences.animeExtensionUpdatesCount.set(0)
             globalPreferences.extensionUpdatesCount.set(0)
+            val notifier = ExtensionUpdateNotifier(context)
+            notifier.dismiss(ExtensionType.MANGA)
+            notifier.dismiss(ExtensionType.ANIME)
             return
         }
 
@@ -507,10 +519,19 @@ class ExtensionManager(
     }
 
     private fun updatePendingUpdatesCount() {
-        val pendingUpdateCount = installedExtensionMapFlow.value.values.count { it.hasUpdate }
-        globalPreferences.extensionUpdatesCount.set(pendingUpdateCount)
-        if (pendingUpdateCount == 0) {
-            ExtensionUpdateNotifier(context).dismiss()
+        val pendingUpdateCounts = pendingExtensionUpdateCounts(installedExtensionMapFlow.value.values)
+        _pendingMangaUpdatesCount.value = pendingUpdateCounts.manga
+        _pendingAnimeUpdatesCount.value = pendingUpdateCounts.anime
+        globalPreferences.mangaExtensionUpdatesCount.set(pendingUpdateCounts.manga)
+        globalPreferences.animeExtensionUpdatesCount.set(pendingUpdateCounts.anime)
+        globalPreferences.extensionUpdatesCount.set(pendingUpdateCounts.total)
+
+        val notifier = ExtensionUpdateNotifier(context)
+        if (pendingUpdateCounts.manga == 0) {
+            notifier.dismiss(ExtensionType.MANGA)
+        }
+        if (pendingUpdateCounts.anime == 0) {
+            notifier.dismiss(ExtensionType.ANIME)
         }
     }
 
@@ -590,4 +611,31 @@ class ExtensionManager(
     ): StateFlow<List<T>> {
         return map { transform(it.values) }.stateIn(scope, WhileSubscribed(5_000), transform(value.values))
     }
+}
+
+internal data class PendingExtensionUpdateCounts(
+    val manga: Int,
+    val anime: Int,
+) {
+    val total: Int
+        get() = manga + anime
+}
+
+internal fun pendingExtensionUpdateCounts(extensions: Collection<Extension.Installed>): PendingExtensionUpdateCounts {
+    var manga = 0
+    var anime = 0
+
+    extensions.forEach { extension ->
+        if (!extension.hasUpdate) return@forEach
+
+        when (extension) {
+            is Extension.InstalledManga -> manga++
+            is Extension.InstalledAnime -> anime++
+        }
+    }
+
+    return PendingExtensionUpdateCounts(
+        manga = manga,
+        anime = anime,
+    )
 }

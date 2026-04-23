@@ -34,6 +34,7 @@ import tachiyomi.domain.download.service.DownloadPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.manga.interactor.GetMergedManga
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.profile.model.ProfileType
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
 import uy.kohesive.injekt.Injekt
@@ -717,19 +718,20 @@ class NotificationReceiver : BroadcastReceiver() {
         }
 
         /**
-         * Returns [PendingIntent] that opens the extensions controller.
+         * Returns [PendingIntent] that opens the extensions screen for the given profile type.
          *
          * @param context context of application
          * @return [PendingIntent]
          */
-        internal fun openExtensionsPendingActivity(context: Context): PendingIntent {
+        internal fun openExtensionsPendingActivity(context: Context, profileType: ProfileType): PendingIntent {
             val intent = Intent(context, MainActivity::class.java).apply {
                 action = Constants.SHORTCUT_EXTENSIONS
                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                putExtra(MainActivity.INTENT_PROFILE_TYPE, profileType.name)
             }
             return PendingIntent.getActivity(
                 context,
-                0,
+                profileType.ordinal,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )

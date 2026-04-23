@@ -8,6 +8,10 @@ class GlobalSourcePreferences(
 ) {
     val extensionRepos = preferenceStore.getStringSet("extension_repos", emptySet())
 
+    val mangaExtensionUpdatesCount = preferenceStore.getInt("manga_ext_updates_count", 0)
+
+    val animeExtensionUpdatesCount = preferenceStore.getInt("anime_ext_updates_count", 0)
+
     val extensionUpdatesCount = preferenceStore.getInt("ext_updates_count", 0)
 
     val trustedExtensions = preferenceStore.getStringSet(

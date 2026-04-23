@@ -5,8 +5,6 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.extension.interactor.GetExtensionsByType
-import eu.kanade.domain.source.service.GlobalSourcePreferences
-import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.components.SEARCH_DEBOUNCE_MILLIS
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.extension.model.Extension
@@ -32,7 +30,6 @@ import uy.kohesive.injekt.api.get
 import kotlin.time.Duration.Companion.seconds
 
 class ExtensionsScreenModel(
-    preferences: GlobalSourcePreferences = Injekt.get(),
     basePreferences: BasePreferences = Injekt.get(),
     private val extensionManager: ExtensionManager = Injekt.get(),
     private val getExtensions: GetExtensionsByType = Injekt.get(),
@@ -93,7 +90,7 @@ class ExtensionsScreenModel(
         screenModelScope.launchIO { findAvailableExtensions() }
 
         combine(
-            preferences.extensionUpdatesCount.changes(),
+            extensionManager.pendingMangaUpdatesCount,
             extensionManager.isAutoUpdateInProgress,
         ) { updates, inProgress ->
             if (inProgress) 0 else updates

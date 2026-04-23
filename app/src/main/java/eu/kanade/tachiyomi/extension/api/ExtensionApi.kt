@@ -123,7 +123,12 @@ internal class ExtensionApi {
         extensionManager.setAvailableExtensions(extensions)
 
         if (fromAvailableExtensionList || !customPreferences.extensionsAutoUpdates.get()) {
-            ExtensionUpdateNotifier(context).promptUpdates(updateCandidates.map { it.installed.name })
+            val notifier = ExtensionUpdateNotifier(context)
+            updateCandidates
+                .groupBy { it.installed.type }
+                .forEach { (type, candidates) ->
+                    notifier.promptUpdates(type, candidates.map { it.installed.name })
+                }
             return updateCandidates.map { it.installed }
         }
 
@@ -135,8 +140,8 @@ internal class ExtensionApi {
         extensions: List<Extension.Available>,
         updateCandidates: List<UpdateCandidate>,
     ): List<Extension.Installed> {
-        val updatedNames = mutableListOf<String>()
-        val leftoverNames = mutableListOf<String>()
+        val updatedExtensions = mutableListOf<Extension.Installed>()
+        val leftoverExtensions = mutableListOf<Extension.Installed>()
 
         extensionManager.runAutoUpdateSession {
             updateCandidates.forEach { candidate ->
@@ -146,23 +151,27 @@ internal class ExtensionApi {
                 }.getOrElse { InstallStep.Error }
 
                 when (finalStep) {
-                    InstallStep.Installed -> updatedNames += candidate.installed.name
+                    InstallStep.Installed -> updatedExtensions += candidate.installed
                     InstallStep.RequiresUserAction,
                     InstallStep.Idle,
                     InstallStep.Error,
-                    -> leftoverNames += candidate.installed.name
+                    -> leftoverExtensions += candidate.installed
                     else -> Unit
                 }
             }
         }
 
         val notifier = ExtensionUpdateNotifier(context)
-        if (updatedNames.isNotEmpty()) {
-            notifier.autoUpdated(updatedNames)
-        }
-        if (leftoverNames.isNotEmpty()) {
-            notifier.promptUpdates(leftoverNames)
-        }
+        updatedExtensions
+            .groupBy(Extension.Installed::type)
+            .forEach { (type, extensionsForType) ->
+                notifier.autoUpdated(type, extensionsForType.map { it.name })
+            }
+        leftoverExtensions
+            .groupBy(Extension.Installed::type)
+            .forEach { (type, extensionsForType) ->
+                notifier.promptUpdates(type, extensionsForType.map { it.name })
+            }
 
         return updateCandidates.map { it.installed }
     }
